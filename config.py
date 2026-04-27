@@ -1,10 +1,8 @@
 """Конфигурация приложения, загружаемая из переменных окружения / .env"""
 from __future__ import annotations
 
-from typing import Annotated, List
-
-from pydantic import Field, field_validator
-from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
+from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -20,11 +18,10 @@ class Settings(BaseSettings):
     tg_api_hash: str = Field(..., alias="TG_API_HASH")
     tg_phone: str = Field(..., alias="TG_PHONE")
     tg_session_name: str = Field("userbot", alias="TG_SESSION_NAME")
-    # NoDecode запрещает pydantic-settings JSON-декодировать значение —
-    # парсим CSV вручную в field_validator ниже.
-    tg_channels: Annotated[List[str], NoDecode] = Field(
-        default_factory=list, alias="TG_CHANNELS"
-    )
+
+    # Каналы храним как строку — pydantic-settings не пытается JSON-декодировать,
+    # а доступ идёт через свойство tg_channels (см. ниже).
+    tg_channels_raw: str = Field("", alias="TG_CHANNELS")
 
     # Telegram Bot (aiogram)
     bot_token: str = Field(..., alias="BOT_TOKEN")
@@ -42,14 +39,12 @@ class Settings(BaseSettings):
     log_level: str = Field("INFO", alias="LOG_LEVEL")
     filters_file: str = Field("data/filters.json", alias="FILTERS_FILE")
 
-    @field_validator("tg_channels", mode="before")
-    @classmethod
-    def split_channels(cls, v):
-        if v is None or v == "":
+    @property
+    def tg_channels(self) -> list[str]:
+        """CSV в .env -> список. Пустое значение -> пустой список."""
+        if not self.tg_channels_raw:
             return []
-        if isinstance(v, str):
-            return [c.strip() for c in v.split(",") if c.strip()]
-        return v
+        return [c.strip() for c in self.tg_channels_raw.split(",") if c.strip()]
 
 
 settings = Settings()  # type: ignore[call-arg]
