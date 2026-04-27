@@ -5,10 +5,14 @@ from config import settings
 from llm.base import LLMProvider
 from llm.ollama_provider import OllamaProvider
 from llm.openai_provider import OpenAIProvider
+from llm.stub_provider import StubProvider
 
 
 def get_llm_provider() -> LLMProvider:
     provider = settings.llm_provider.lower()
+
+    if provider == "stub":
+        return StubProvider()
 
     if provider == "openai":
         if not settings.openai_api_key:
