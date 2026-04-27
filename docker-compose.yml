@@ -1,0 +1,25 @@
+services:
+  app:
+    build: .
+    container_name: tg_parser_app
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      # Сессия Telethon — иначе при каждом перезапуске придётся вводить код
+      - ./sessions:/app/sessions
+      # Фильтры пользователей (JSON)
+      - ./data:/app/data
+    # Если используете Ollama, поднятый рядом — раскомментируйте depends_on
+    # depends_on:
+    #   - ollama
+
+  # Опциональный локальный LLM
+  # ollama:
+  #   image: ollama/ollama:latest
+  #   container_name: ollama
+  #   restart: unless-stopped
+  #   volumes:
+  #     - ./ollama_data:/root/.ollama
+  #   ports:
+  #     - "11434:11434"

@@ -1,0 +1,23 @@
+# Production compose: использует готовый image из GHCR.
+# Переменная IMAGE задаётся в workflow или прямо в .env на VPS.
+services:
+  app:
+    image: ${IMAGE:-ghcr.io/OWNER/REPO:latest}
+    container_name: tg_parser_app
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - ./sessions:/app/sessions
+      - ./data:/app/data
+    # depends_on:
+    #   - ollama
+
+  # ollama:
+  #   image: ollama/ollama:latest
+  #   container_name: ollama
+  #   restart: unless-stopped
+  #   volumes:
+  #     - ./ollama_data:/root/.ollama
+  #   ports:
+  #     - "127.0.0.1:11434:11434"
