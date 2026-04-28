@@ -1,11 +1,8 @@
 {
-    # Email для Let's Encrypt — на этот адрес будут приходить уведомления
-    # о скором истечении сертификатов (Caddy продлевает автоматически).
     email georgec3625@gmail.com
 }
 
 modelpro.agency, www.modelpro.agency {
-    # Безопасные заголовки
     header {
         Strict-Transport-Security "max-age=31536000; includeSubDomains"
         X-Content-Type-Options "nosniff"
@@ -13,16 +10,14 @@ modelpro.agency, www.modelpro.agency {
         Referrer-Policy "strict-origin-when-cross-origin"
     }
 
-    # API — проксируем на FastAPI БЕЗ снятия префикса /api/
+    # API → FastAPI (префикс /api/ оставляем)
     handle /api/* {
         reverse_proxy api:8000
     }
 
-    # Mini App (фронт) — пока заглушка, потом сюда уедет webapp:80
+    # Mini App (React+Vite билд) → nginx-сервис
     handle {
-        respond "🎬 Casting Mini App is starting up. Check back soon." 200 {
-            close
-        }
+        reverse_proxy webapp:80
     }
 
     log {

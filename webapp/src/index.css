@@ -1,0 +1,29 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body, #root {
+  min-height: 100vh;
+  background: #0d1326;
+  -webkit-font-smoothing: antialiased;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+/* Скрываем нативный outline у браузеров — мы рисуем свой */
+*:focus { outline: none; }
+
+/* Чтобы инпуты не растягивались странно */
+input, select, textarea, button {
+  font: inherit;
+  color: inherit;
+}
+
+/* Number-инпуты — без стрелок (для возрастов и размеров) */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+}

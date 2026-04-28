@@ -30,6 +30,13 @@ services:
       postgres:
         condition: service_healthy
 
+  webapp:
+    image: ${WEBAPP_IMAGE:-ghcr.io/OWNER/REPO-webapp:latest}
+    container_name: tg_parser_webapp
+    restart: unless-stopped
+    expose:
+      - "80"
+
   caddy:
     image: caddy:2-alpine
     container_name: tg_parser_caddy
@@ -47,6 +54,7 @@ services:
       - caddy_logs:/var/log/caddy
     depends_on:
       - api
+      - webapp
 
   postgres:
     image: postgres:16-alpine
