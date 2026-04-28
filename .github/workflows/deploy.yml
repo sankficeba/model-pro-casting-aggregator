@@ -62,6 +62,19 @@ jobs:
       cancel-in-progress: false
 
     steps:
+      - name: Checkout (need compose file)
+        uses: actions/checkout@v4
+
+      - name: Copy compose file to VPS
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.SSH_PORT || 22 }}
+          source: "docker-compose.prod.yml"
+          target: "${{ secrets.DEPLOY_PATH }}"
+
       - name: Deploy over SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -74,12 +87,9 @@ jobs:
             set -euo pipefail
             cd "${{ secrets.DEPLOY_PATH }}"
 
-            # Залогиниться в GHCR (одноразово после ротации токена — безопасно повторять)
+            # Залогиниться в GHCR
             echo "${{ secrets.GHCR_PULL_TOKEN }}" \
               | docker login ghcr.io -u "${{ secrets.GHCR_PULL_USER }}" --password-stdin
-
-            # Подтянуть свежий compose, если он лежит в git (опционально)
-            # git pull --ff-only
 
             export IMAGE="ghcr.io/${{ github.repository }}:latest"
 
