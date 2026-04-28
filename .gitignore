@@ -7,6 +7,7 @@ venv/
 .env
 sessions/
 data/
+postgres_data/
 *.session
 *.session-journal
 .idea/

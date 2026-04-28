@@ -1,5 +1,5 @@
 """Telethon-userbot: слушает каналы, парсит сообщения через LLM,
-рассылает совпадения подписчикам через aiogram-бота."""
+пишет историю в БД и рассылает совпадения подписчикам через aiogram-бота."""
 from __future__ import annotations
 
 import asyncio
@@ -10,8 +10,10 @@ from loguru import logger
 from telethon import TelegramClient, events
 
 from config import settings
+from db import repository
 from filters.storage import FilterStorage
 from llm.base import LLMProvider
+from models.schemas import ExtractedData
 
 
 class Userbot:
@@ -43,13 +45,11 @@ class Userbot:
                 logger.error("Не удалось получить entity для {}: {}", ch, e)
         return entities
 
-    def _format_notification(self, data, message) -> str:
+    @staticmethod
+    def _format_notification(data: ExtractedData, message, chat_username: str | None) -> str:
         link = ""
-        try:
-            if getattr(message.chat, "username", None):
-                link = f"https://t.me/{message.chat.username}/{message.id}"
-        except Exception:  # noqa: BLE001
-            pass
+        if chat_username:
+            link = f"https://t.me/{chat_username}/{message.id}"
 
         lines = [
             "<b>Найдена подходящая заявка</b>",
@@ -69,22 +69,70 @@ class Userbot:
             return
         logger.debug("Новое сообщение: {!r}", text[:120])
 
+        # 1. Парсинг через LLM
         data = await self.llm.extract(text)
-        if data.confidence == 0.0:
+        logger.debug("Extracted: {}", data.model_dump())
+
+        # 2. Сохраняем сообщение в БД (даже если confidence низкая — для истории)
+        chat = event.message.chat
+        chat_id = getattr(chat, "id", 0)
+        chat_username = getattr(chat, "username", None)
+        message_db_id = await repository.insert_message(
+            tg_chat_id=chat_id,
+            tg_chat_username=chat_username,
+            tg_message_id=event.message.id,
+            text=text,
+            extracted=data,
+        )
+
+        # Слишком низкая уверенность — не рассылаем
+        if data.confidence == 0.0 or message_db_id is None:
             return
 
+        # 3. Подбираем фильтры
         matches = await self.storage.find_matches(data)
         if not matches:
             return
 
-        notification = self._format_notification(data, event.message)
+        # Получаем фильтры с их БД-id, чтобы записать в notifications
+        from db.models import Filter
+        from sqlalchemy import select
+        from db.session import AsyncSessionLocal
+
+        async with AsyncSessionLocal() as session:
+            res = await session.execute(select(Filter))
+            filter_rows = {f.user_id: f.id for f in res.scalars().all()}
+
+        notification_text = self._format_notification(data, event.message, chat_username)
+
         for f in matches:
+            # Дедуп: если уже отправляли — пропустить
+            if await repository.already_notified(f.user_id, message_db_id):
+                continue
+
+            success = False
+            err: str | None = None
             try:
                 await self.bot.send_message(
-                    f.user_id, notification, parse_mode="HTML", disable_web_page_preview=True
+                    f.user_id,
+                    notification_text,
+                    parse_mode="HTML",
+                    disable_web_page_preview=True,
                 )
+                success = True
             except Exception as e:  # noqa: BLE001
+                err = str(e)
                 logger.warning("Не удалось отправить пользователю {}: {}", f.user_id, e)
+
+            filter_id = filter_rows.get(f.user_id)
+            if filter_id is not None:
+                await repository.log_notification(
+                    user_id=f.user_id,
+                    message_id=message_db_id,
+                    filter_id=filter_id,
+                    success=success,
+                    error=err,
+                )
             await asyncio.sleep(0.05)  # лёгкий троттлинг
 
     async def start(self) -> None:

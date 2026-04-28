@@ -8,6 +8,7 @@ from aiogram.filters import Command, CommandStart
 from aiogram.types import Message
 from loguru import logger
 
+from db import repository
 from filters.storage import FilterStorage
 from models.schemas import UserFilter
 
@@ -82,6 +83,10 @@ def build_dispatcher(storage: FilterStorage) -> Dispatcher:
 
     @dp.message(CommandStart())
     async def cmd_start(message: Message) -> None:
+        await repository.upsert_user(
+            message.from_user.id,
+            username=message.from_user.username,
+        )
         await message.answer(
             "Привет! Я уведомляю тебя о подходящих объявлениях из отслеживаемых "
             "Telegram-каналов.\n\n" + HELP_TEXT,
@@ -102,6 +107,9 @@ def build_dispatcher(storage: FilterStorage) -> Dispatcher:
             await message.answer(f"Ошибка: {e}\n\n{HELP_TEXT}", parse_mode="HTML")
             return
 
+        await repository.upsert_user(
+            message.from_user.id, username=message.from_user.username
+        )
         await storage.upsert(f)
         logger.info("Пользователь {} обновил фильтр: {}", message.from_user.id, f)
         await message.answer("Фильтр сохранён.\n\n" + _format_filter(f), parse_mode="HTML")

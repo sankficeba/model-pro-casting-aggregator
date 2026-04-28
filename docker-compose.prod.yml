@@ -1,5 +1,4 @@
 # Production compose: использует готовый image из GHCR.
-# Переменная IMAGE задаётся в workflow или прямо в .env на VPS.
 services:
   app:
     image: ${IMAGE:-ghcr.io/OWNER/REPO:latest}
@@ -7,17 +6,29 @@ services:
     restart: unless-stopped
     env_file:
       - .env
+    environment:
+      POSTGRES_HOST: postgres
     volumes:
       - ./sessions:/app/sessions
-      - ./data:/app/data
-    # depends_on:
-    #   - ollama
+    depends_on:
+      postgres:
+        condition: service_healthy
 
-  # ollama:
-  #   image: ollama/ollama:latest
-  #   container_name: ollama
-  #   restart: unless-stopped
-  #   volumes:
-  #     - ./ollama_data:/root/.ollama
-  #   ports:
-  #     - "127.0.0.1:11434:11434"
+  postgres:
+    image: postgres:16-alpine
+    container_name: tg_parser_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-tg_parser}
+      POSTGRES_USER: ${POSTGRES_USER:-tg_parser}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tg_parser}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  postgres_data:
