@@ -3,12 +3,29 @@ services:
     build: .
     container_name: tg_parser_app
     restart: unless-stopped
+    command: ["bot"]
     env_file:
       - .env
     environment:
       POSTGRES_HOST: postgres
     volumes:
       - ./sessions:/app/sessions
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    build: .
+    container_name: tg_parser_api
+    restart: unless-stopped
+    command: ["api"]
+    env_file:
+      - .env
+    environment:
+      POSTGRES_HOST: postgres
+    ports:
+      # для локальной разработки удобно иметь прямой доступ
+      - "127.0.0.1:8000:8000"
     depends_on:
       postgres:
         condition: service_healthy
@@ -23,7 +40,6 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tg_parser}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    # Локальная разработка — биндим на localhost
     ports:
       - "127.0.0.1:5432:5432"
     healthcheck:

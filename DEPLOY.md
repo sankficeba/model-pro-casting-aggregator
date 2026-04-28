@@ -1,188 +1,228 @@
-# Автодеплой через GitHub Actions
+# Деплой на VPS — modelpro.agency
 
-Workflow: [.github/workflows/deploy.yml](.github/workflows/deploy.yml)
+Полный пайплайн: GitHub Actions → GHCR → SSH на VPS → docker compose с Caddy/SSL.
 
-При `push` в `main` (или ручном запуске через `workflow_dispatch`):
+При `push` в `main`:
 
-1. Собирается Docker-образ.
+1. Собирается Docker-образ (один общий для bot и api).
 2. Пушится в **GitHub Container Registry** (`ghcr.io/<owner>/<repo>:latest` + `:sha-<commit>`).
-3. По SSH выполняется `docker compose pull && up -d` на VPS.
+3. По SSH на VPS копируются `docker-compose.prod.yml` и `Caddyfile`, выполняется `docker compose pull && up -d`, Caddy перечитывает конфиг.
 
-Используется `docker-compose.prod.yml`, который тянет готовый образ из GHCR
-(в отличие от dev-варианта `docker-compose.yml`, где образ собирается локально).
+## Сервисы на VPS
 
----
-
-## 1. Подготовка VPS (один раз)
-
-### 1.1. Установить Docker и Compose plugin
-
-```bash
-curl -fsSL https://get.docker.com | sh
-sudo usermod -aG docker "$USER"   # перелогиниться после этого
-docker compose version            # проверить
+```
+┌───────────────────────────┐       ┌─────────────────────┐
+│ Caddy (80/443)            │  ◄──  │ Интернет (modelpro) │
+│ - LE авто-SSL             │       └─────────────────────┘
+│ - / → "Coming soon" /     │
+│   webapp:80 (когда будет) │
+│ - /api/* → api:8000       │
+└───┬──────────────┬────────┘
+    │              │
+    ▼              ▼
+┌─────────┐    ┌─────────┐
+│ webapp  │    │  api    │ (FastAPI uvicorn)
+│ (later) │    │ :8000   │
+└─────────┘    └────┬────┘
+                    │
+              ┌─────▼─────┐    ┌──────────────────┐
+              │ postgres  │ ◄─ │ app (bot+userbot)│
+              │ :5432     │    │ Telethon+aiogram │
+              └───────────┘    └──────────────────┘
 ```
 
-### 1.2. Создать deploy-пользователя (рекомендуется не использовать root)
+## 1. Подготовка домена (modelpro.agency)
+
+### 1.1. Узнать IP вашего VPS
 
 ```bash
-sudo adduser --disabled-password --gecos "" deploy
-sudo usermod -aG docker deploy
-sudo mkdir -p /home/deploy/.ssh && sudo chown deploy:deploy /home/deploy/.ssh
-sudo chmod 700 /home/deploy/.ssh
+ssh deploy@VPS_IP
+curl -s ifconfig.me
 ```
 
-### 1.3. Сгенерировать SSH-ключ (на ЛОКАЛЬНОЙ машине)
+### 1.2. Прописать A-записи у регистратора домена
+
+В DNS-панели регистратора (где покупали `modelpro.agency`):
+
+| Тип | Имя | Значение | TTL |
+|---|---|---|---|
+| A | `@`   | `IP_VPS` | 600 |
+| A | `www` | `IP_VPS` | 600 |
+
+После сохранения — DNS-обновление занимает от 5 минут до пары часов.
+
+### 1.3. Проверить, что DNS дошёл
+
+С локальной машины:
 
 ```bash
-ssh-keygen -t ed25519 -C "github-actions-deploy" -f ~/.ssh/tg_parser_deploy -N ""
+# Linux/macOS
+dig modelpro.agency A +short
+dig www.modelpro.agency A +short
+
+# Windows PowerShell
+nslookup modelpro.agency
 ```
 
-Получится два файла:
-- `~/.ssh/tg_parser_deploy`     — приватный (пойдёт в **секрет GitHub**)
-- `~/.ssh/tg_parser_deploy.pub` — публичный (пойдёт на VPS)
+Должны увидеть IP вашего VPS. Если возвращает что-то другое — DNS ещё не распространился, подождите.
 
-### 1.4. Положить публичный ключ на VPS
+## 2. Открыть порты на VPS
 
 ```bash
-ssh-copy-id -i ~/.ssh/tg_parser_deploy.pub deploy@YOUR_VPS_IP
-# или вручную:
-cat ~/.ssh/tg_parser_deploy.pub | ssh deploy@YOUR_VPS_IP \
-  "cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
+sudo ufw allow OpenSSH                # уже должно быть
+sudo ufw enable
+sudo ufw status
 ```
 
-Проверить:
+Без открытых 80/443 Caddy не получит сертификат от Let's Encrypt (валидация идёт по HTTP-01 challenge на 80 порту).
+
+## 3. Подготовка каталога проекта
 
 ```bash
-ssh -i ~/.ssh/tg_parser_deploy deploy@YOUR_VPS_IP 'echo OK && docker compose version'
-```
-
-### 1.5. Подготовить каталог проекта на VPS
-
-```bash
-ssh deploy@YOUR_VPS_IP
-mkdir -p /home/deploy/tg_parser/{sessions,data}
+ssh deploy@VPS_IP
+mkdir -p /home/deploy/tg_parser/{sessions}
 cd /home/deploy/tg_parser
 ```
 
-Положить туда **только** два файла (остальное прилетит в виде Docker-образа):
-
-- `docker-compose.prod.yml` — скопировать из репозитория
-- `.env` — реальные значения переменных (см. `.env.example`)
+`.env` (скопировать из `.env.example` и заполнить):
 
 ```bash
-# на VPS:
-nano docker-compose.prod.yml   # вставить содержимое из репо
-nano .env                      # вставить реальные TG_API_ID, TG_API_HASH, BOT_TOKEN, OPENAI_API_KEY и т.д.
+nano .env
+```
+
+Минимум:
+
+```
+TG_API_ID=...
+TG_API_HASH=...
+TG_PHONE=+7...
+TG_SESSION_NAME=userbot
+BOT_TOKEN=...
+TG_CHANNELS=@channel1,@channel2
+LLM_PROVIDER=stub
+
+POSTGRES_HOST=postgres
+POSTGRES_PORT=5432
+POSTGRES_DB=tg_parser
+POSTGRES_USER=tg_parser
+POSTGRES_PASSWORD=придумайте_надёжный_пароль_не_менее_24_символов
+
+IMAGE=ghcr.io/sankficeba/model_pro:latest
+LOG_LEVEL=INFO
+```
+
+```bash
 chmod 600 .env
 ```
 
-### 1.6. Первый запуск + авторизация Telethon
+## 4. Секреты GitHub Actions
 
-При первом запуске Telethon потребует ввести код подтверждения.
-Поэтому делаем это вручную в интерактивном режиме (один раз):
+`Settings → Secrets and variables → Actions`:
 
-```bash
-# Войти в GHCR (если репозиторий приватный — иначе пропустить)
-echo "GHCR_PAT" | docker login ghcr.io -u GITHUB_USERNAME --password-stdin
+| Секрет | Значение |
+|---|---|
+| `SSH_HOST` | IP или `modelpro.agency` |
+| `SSH_USER` | `deploy` |
+| `SSH_PORT` | (опц.) если SSH не на 22 |
+| `SSH_PRIVATE_KEY` | приватный ключ (ed25519) |
+| `DEPLOY_PATH` | `/home/deploy/tg_parser` |
+| `GHCR_PULL_USER` | ваш GitHub username |
+| `GHCR_PULL_TOKEN` | PAT со scope `read:packages` (если репо приватный) |
 
-export IMAGE="ghcr.io/<owner>/<repo>:latest"
-docker compose -f docker-compose.prod.yml pull
-docker compose -f docker-compose.prod.yml run --rm app
-# ввести код из Telegram, дождаться "Userbot запущен"
-# Ctrl+C
-```
+## 5. Первый запуск
 
-Файл сессии сохранится в `./sessions/userbot.session` (volume) и больше код спрашивать не будет.
+После пуша в `main` Actions сам всё сделает. Но для самого первого запуска нужно:
 
-Затем уже фоновый старт:
-
-```bash
-docker compose -f docker-compose.prod.yml up -d
-docker compose -f docker-compose.prod.yml logs -f app
-```
-
----
-
-## 2. Секреты в GitHub
-
-`Settings → Secrets and variables → Actions → New repository secret`
-
-| Имя секрета         | Что класть |
-|---------------------|------------|
-| `SSH_HOST`          | IP или домен VPS |
-| `SSH_USER`          | `deploy` (или ваш SSH-пользователь) |
-| `SSH_PORT`          | (опционально) если SSH не на 22 |
-| `SSH_PRIVATE_KEY`   | содержимое `~/.ssh/tg_parser_deploy` (целиком, с `-----BEGIN ...-----`) |
-| `DEPLOY_PATH`       | `/home/deploy/tg_parser` |
-| `GHCR_PULL_USER`    | ваш GitHub username (для `docker login` на VPS) |
-| `GHCR_PULL_TOKEN`   | Personal Access Token со scope `read:packages` (см. ниже) |
-
-### Создание GHCR_PULL_TOKEN
-
-Если репозиторий **публичный** — этот секрет не нужен, удалите шаг `docker login` из workflow.
-
-Если **приватный**:
-1. `Settings → Developer settings → Personal access tokens → Tokens (classic)`
-2. `Generate new token (classic)`, scope: `read:packages`.
-3. Скопировать токен в секрет `GHCR_PULL_TOKEN`.
-
-### Environment "production" (опционально, но рекомендуется)
-
-`Settings → Environments → New environment → production` —
-там можно включить **Required reviewers**, чтобы каждый деплой требовал подтверждения,
-и/или ограничить ветки, с которых деплой разрешён.
-
----
-
-## 3. Что делает workflow
-
-```
-push → main
-   │
-   ├── job: build-and-push
-   │     ├── checkout
-   │     ├── setup buildx
-   │     ├── docker login ghcr.io (через GITHUB_TOKEN)
-   │     ├── tags: latest + sha-<commit>
-   │     └── docker buildx build --push (с GHA-кэшем)
-   │
-   └── job: deploy (needs: build-and-push)
-         └── ssh deploy@VPS:
-               docker login ghcr.io
-               docker compose -f docker-compose.prod.yml pull
-               docker compose -f docker-compose.prod.yml up -d --remove-orphans
-               docker image prune -f
-```
-
-`concurrency.group: deploy-prod` — гарантирует, что одновременно идёт только один деплой.
-
-## 4. Быстрая проверка
-
-После пуша в `main`:
-
-1. Открыть `Actions` в репозитории — пройти оба job-а до зелёного.
-2. На VPS:
-   ```bash
-   docker compose -f docker-compose.prod.yml ps
-   docker compose -f docker-compose.prod.yml logs --tail=100 app
-   ```
-
-## 5. Откат
-
-Образы тегаются `sha-<commit>`. Чтобы откатиться:
+### 5.1. Telethon-сессия (один раз, интерактивно)
 
 ```bash
-ssh deploy@VPS
 cd /home/deploy/tg_parser
-export IMAGE="ghcr.io/<owner>/<repo>:sha-<previous_commit>"
+docker compose -f docker-compose.prod.yml down
+docker compose -f docker-compose.prod.yml run --rm app
+```
+
+Откроется интерактивный сеанс. В чате с «Telegram» (ID 777000) в самом мессенджере придёт код — введите его. После «Userbot запущен» нажмите Ctrl+C.
+
+### 5.2. Поднять всё в фоне
+
+```bash
+docker compose -f docker-compose.prod.yml up -d
+docker compose -f docker-compose.prod.yml ps
+```
+
+Должно быть 4 контейнера в статусе `Up`/`healthy`:
+
+| Контейнер | Назначение |
+|---|---|
+| `tg_parser_app` | userbot + aiogram bot |
+| `tg_parser_api` | FastAPI на 8000 |
+| `tg_parser_caddy` | reverse proxy, 80/443 |
+| `tg_parser_postgres` | БД |
+
+### 5.3. Проверить SSL и API
+
+```bash
+# С VPS изнутри:
+curl http://127.0.0.1:8000/api/health    # {"status":"ok"}
+
+# С локальной машины (после DNS):
+curl https://modelpro.agency/api/health
+curl https://modelpro.agency/                 # "Casting Mini App is starting up..."
+```
+
+Если открыть `https://modelpro.agency/` в браузере — должен быть валидный SSL (зелёный замок) и ваше сообщение-заглушка.
+
+Если SSL ещё «получается» — Caddy в этот момент проходит challenge у Let's Encrypt. В логах:
+
+```bash
+docker compose -f docker-compose.prod.yml logs --tail=50 caddy
+```
+
+Ищите строки вроде `obtaining certificate` / `certificate obtained successfully`.
+
+## 6. Мониторинг
+
+```bash
+# Все логи
+docker compose -f docker-compose.prod.yml logs -f
+
+# Только бот
+docker compose -f docker-compose.prod.yml logs -f app
+
+# Только API
+docker compose -f docker-compose.prod.yml logs -f api
+
+# Только Caddy (там видны входящие HTTPS-запросы)
+docker compose -f docker-compose.prod.yml logs -f caddy
+```
+
+## 7. Подключение к БД с локальной машины (опц.)
+
+```powershell
+# SSH-туннель
+ssh -N -L 5432:localhost:5432 deploy@modelpro.agency
+```
+
+В DBeaver / pgAdmin: host `localhost`, port `5432`, db `tg_parser`, user `tg_parser`, password — из `.env`.
+
+## 8. Откат
+
+Все образы тегаются `sha-<commit>`. На VPS:
+
+```bash
+cd /home/deploy/tg_parser
+export IMAGE="ghcr.io/sankficeba/model_pro:sha-<previous_commit>"
 docker compose -f docker-compose.prod.yml up -d
 ```
 
-## 6. Чего НЕТ в Git и НЕ должно туда попасть
+## 9. Troubleshooting
 
-- `.env`              — реальные секреты (есть в `.gitignore`)
-- `sessions/`         — `.session` файлы Telethon
-- `data/filters.json` — пользовательские фильтры
-
-Эти файлы живут **только на VPS**. Workflow их не трогает.
+| Симптом | Причина | Лечение |
+|---|---|---|
+| Mini App: «Не удалось загрузить» | домен ещё без HTTPS | подождать 1-2 минуты, посмотреть `docker compose logs caddy` |
+| `permission denied` для docker.sock | deploy не в группе docker | `sudo usermod -aG docker deploy && relogin` |
+| `unable to get image OWNER/REPO` | не задана `IMAGE` в .env | дописать `IMAGE=ghcr.io/.../...:latest` в `.env` |
+| `Temporary failure in name resolution` | postgres не поднялся | `docker compose ps`, проверить логи postgres |
+| Caddy: `obtaining certificate failed` | DNS ещё не пришёл / 80 порт закрыт | `dig modelpro.agency A`, `sudo ufw status` |

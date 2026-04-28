@@ -5,6 +5,7 @@ from datetime import datetime
 from typing import Optional
 
 from sqlalchemy import (
+    ARRAY,
     BigInteger,
     Boolean,
     DateTime,
@@ -40,6 +41,96 @@ class User(Base):
     filters: Mapped[list["Filter"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
+    profile: Mapped[Optional["ActorProfile"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan", uselist=False
+    )
+
+
+class ActorProfile(Base):
+    """Анкета актёра — заполняется через Mini App, один профиль на пользователя."""
+
+    __tablename__ = "actor_profiles"
+
+    user_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+
+    # --- Step 1: Основная информация ---
+    full_name: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    gender: Mapped[Optional[str]] = mapped_column(String(8), nullable=True)  # male/female
+    city: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    ready_for_travel: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    actual_age: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    play_age_min: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    play_age_max: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+
+    # --- Step 2: Какие кастинги подходят ---
+    project_types: Mapped[list[str]] = mapped_column(
+        ARRAY(Text), default=list, server_default="{}", nullable=False
+    )
+    role_types: Mapped[list[str]] = mapped_column(
+        ARRAY(Text), default=list, server_default="{}", nullable=False
+    )
+    min_rate: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    show_negotiable: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    show_noncommercial: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    show_agency: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+
+    # --- Step 3: Параметры для подбора ---
+    height_cm: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    clothing_size: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    shoe_size: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    ethnicity: Mapped[list[str]] = mapped_column(
+        ARRAY(Text), default=list, server_default="{}", nullable=False
+    )
+    body_type: Mapped[list[str]] = mapped_column(
+        ARRAY(Text), default=list, server_default="{}", nullable=False
+    )
+    hair_color: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    hair_length: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+
+    # --- Step 4: Профессиональные параметры ---
+    has_experience: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+    education: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    tax_status: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+
+    # --- Step 5: Дополнительные данные ---
+    eye_color: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    marks: Mapped[list[str]] = mapped_column(
+        ARRAY(Text), default=list, server_default="{}", nullable=False
+    )
+    skills_sport: Mapped[list[str]] = mapped_column(
+        ARRAY(Text), default=list, server_default="{}", nullable=False
+    )
+    skills_dance: Mapped[list[str]] = mapped_column(
+        ARRAY(Text), default=list, server_default="{}", nullable=False
+    )
+    skills_vocal: Mapped[list[str]] = mapped_column(
+        ARRAY(Text), default=list, server_default="{}", nullable=False
+    )
+    skills_instruments: Mapped[list[str]] = mapped_column(
+        ARRAY(Text), default=list, server_default="{}", nullable=False
+    )
+
+    # --- Step 6: Материалы и контакты ---
+    portfolio_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    video_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    professional_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    phone: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    vk_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    email: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    user: Mapped[User] = relationship(back_populates="profile")
 
 
 class Filter(Base):

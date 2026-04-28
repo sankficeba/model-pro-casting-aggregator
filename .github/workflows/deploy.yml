@@ -65,14 +65,14 @@ jobs:
       - name: Checkout (need compose file)
         uses: actions/checkout@v4
 
-      - name: Copy compose file to VPS
+      - name: Copy compose & Caddyfile to VPS
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.SSH_PORT || 22 }}
-          source: "docker-compose.prod.yml"
+          source: "docker-compose.prod.yml,Caddyfile"
           target: "${{ secrets.DEPLOY_PATH }}"
 
       - name: Deploy over SSH
@@ -95,4 +95,11 @@ jobs:
 
             docker compose -f docker-compose.prod.yml pull
             docker compose -f docker-compose.prod.yml up -d --remove-orphans
+
+            # Caddyfile примонтирован read-only — compose не пересоздаёт контейнер при его изменении.
+            # Перезагрузим конфиг вручную (если Caddy уже запущен).
+            if docker ps --format '{{.Names}}' | grep -q '^tg_parser_caddy$'; then
+              docker exec tg_parser_caddy caddy reload --config /etc/caddy/Caddyfile || true
+            fi
+
             docker image prune -f
