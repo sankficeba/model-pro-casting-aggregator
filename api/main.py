@@ -14,9 +14,12 @@ from api.reference_data import all_refs
 from api.schemas import ProfileResponse, ProfileUpdate
 from config import settings
 
-COMPLETION_MESSAGE = (
+FIRST_COMPLETION_MESSAGE = (
     "✅ Анкета успешно заполнена. "
     "Теперь вам будут поступать подходящие кастинги."
+)
+RECOMPLETION_MESSAGE = (
+    "✏️ Анкета успешно изменена. Подборка кастингов обновлена."
 )
 
 
@@ -93,12 +96,16 @@ async def update_my_profile(
 async def complete_my_profile(
     user: TelegramUser = Depends(current_user),
 ) -> ProfileResponse:
-    """Финальное завершение анкеты: уведомляем пользователя в боте."""
-    p = await profile_repo.get_profile(user.id)
+    """Финальное завершение анкеты: уведомляем пользователя в боте.
+
+    Текст сообщения отличается в первый раз и при повторном завершении.
+    """
+    p, was_first_time = await profile_repo.mark_completed(user.id)
     if p is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Профиль не найден",
         )
-    await _notify_user(user.id, COMPLETION_MESSAGE)
+    text = FIRST_COMPLETION_MESSAGE if was_first_time else RECOMPLETION_MESSAGE
+    await _notify_user(user.id, text)
     return p

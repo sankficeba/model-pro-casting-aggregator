@@ -129,6 +129,9 @@ class ActorProfile(Base):
         onupdate=func.now(),
         nullable=False,
     )
+    completed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     user: Mapped[User] = relationship(back_populates="profile")
 

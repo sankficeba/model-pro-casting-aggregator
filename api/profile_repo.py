@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from api.schemas import ProfileResponse, ProfileUpdate
@@ -84,6 +84,28 @@ async def get_profile(user_id: int) -> Optional[ProfileResponse]:
         )
         p = res.scalar_one_or_none()
         return _to_response(p) if p else None
+
+
+async def mark_completed(user_id: int) -> tuple[Optional[ProfileResponse], bool]:
+    """Отмечает профиль завершённым. Возвращает (профиль, was_first_time).
+
+    was_first_time = True, если completed_at до этого был NULL
+    (то есть пользователь завершает анкету впервые).
+    Возвращает (None, False), если профиля нет.
+    """
+    async with AsyncSessionLocal() as session:
+        res = await session.execute(
+            select(ActorProfile).where(ActorProfile.user_id == user_id)
+        )
+        p = res.scalar_one_or_none()
+        if p is None:
+            return None, False
+        was_first_time = p.completed_at is None
+        if was_first_time:
+            p.completed_at = func.now()
+            await session.commit()
+            await session.refresh(p)
+        return _to_response(p), was_first_time
 
 
 async def upsert_profile(
