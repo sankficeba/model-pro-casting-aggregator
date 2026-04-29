@@ -1,0 +1,70 @@
+"""Постобработка LLM-extract: подменяем русские лейблы и опечатки на
+канонические коды из api/reference_data.py.
+
+Зачем: gpt-4o-mini периодически возвращает в project_types/role_types
+лейбл вместо кода ("реклама" вместо "advertising"). Из-за этого сравнение
+set'ов в db.matching ничего не находит, и пользователь не получает
+уведомление. Нормализуем, чтобы матчинг работал даже при таких ошибках.
+"""
+from __future__ import annotations
+
+from api.reference_data import all_refs
+from models.schemas import ExtractedData
+
+
+def _build_indexes() -> tuple[dict[str, set[str]], dict[str, dict[str, str]]]:
+    """Возвращает:
+    - codes_by_category: {category: set_of_valid_codes}
+    - label_to_code_by_category: {category: {label_lowercase: code}}
+    """
+    refs = all_refs()
+    codes_by: dict[str, set[str]] = {}
+    label_to_code_by: dict[str, dict[str, str]] = {}
+    for category, items in refs.items():
+        codes_by[category] = {it["code"] for it in items}
+        label_to_code_by[category] = {it["label"].lower(): it["code"] for it in items}
+    return codes_by, label_to_code_by
+
+
+_CODES, _LABELS = _build_indexes()
+
+
+def _normalize_one(category: str, raw: str) -> str | None:
+    valid = _CODES.get(category, set())
+    label_map = _LABELS.get(category, {})
+    s = (raw or "").strip()
+    if not s:
+        return None
+    if s in valid:
+        return s
+    # Точный label-матч (без учёта регистра)
+    code = label_map.get(s.lower())
+    if code:
+        return code
+    # Допускаем мелкие отклонения: тире/подчёркивания/лишние пробелы
+    cleaned = s.lower().replace("-", " ").replace("_", " ").strip()
+    code = label_map.get(cleaned)
+    if code:
+        return code
+    return None
+
+
+def _normalize_list(category: str, raw: list[str]) -> list[str]:
+    out: list[str] = []
+    seen: set[str] = set()
+    for x in raw or []:
+        norm = _normalize_one(category, x)
+        if norm is not None and norm not in seen:
+            seen.add(norm)
+            out.append(norm)
+    return out
+
+
+def normalize_extracted(data: ExtractedData) -> ExtractedData:
+    """Возвращает копию ExtractedData с нормализованными списками кодов."""
+    return data.model_copy(
+        update={
+            "project_types": _normalize_list("project_types", data.project_types),
+            "role_types": _normalize_list("role_types", data.role_types),
+        }
+    )

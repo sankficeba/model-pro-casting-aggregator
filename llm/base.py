@@ -8,6 +8,7 @@ from typing import Any
 from loguru import logger
 from pydantic import ValidationError
 
+from llm.normalize import normalize_extracted
 from models.schemas import ExtractedData
 
 SYSTEM_PROMPT = """Ты разбираешь объявления о кастингах на актёров и моделей
@@ -71,7 +72,20 @@ class LLMProvider(ABC):
 
         try:
             data = _try_parse_json(raw)
-            return ExtractedData(**data)
+            parsed = ExtractedData(**data)
         except (ValueError, ValidationError, json.JSONDecodeError) as e:
             logger.warning("Не удалось распарсить ответ LLM: {} | raw={!r}", e, raw)
             return ExtractedData(confidence=0.0)
+
+        normalized = normalize_extracted(parsed)
+        if normalized.project_types != parsed.project_types:
+            logger.debug(
+                "Нормализация project_types: {} -> {}",
+                parsed.project_types, normalized.project_types,
+            )
+        if normalized.role_types != parsed.role_types:
+            logger.debug(
+                "Нормализация role_types: {} -> {}",
+                parsed.role_types, normalized.role_types,
+            )
+        return normalized
