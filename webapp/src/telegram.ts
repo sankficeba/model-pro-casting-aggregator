@@ -54,3 +54,11 @@ export function isInTelegram(): boolean {
 export function haptic(type: "light" | "medium" | "heavy" = "light") {
   tg?.HapticFeedback?.impactOccurred(type);
 }
+
+export function notify(type: "error" | "success" | "warning") {
+  tg?.HapticFeedback?.notificationOccurred(type);
+}
+
+export function closeApp() {
+  tg?.close();
+}

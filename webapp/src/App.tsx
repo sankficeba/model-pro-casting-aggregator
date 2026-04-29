@@ -1,7 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { api } from "./api";
 import { EMPTY_PROFILE, type Profile, type Refs } from "./types";
-import { getInitData, haptic, initTelegram, isInTelegram } from "./telegram";
+import {
+  closeApp,
+  getInitData,
+  haptic,
+  initTelegram,
+  isInTelegram,
+  notify,
+} from "./telegram";
 import { Step1, Step2, Step3, Step4, Step5, Step6 } from "./components/steps";
 import { PrimaryButton, ProgressBar } from "./components/ui";
 
@@ -17,6 +24,9 @@ const PROGRESS_HINTS: Record<number, string> = {
 };
 
 // ===== Validation =====
+
+// Простая проверка: что-то@что-то.доменное-расширение, минимум 2 буквы в TLD.
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[A-Za-zА-Яа-я]{2,}$/;
 
 function validateStep(step: number, p: Profile): string | null {
   const missing: string[] = [];
@@ -34,7 +44,11 @@ function validateStep(step: number, p: Profile): string | null {
     if (p.body_type.length === 0) missing.push("Телосложение");
     if (!p.hair_color || !p.hair_length) missing.push("Волосы");
   } else if (step === 6) {
-    if (!p.email?.trim()) missing.push("Email");
+    if (!p.email?.trim()) {
+      missing.push("Email");
+    } else if (!EMAIL_RE.test(p.email.trim())) {
+      return "Некорректный email";
+    }
   }
   return missing.length ? "Заполните: " + missing.join(", ") : null;
 }
@@ -136,7 +150,7 @@ export default function App() {
     const validationError = validateStep(step, profile);
     if (validationError) {
       setError(validationError);
-      haptic("heavy");
+      notify("error");
       return;
     }
     haptic("light");
@@ -145,7 +159,12 @@ export default function App() {
       if (ok) setStep(step + 1);
       window.scrollTo({ top: 0, behavior: "smooth" });
     } else {
-      await save(true);
+      const ok = await save(true);
+      if (ok) {
+        notify("success");
+        // Дать пользователю увидеть «Сохранено» и закрыть Mini App
+        setTimeout(closeApp, 1500);
+      }
     }
   }
 
