@@ -48,7 +48,7 @@ services:
       - 1.1.1.1
       - 8.8.8.8
     volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./caddy:/etc/caddy:ro
       - caddy_data:/data
       - caddy_config:/config
       - caddy_logs:/var/log/caddy

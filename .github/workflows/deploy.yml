@@ -92,7 +92,7 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.SSH_PORT || 22 }}
-          source: "docker-compose.prod.yml,Caddyfile"
+          source: "docker-compose.prod.yml,caddy/Caddyfile"
           target: "${{ secrets.DEPLOY_PATH }}"
 
       - name: Deploy over SSH
