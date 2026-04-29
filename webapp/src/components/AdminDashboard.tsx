@@ -229,6 +229,44 @@ function MessagesTab() {
                   )}
                 </div>
               )}
+              {m.vacancies.length > 0 && (
+                <div className="mt-2 space-y-1">
+                  <div className="text-xs text-slate-500">
+                    Вакансии ({m.vacancies.length}):
+                  </div>
+                  <ul className="space-y-1">
+                    {m.vacancies.map((v) => (
+                      <li
+                        key={v.id}
+                        className="text-xs text-slate-300 bg-bg-card rounded px-2 py-1"
+                      >
+                        <span className="font-medium">
+                          {v.role_label ?? v.role_types[0] ?? "Роль"}
+                        </span>
+                        {v.gender && <> · {v.gender === "male" ? "м" : "ж"}</>}
+                        {v.age_min != null && (
+                          <>
+                            {" "}
+                            · {v.age_min}
+                            {v.age_max !== v.age_min ? `–${v.age_max}` : ""} лет
+                          </>
+                        )}
+                        {v.rate != null && (
+                          <> · {v.rate.toLocaleString("ru-RU")} ₽</>
+                        )}
+                        {v.role_types.length > 0 && (
+                          <> · {v.role_types.join(",")}</>
+                        )}
+                        {v.description && (
+                          <div className="text-slate-400 mt-0.5 break-words">
+                            {v.description}
+                          </div>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </li>
           ))}
         </ul>

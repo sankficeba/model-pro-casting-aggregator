@@ -11,9 +11,10 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
+from sqlalchemy.orm import selectinload
 
 from api.auth import TelegramUser, admin_user
-from db.models import ActorProfile, Message, Notification
+from db.models import ActorProfile, Message, Notification, Vacancy
 from db.session import AsyncSessionLocal
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
@@ -34,6 +35,18 @@ class AdminProfile(BaseModel):
     updated_at: datetime
 
 
+class AdminVacancy(BaseModel):
+    id: int
+    idx: int
+    role_types: list[str] = []
+    gender: Optional[str] = None
+    age_min: Optional[int] = None
+    age_max: Optional[int] = None
+    rate: Optional[int] = None
+    description: Optional[str] = None
+    role_label: Optional[str] = None
+
+
 class AdminMessage(BaseModel):
     id: int
     tg_chat_username: Optional[str] = None
@@ -51,6 +64,7 @@ class AdminMessage(BaseModel):
     confidence: float
     received_at: datetime
     notified_count: int = Field(0, description="Сколько пользователей получило уведомление")
+    vacancies: list[AdminVacancy] = []
 
 
 class AdminStats(BaseModel):
@@ -143,7 +157,13 @@ async def list_messages(
             for row in (await session.execute(notif_counts_stmt)).all()
         }
 
-        msg_stmt = select(Message).order_by(Message.id.desc()).limit(limit).offset(offset)
+        msg_stmt = (
+            select(Message)
+            .options(selectinload(Message.vacancies))
+            .order_by(Message.id.desc())
+            .limit(limit)
+            .offset(offset)
+        )
         if casting_only:
             msg_stmt = msg_stmt.where(Message.is_casting.is_(True))
         res = await session.execute(msg_stmt)
@@ -167,6 +187,15 @@ async def list_messages(
             confidence=m.confidence,
             received_at=m.received_at,
             notified_count=notif_counts.get(m.id, 0),
+            vacancies=[
+                AdminVacancy(
+                    id=v.id, idx=v.idx,
+                    role_types=list(v.role_types or []),
+                    gender=v.gender, age_min=v.age_min, age_max=v.age_max,
+                    rate=v.rate, description=v.description, role_label=v.role_label,
+                )
+                for v in m.vacancies
+            ],
         )
         for m in rows
     ]

@@ -99,6 +99,18 @@ export interface AdminProfileRow {
   updated_at: string;
 }
 
+export interface AdminVacancyRow {
+  id: number;
+  idx: number;
+  role_types: string[];
+  gender: string | null;
+  age_min: number | null;
+  age_max: number | null;
+  rate: number | null;
+  description: string | null;
+  role_label: string | null;
+}
+
 export interface AdminMessageRow {
   id: number;
   tg_chat_username: string | null;
@@ -116,6 +128,7 @@ export interface AdminMessageRow {
   confidence: number;
   received_at: string;
   notified_count: number;
+  vacancies: AdminVacancyRow[];
 }
 
 export const EMPTY_PROFILE: Profile = {
