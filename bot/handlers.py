@@ -5,7 +5,7 @@ import shlex
 
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import Command, CommandStart
-from aiogram.types import Message
+from aiogram.types import Message, ReplyKeyboardRemove
 from loguru import logger
 
 from db import repository
@@ -92,6 +92,7 @@ def build_dispatcher(storage: FilterStorage) -> Dispatcher:
             "после этого я начну присылать тебе подходящие объявления из "
             "отслеживаемых Telegram-каналов.\n\n" + HELP_TEXT,
             parse_mode="HTML",
+            reply_markup=ReplyKeyboardRemove(),
         )
 
     @dp.message(Command("help"))
