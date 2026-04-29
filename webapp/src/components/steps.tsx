@@ -2,7 +2,9 @@
 import type { Profile, Refs } from "../types";
 import {
   ChipGroup,
+  CityInput,
   Field,
+  NumberInput,
   PairButtons,
   RangeInput,
   Section,
@@ -41,10 +43,10 @@ export function Step1({ profile, refs, patch }: StepProps) {
       </Field>
 
       <Field label="Город проживания" required>
-        <TextInput
-          value={profile.city ?? ""}
-          onChange={(e) => patch({ city: e.target.value })}
-          placeholder="Москва"
+        <CityInput
+          value={profile.city}
+          onChange={(v) => patch({ city: v })}
+          placeholder="Начните вводить — Москва, Санкт-Петербург…"
         />
       </Field>
 
@@ -55,13 +57,11 @@ export function Step1({ profile, refs, patch }: StepProps) {
       />
 
       <Field label="Фактический возраст" required>
-        <TextInput
-          type="number"
-          value={profile.actual_age ?? ""}
-          onChange={(e) =>
-            patch({ actual_age: e.target.value ? Number(e.target.value) : null })
-          }
+        <NumberInput
+          value={profile.actual_age}
+          onChange={(v) => patch({ actual_age: v })}
           placeholder="24"
+          maxLength={3}
         />
       </Field>
 
@@ -101,14 +101,12 @@ export function Step2({ profile, refs, patch }: StepProps) {
         />
       </Field>
 
-      <Field label="Минимальная ставка (₽)">
-        <TextInput
-          type="number"
-          value={profile.min_rate ?? ""}
-          onChange={(e) =>
-            patch({ min_rate: e.target.value ? Number(e.target.value) : null })
-          }
+      <Field label="Минимальная ставка (₽ / съёмочный день)">
+        <NumberInput
+          value={profile.min_rate}
+          onChange={(v) => patch({ min_rate: v })}
           placeholder="0 — оставьте пустым, чтобы не фильтровать"
+          maxLength={7}
         />
       </Field>
 
@@ -163,39 +161,29 @@ export function Step3({ profile, refs, patch }: StepProps) {
       </Field>
 
       <Field label="Рост (см)" required>
-        <TextInput
-          type="number"
-          value={profile.height_cm ?? ""}
-          onChange={(e) =>
-            patch({ height_cm: e.target.value ? Number(e.target.value) : null })
-          }
+        <NumberInput
+          value={profile.height_cm}
+          onChange={(v) => patch({ height_cm: v })}
           placeholder="175"
+          maxLength={3}
         />
       </Field>
 
       <div className="grid grid-cols-2 gap-3">
         <Field label="Размер одежды">
-          <TextInput
-            type="number"
-            value={profile.clothing_size ?? ""}
-            onChange={(e) =>
-              patch({
-                clothing_size: e.target.value ? Number(e.target.value) : null,
-              })
-            }
+          <NumberInput
+            value={profile.clothing_size}
+            onChange={(v) => patch({ clothing_size: v })}
             placeholder="48"
+            maxLength={2}
           />
         </Field>
         <Field label="Размер обуви">
-          <TextInput
-            type="number"
-            value={profile.shoe_size ?? ""}
-            onChange={(e) =>
-              patch({
-                shoe_size: e.target.value ? Number(e.target.value) : null,
-              })
-            }
+          <NumberInput
+            value={profile.shoe_size}
+            onChange={(v) => patch({ shoe_size: v })}
             placeholder="42"
+            maxLength={2}
           />
         </Field>
       </div>
@@ -311,7 +299,7 @@ export function Step5({ profile, refs, patch }: StepProps) {
           value={profile.eye_color}
           onChange={(v) => patch({ eye_color: v })}
           options={refs.eye_colors}
-          placeholder="Карие"
+          placeholder="Не выбрано"
         />
       </Field>
 

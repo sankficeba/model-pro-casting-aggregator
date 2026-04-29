@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { api } from "./api";
 import { EMPTY_PROFILE, type Profile, type Refs } from "./types";
 import { getInitData, haptic, initTelegram, isInTelegram } from "./telegram";
@@ -16,6 +16,70 @@ const PROGRESS_HINTS: Record<number, string> = {
   6: "Заполните email, чтобы завершить регистрацию.",
 };
 
+// ===== Validation =====
+
+function validateStep(step: number, p: Profile): string | null {
+  const missing: string[] = [];
+  if (step === 1) {
+    if (!p.full_name?.trim()) missing.push("ФИО");
+    if (!p.gender) missing.push("Пол");
+    if (!p.city?.trim()) missing.push("Город");
+    if (p.actual_age == null) missing.push("Фактический возраст");
+  } else if (step === 2) {
+    if (p.project_types.length === 0) missing.push("Типы проектов");
+    if (p.role_types.length === 0) missing.push("Типы ролей");
+  } else if (step === 3) {
+    if (p.height_cm == null) missing.push("Рост");
+    if (p.ethnicity.length === 0) missing.push("Этнос");
+    if (p.body_type.length === 0) missing.push("Телосложение");
+    if (!p.hair_color || !p.hair_length) missing.push("Волосы");
+  } else if (step === 6) {
+    if (!p.email?.trim()) missing.push("Email");
+  }
+  return missing.length ? "Заполните: " + missing.join(", ") : null;
+}
+
+// ===== Completion percentage (локально, не ждём бэк) =====
+
+function calcCompletion(p: Profile): number {
+  const checks: boolean[] = [
+    !!p.full_name?.trim(),
+    !!p.gender,
+    !!p.city?.trim(),
+    p.actual_age != null,
+    p.play_age_min != null || p.play_age_max != null,
+    p.project_types.length > 0,
+    p.role_types.length > 0,
+    p.min_rate != null,
+    p.height_cm != null,
+    p.clothing_size != null,
+    p.shoe_size != null,
+    p.ethnicity.length > 0,
+    p.body_type.length > 0,
+    !!p.hair_color,
+    !!p.hair_length,
+    p.has_experience !== null && p.has_experience !== undefined,
+    !!p.education,
+    !!p.tax_status,
+    !!p.eye_color,
+    p.marks.length > 0,
+    p.skills_sport.length > 0,
+    p.skills_dance.length > 0,
+    p.skills_vocal.length > 0,
+    p.skills_instruments.length > 0,
+    !!p.portfolio_url,
+    !!p.video_url,
+    !!p.professional_url,
+    !!p.phone,
+    !!p.vk_url,
+    !!p.email,
+  ];
+  const filled = checks.filter(Boolean).length;
+  return Math.round((filled / checks.length) * 100);
+}
+
+// ===== App =====
+
 export default function App() {
   const [step, setStep] = useState<number>(1);
   const [refs, setRefs] = useState<Refs | null>(null);
@@ -25,7 +89,6 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [savedToast, setSavedToast] = useState<string | null>(null);
 
-  // Старт
   useEffect(() => {
     initTelegram();
     (async () => {
@@ -42,8 +105,11 @@ export default function App() {
     })();
   }, []);
 
+  const completionPct = useMemo(() => calcCompletion(profile), [profile]);
+
   function patch(p: Partial<Profile>) {
     setProfile((prev) => ({ ...prev, ...p }));
+    if (error) setError(null);
   }
 
   async function save(showToast = true): Promise<boolean> {
@@ -67,6 +133,12 @@ export default function App() {
   }
 
   async function next() {
+    const validationError = validateStep(step, profile);
+    if (validationError) {
+      setError(validationError);
+      haptic("heavy");
+      return;
+    }
     haptic("light");
     if (step < TOTAL_STEPS) {
       const ok = await save(false);
@@ -80,6 +152,7 @@ export default function App() {
   function back() {
     haptic("light");
     if (step > 1) setStep(step - 1);
+    setError(null);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -108,7 +181,6 @@ export default function App() {
     );
   }
 
-  const progressPct = profile.completion_pct ?? 0;
   const stepProps = { profile, refs: refs!, patch };
 
   return (
@@ -143,9 +215,11 @@ export default function App() {
 
         {/* Хинт прогресса */}
         <div className="mt-6 rounded-card bg-bg-surface px-4 py-3 flex items-baseline gap-3">
-          <span className="text-accent text-lg font-bold">{progressPct}%</span>
+          <span className="text-accent text-lg font-bold tabular-nums">
+            {completionPct}%
+          </span>
           <span className="text-sm text-slate-300">
-            {PROGRESS_HINTS[step] ?? `${progressPct}% профиля заполнено`}
+            {PROGRESS_HINTS[step] ?? `${completionPct}% профиля заполнено`}
           </span>
         </div>
 
