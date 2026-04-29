@@ -188,11 +188,28 @@ class Message(Base):
     tg_chat_username: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     tg_message_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     text: Mapped[str] = mapped_column(Text, nullable=False)
+
+    # Извлечённые LLM поля (текущая схема).
+    is_casting: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     gender: Mapped[Optional[str]] = mapped_column(String(8), nullable=True)
-    age: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    category: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    age_min: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    age_max: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    project_types: Mapped[list[str]] = mapped_column(
+        ARRAY(Text), default=list, server_default="{}", nullable=False
+    )
+    role_types: Mapped[list[str]] = mapped_column(
+        ARRAY(Text), default=list, server_default="{}", nullable=False
+    )
+    city: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    rate: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     summary: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     confidence: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+
+    # Хвост от старой схемы — заполняется только в исторических строках,
+    # новые записи их не используют. Оставлено для совместимости.
+    age: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    category: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+
     received_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
     )

@@ -22,20 +22,6 @@ class ExtractedData(BaseModel):
     summary: Optional[str] = None
     confidence: float = Field(0.0, ge=0.0, le=1.0)
 
-    # Backward-совместимость со старыми хранимыми данными:
-    # одно число вместо диапазона + старая «категория».
-    @property
-    def age(self) -> Optional[int]:
-        if self.age_min is not None and self.age_max is not None:
-            return (self.age_min + self.age_max) // 2
-        return self.age_min if self.age_min is not None else self.age_max
-
-    @property
-    def category(self) -> Optional[str]:
-        if not self.project_types:
-            return None
-        return ",".join(self.project_types)
-
 
 class UserFilter(BaseModel):
     """Устаревшая модель текстового фильтра. Сейчас матчинг идёт по
