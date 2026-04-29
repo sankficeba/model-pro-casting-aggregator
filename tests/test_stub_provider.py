@@ -2,7 +2,7 @@ from llm.stub_provider import StubProvider
 
 
 async def test_stub_casting_one_vacancy():
-    text = "Кастинг на сериал. Ищем девушку 25-30 лет."
+    text = "Кастинг на сериал. Девушка 25-30 лет, нужна на главную роль."
     out = await StubProvider().extract(text)
     assert out.is_casting is True
     assert len(out.vacancies) == 1
