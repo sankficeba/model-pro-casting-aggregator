@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { api } from "./api";
 import { EMPTY_PROFILE, type Profile, type Refs } from "./types";
 import {
@@ -13,15 +13,6 @@ import { Step1, Step2, Step3, Step4, Step5, Step6 } from "./components/steps";
 import { PrimaryButton, ProgressBar } from "./components/ui";
 
 const TOTAL_STEPS = 6;
-
-const PROGRESS_HINTS: Record<number, string> = {
-  1: "Мы начинаем подбирать для вас кастинги.",
-  2: "Уточняем тип проектов и условия.",
-  3: "Отлично — параметры помогут точнее подбирать.",
-  4: "Профессиональный профиль почти заполнен.",
-  5: "Чем больше навыков — тем точнее подбор.",
-  6: "Заполните email, чтобы завершить регистрацию.",
-};
 
 // ===== Validation =====
 
@@ -53,45 +44,6 @@ function validateStep(step: number, p: Profile): string | null {
   return missing.length ? "Заполните: " + missing.join(", ") : null;
 }
 
-// ===== Completion percentage (локально, не ждём бэк) =====
-
-function calcCompletion(p: Profile): number {
-  const checks: boolean[] = [
-    !!p.full_name?.trim(),
-    !!p.gender,
-    !!p.city?.trim(),
-    p.actual_age != null,
-    p.play_age_min != null || p.play_age_max != null,
-    p.project_types.length > 0,
-    p.role_types.length > 0,
-    p.min_rate != null,
-    p.height_cm != null,
-    p.clothing_size != null,
-    p.shoe_size != null,
-    p.ethnicity.length > 0,
-    p.body_type.length > 0,
-    !!p.hair_color,
-    !!p.hair_length,
-    p.has_experience !== null && p.has_experience !== undefined,
-    !!p.education,
-    !!p.tax_status,
-    !!p.eye_color,
-    p.marks.length > 0,
-    p.skills_sport.length > 0,
-    p.skills_dance.length > 0,
-    p.skills_vocal.length > 0,
-    p.skills_instruments.length > 0,
-    !!p.portfolio_url,
-    !!p.video_url,
-    !!p.professional_url,
-    !!p.phone,
-    !!p.vk_url,
-    !!p.email,
-  ];
-  const filled = checks.filter(Boolean).length;
-  return Math.round((filled / checks.length) * 100);
-}
-
 // ===== App =====
 
 export default function App() {
@@ -118,8 +70,6 @@ export default function App() {
       }
     })();
   }, []);
-
-  const completionPct = useMemo(() => calcCompletion(profile), [profile]);
 
   function patch(p: Partial<Profile>) {
     setProfile((prev) => ({ ...prev, ...p }));
@@ -231,16 +181,6 @@ export default function App() {
         {step === 4 && <Step4 {...stepProps} />}
         {step === 5 && <Step5 {...stepProps} />}
         {step === 6 && <Step6 {...stepProps} />}
-
-        {/* Хинт прогресса */}
-        <div className="mt-6 rounded-card bg-bg-surface px-4 py-3 flex items-baseline gap-3">
-          <span className="text-accent text-lg font-bold tabular-nums">
-            {completionPct}%
-          </span>
-          <span className="text-sm text-slate-300">
-            {PROGRESS_HINTS[step] ?? `${completionPct}% профиля заполнено`}
-          </span>
-        </div>
 
         {error && (
           <div className="mt-4 rounded-card bg-red-950/40 border border-red-900 px-4 py-3 text-sm text-red-300">
