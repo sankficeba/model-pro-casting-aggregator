@@ -10,13 +10,19 @@ from sqlalchemy.ext.asyncio import (
 
 from config import settings
 
-engine: AsyncEngine = create_async_engine(
-    settings.db_dsn,
-    pool_pre_ping=True,
-    pool_size=5,
-    max_overflow=5,
-    echo=False,
-)
+_engine_kwargs = {
+    "echo": False,
+}
+
+# SQLite doesn't support pool_size/max_overflow; only PostgreSQL does
+if not settings.db_dsn.startswith("sqlite"):
+    _engine_kwargs.update({
+        "pool_pre_ping": True,
+        "pool_size": 5,
+        "max_overflow": 5,
+    })
+
+engine: AsyncEngine = create_async_engine(settings.db_dsn, **_engine_kwargs)
 
 AsyncSessionLocal: async_sessionmaker[AsyncSession] = async_sessionmaker(
     engine, expire_on_commit=False, class_=AsyncSession
