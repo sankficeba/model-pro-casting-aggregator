@@ -7,15 +7,16 @@ from __future__ import annotations
 
 from typing import Iterable
 
+from loguru import logger
+
 from db import repository
-from models.schemas import ExtractedData, UserFilter
+from models.schemas import PostExtraction, UserFilter
 
 
 class FilterStorage:
     """Тонкая обёртка над репозиторием. Пока — один фильтр на пользователя."""
 
     def __init__(self, *_args, **_kwargs):
-        # Аргументы оставлены для обратной совместимости с прежней инициализацией
         pass
 
     async def upsert(self, f: UserFilter) -> None:
@@ -31,5 +32,10 @@ class FilterStorage:
     async def all(self) -> list[UserFilter]:
         return await repository.all_filters()
 
-    async def find_matches(self, extracted: ExtractedData) -> Iterable[UserFilter]:
-        return [f for f in await self.all() if f.matches(extracted)]
+    async def find_matches(self, extracted: PostExtraction) -> Iterable[UserFilter]:
+        """Deprecated: матчинг переехал в db.matching.find_matching_vacancies.
+        Здесь оставлено как no-op, чтобы не ломать исторические импорты."""
+        logger.warning(
+            "FilterStorage.find_matches is deprecated; use db.matching.find_matching_vacancies"
+        )
+        return []
