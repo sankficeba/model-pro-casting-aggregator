@@ -1,6 +1,6 @@
 """notifications.filter_id nullable + drop FK
 
-Revision ID: 0004_notifications_filter_id_nullable
+Revision ID: 0004_notif_filter_nullable
 Revises: 0003_actor_profile_completed_at
 Create Date: 2026-04-29
 
@@ -8,13 +8,15 @@ Create Date: 2026-04-29
 триггернул рассылку). Сейчас матчинг идёт по actor_profiles, поэтому
 filter_id больше не имеет смысла — делаем его nullable и убираем FK.
 Существующие строки сохраняются.
+
+Имя ревизии короткое (26 chars) — alembic_version.version_num ограничен 32.
 """
 from typing import Sequence, Union
 
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0004_notifications_filter_id_nullable"
+revision: str = "0004_notif_filter_nullable"
 down_revision: Union[str, None] = "0003_actor_profile_completed_at"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
