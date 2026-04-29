@@ -60,6 +60,9 @@ def _normalize_vacancy(v: VacancyExtraction) -> VacancyExtraction:
         update={
             "role_types": _normalize_list("role_types", v.role_types),
             "ethnicity": _normalize_list("ethnicity", v.ethnicity),
+            "body_type": _normalize_list("body_type", v.body_type),
+            "hair_color": _normalize_list("hair_colors", v.hair_color),
+            "hair_length": _normalize_list("hair_lengths", v.hair_length),
         }
     )
 

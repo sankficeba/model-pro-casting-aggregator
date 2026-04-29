@@ -253,6 +253,15 @@ class Vacancy(Base):
     )
     height_min: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     height_max: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    body_type: Mapped[list[str]] = mapped_column(
+        ARRAY(Text), default=list, server_default="{}", nullable=False,
+    )
+    hair_color: Mapped[list[str]] = mapped_column(
+        ARRAY(Text), default=list, server_default="{}", nullable=False,
+    )
+    hair_length: Mapped[list[str]] = mapped_column(
+        ARRAY(Text), default=list, server_default="{}", nullable=False,
+    )
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     role_label: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
 

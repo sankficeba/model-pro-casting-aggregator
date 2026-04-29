@@ -251,6 +251,15 @@ function MessagesTab() {
                         {v.ethnicity.length > 0 && (
                           <> · {v.ethnicity.join(",")}</>
                         )}
+                        {v.body_type.length > 0 && (
+                          <> · {v.body_type.join(",")}</>
+                        )}
+                        {v.hair_color.length > 0 && (
+                          <> · волосы: {v.hair_color.join(",")}</>
+                        )}
+                        {v.hair_length.length > 0 && (
+                          <> · длина: {v.hair_length.join(",")}</>
+                        )}
                         {v.role_types.length > 0 && (
                           <> · {v.role_types.join(",")}</>
                         )}

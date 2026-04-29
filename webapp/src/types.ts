@@ -110,6 +110,9 @@ export interface AdminVacancyRow {
   ethnicity: string[];
   height_min: number | null;
   height_max: number | null;
+  body_type: string[];
+  hair_color: string[];
+  hair_length: string[];
   description: string | null;
   role_label: string | null;
 }

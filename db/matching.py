@@ -71,6 +71,22 @@ def matches(profile: ActorProfile, post: PostExtraction, vacancy: VacancyExtract
         if not (v_lo <= profile.height_cm <= v_hi):
             return False
 
+    # Телосложение (per-vacancy)
+    if vacancy.body_type and profile.body_type:
+        if not _intersect(vacancy.body_type, profile.body_type):
+            return False
+
+    # Цвет волос (per-vacancy): в профиле один цвет, в вакансии может быть
+    # список разрешённых. Если в профиле не задан — пропускаем.
+    if vacancy.hair_color and profile.hair_color:
+        if profile.hair_color not in vacancy.hair_color:
+            return False
+
+    # Длина волос (per-vacancy): аналогично цвету.
+    if vacancy.hair_length and profile.hair_length:
+        if profile.hair_length not in vacancy.hair_length:
+            return False
+
     # Город (post-level), с поправкой на ready_for_travel
     if post.city and profile.city:
         if post.city.lower() != profile.city.lower() and not profile.ready_for_travel:

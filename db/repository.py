@@ -168,6 +168,9 @@ async def insert_message_with_vacancies(
                             ethnicity=list(v.ethnicity),
                             height_min=v.height_min,
                             height_max=v.height_max,
+                            body_type=list(v.body_type),
+                            hair_color=list(v.hair_color),
+                            hair_length=list(v.hair_length),
                             description=v.description,
                             role_label=v.role_label,
                         )

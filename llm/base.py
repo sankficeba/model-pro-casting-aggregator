@@ -44,6 +44,15 @@ SYSTEM_PROMPT = """Ты разбираешь объявления о касти�
       "height_min": int|null,             // рост в см, нижняя граница
       "height_max": int|null,             // рост в см, верхняя граница;
                                           // одно значение "рост 180" → height_min=height_max=180
+      "body_type": [str],                 // подмножество кодов телосложения:
+                                          // slim, athletic, normal, plus_size, muscular.
+                                          // Пустой массив если не указано.
+      "hair_color": [str],                // подмножество цветов волос:
+                                          // black, dark_brown, brown, light_brown,
+                                          // blond, red, grey, dyed.
+                                          // Несколько вариантов — все перечислить.
+      "hair_length": [str],               // подмножество кодов длины волос:
+                                          // bald, very_short, short, medium, long, very_long.
       "description": str|null,           // фрагмент поста об этой роли
       "role_label": str|null             // короткое имя роли как в посте: "Мама", "Сын", "Прохожий"
     }

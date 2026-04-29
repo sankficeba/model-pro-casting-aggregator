@@ -17,6 +17,9 @@ class VacancyExtraction(BaseModel):
     ethnicity: list[str] = []
     height_min: Optional[int] = Field(None, ge=50, le=250)
     height_max: Optional[int] = Field(None, ge=50, le=250)
+    body_type: list[str] = []
+    hair_color: list[str] = []
+    hair_length: list[str] = []
     description: Optional[str] = None
     role_label: Optional[str] = None
 

@@ -20,6 +20,9 @@ class FakeProfile:
     ready_for_travel: bool = False
     ethnicity: list[str] = field(default_factory=list)
     height_cm: int | None = None
+    body_type: list[str] = field(default_factory=list)
+    hair_color: str | None = None
+    hair_length: str | None = None
 
 
 def _post(**kw) -> PostExtraction:
@@ -156,4 +159,39 @@ def test_height_unspecified_in_profile_passes():
     p = _post()
     v = _v(height_min=180, height_max=200)
     prof = FakeProfile(height_cm=None)
+    assert matches(prof, p, v) is True
+
+
+def test_body_type_intersection():
+    p = _post()
+    v = _v(body_type=["athletic", "muscular"])
+    prof_match = FakeProfile(body_type=["athletic"])
+    prof_miss = FakeProfile(body_type=["plus_size"])
+    assert matches(prof_match, p, v) is True
+    assert matches(prof_miss, p, v) is False
+
+
+def test_hair_color_membership():
+    """В вакансии перечислены допустимые цвета — у профиля один из них."""
+    p = _post()
+    v = _v(hair_color=["blond", "light_brown"])
+    prof_blond = FakeProfile(hair_color="blond")
+    prof_black = FakeProfile(hair_color="black")
+    assert matches(prof_blond, p, v) is True
+    assert matches(prof_black, p, v) is False
+
+
+def test_hair_length_membership():
+    p = _post()
+    v = _v(hair_length=["long", "very_long"])
+    prof_long = FakeProfile(hair_length="long")
+    prof_short = FakeProfile(hair_length="short")
+    assert matches(prof_long, p, v) is True
+    assert matches(prof_short, p, v) is False
+
+
+def test_hair_unspecified_in_profile_passes():
+    p = _post()
+    v = _v(hair_color=["blond"], hair_length=["long"])
+    prof = FakeProfile(hair_color=None, hair_length=None)
     assert matches(prof, p, v) is True
