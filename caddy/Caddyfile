@@ -10,14 +10,24 @@ modelpro.agency, www.modelpro.agency {
         Referrer-Policy "strict-origin-when-cross-origin"
     }
 
-    # API → FastAPI (префикс /api/ оставляем)
+    # API → FastAPI (префикс /api/ оставляем).
+    # Retry помогает пережить ~20-сек окно во время деплоя, пока compose
+    # пересоздаёт api-контейнер и uvicorn ещё не слушает порт.
     handle /api/* {
-        reverse_proxy api:8000
+        reverse_proxy api:8000 {
+            lb_try_duration 30s
+            lb_try_interval 1s
+            fail_duration 5s
+        }
     }
 
     # Mini App (React+Vite билд) → nginx-сервис
     handle {
-        reverse_proxy webapp:80
+        reverse_proxy webapp:80 {
+            lb_try_duration 30s
+            lb_try_interval 1s
+            fail_duration 5s
+        }
     }
 
     log {
