@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from typing import Optional
 from urllib.parse import parse_qsl
 
-from fastapi import Header, HTTPException, status
+from fastapi import Depends, Header, HTTPException, status
 
 from config import settings
 
@@ -104,3 +104,17 @@ async def current_user(
 ) -> TelegramUser:
     """Зависимость: фронт обязан слать initData в заголовке X-Telegram-Init-Data."""
     return parse_init_data(x_telegram_init_data)
+
+
+def is_admin_user(user: TelegramUser) -> bool:
+    return user.id in settings.admin_ids
+
+
+async def admin_user(user: TelegramUser = Depends(current_user)) -> TelegramUser:
+    """Только для пользователей из ADMIN_IDS — иначе 403."""
+    if not is_admin_user(user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Доступ только для администраторов",
+        )
+    return user

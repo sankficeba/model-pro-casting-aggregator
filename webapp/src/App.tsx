@@ -9,6 +9,7 @@ import {
   isInTelegram,
   notify,
 } from "./telegram";
+import { AdminDashboard } from "./components/AdminDashboard";
 import { Step1, Step2, Step3, Step4, Step5, Step6 } from "./components/steps";
 import { PrimaryButton, ProgressBar } from "./components/ui";
 
@@ -54,14 +55,21 @@ export default function App() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [savedToast, setSavedToast] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [view, setView] = useState<"wizard" | "admin">("wizard");
 
   useEffect(() => {
     initTelegram();
     (async () => {
       try {
-        const [r, p] = await Promise.all([api.getRefs(), api.getProfile()]);
+        const [r, p, me] = await Promise.all([
+          api.getRefs(),
+          api.getProfile(),
+          api.getMe().catch(() => null),
+        ]);
         setRefs(r);
         setProfile({ ...EMPTY_PROFILE, ...p });
+        setIsAdmin(me?.is_admin ?? false);
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         setError(msg);
@@ -153,6 +161,10 @@ export default function App() {
     );
   }
 
+  if (view === "admin") {
+    return <AdminDashboard onBack={() => setView("wizard")} />;
+  }
+
   const stepProps = { profile, refs: refs!, patch };
 
   return (
@@ -173,6 +185,15 @@ export default function App() {
           <span className="text-xs text-slate-500 tabular-nums">
             {step}/{TOTAL_STEPS}
           </span>
+          {isAdmin && (
+            <button
+              onClick={() => setView("admin")}
+              className="text-xs text-accent hover:underline whitespace-nowrap"
+              title="Открыть админку"
+            >
+              ⚙ Админка
+            </button>
+          )}
         </div>
       </div>
 

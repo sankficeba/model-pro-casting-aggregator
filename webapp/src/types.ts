@@ -71,6 +71,53 @@ export interface Profile {
   completion_pct: number;
 }
 
+export interface MeResponse {
+  user_id: number;
+  username: string | null;
+  is_admin: boolean;
+}
+
+export interface AdminStats {
+  profiles_total: number;
+  profiles_completed: number;
+  messages_total: number;
+  messages_casting: number;
+  notifications_total: number;
+  notifications_success: number;
+}
+
+export interface AdminProfileRow {
+  user_id: number;
+  full_name: string | null;
+  gender: string | null;
+  city: string | null;
+  actual_age: number | null;
+  project_types: string[];
+  role_types: string[];
+  email: string | null;
+  completed_at: string | null;
+  updated_at: string;
+}
+
+export interface AdminMessageRow {
+  id: number;
+  tg_chat_username: string | null;
+  tg_message_id: number;
+  text: string;
+  is_casting: boolean;
+  gender: string | null;
+  age_min: number | null;
+  age_max: number | null;
+  project_types: string[];
+  role_types: string[];
+  city: string | null;
+  rate: number | null;
+  summary: string | null;
+  confidence: number;
+  received_at: string;
+  notified_count: number;
+}
+
 export const EMPTY_PROFILE: Profile = {
   ready_for_travel: false,
   project_types: [],

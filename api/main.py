@@ -8,8 +8,9 @@ from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
 
+from api import admin as admin_module
 from api import profile_repo
-from api.auth import TelegramUser, current_user
+from api.auth import TelegramUser, current_user, is_admin_user
 from api.reference_data import all_refs
 from api.schemas import ProfileResponse, ProfileUpdate
 from config import settings
@@ -64,9 +65,22 @@ app.add_middleware(
 )
 
 
+app.include_router(admin_module.router)
+
+
 @app.get("/api/health")
 async def health() -> dict:
     return {"status": "ok"}
+
+
+@app.get("/api/me")
+async def me(user: TelegramUser = Depends(current_user)) -> dict:
+    """Кто я + админ ли. Фронт по этому решает, показывать ли «Админку»."""
+    return {
+        "user_id": user.id,
+        "username": user.username,
+        "is_admin": is_admin_user(user),
+    }
 
 
 @app.get("/api/refs")

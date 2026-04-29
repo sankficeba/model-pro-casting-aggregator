@@ -1,5 +1,12 @@
 import { getInitData } from "./telegram";
-import type { Profile, Refs } from "./types";
+import type {
+  AdminMessageRow,
+  AdminProfileRow,
+  AdminStats,
+  MeResponse,
+  Profile,
+  Refs,
+} from "./types";
 
 const BASE = "/api";
 
@@ -127,10 +134,20 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  getMe: () => request<MeResponse>("/me"),
   getRefs: () => request<Refs>("/refs"),
   getProfile: () => request<Profile>("/profile"),
   updateProfile: (data: Profile) =>
     request<Profile>("/profile", { method: "PUT", body: JSON.stringify(data) }),
   completeProfile: () =>
     request<Profile>("/profile/complete", { method: "POST" }),
+
+  // Admin
+  adminStats: () => request<AdminStats>("/admin/stats"),
+  adminProfiles: (limit = 50, offset = 0) =>
+    request<AdminProfileRow[]>(`/admin/profiles?limit=${limit}&offset=${offset}`),
+  adminMessages: (limit = 50, offset = 0, castingOnly = false) =>
+    request<AdminMessageRow[]>(
+      `/admin/messages?limit=${limit}&offset=${offset}&casting_only=${castingOnly}`,
+    ),
 };
