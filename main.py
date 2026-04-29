@@ -37,7 +37,7 @@ async def main() -> None:
     try:
         await asyncio.gather(
             userbot.start(),
-            run_bot(bot, storage),
+            run_bot(bot),
         )
     finally:
         await bot.session.close()
