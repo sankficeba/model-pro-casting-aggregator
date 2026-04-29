@@ -12,7 +12,6 @@ from loguru import logger
 from bot.handlers import run_bot
 from config import settings
 from db.session import dispose_engine
-from filters.storage import FilterStorage
 from llm.factory import get_llm_provider
 from userbot.client import Userbot
 
@@ -26,13 +25,12 @@ async def main() -> None:
     _setup_logging()
     logger.info("Запуск приложения. LLM_PROVIDER={}", settings.llm_provider)
 
-    storage = FilterStorage()
     llm = get_llm_provider()
     bot = Bot(
         settings.bot_token,
         default=DefaultBotProperties(parse_mode=ParseMode.HTML),
     )
-    userbot = Userbot(llm=llm, storage=storage, bot=bot)
+    userbot = Userbot(llm=llm, bot=bot)
 
     try:
         await asyncio.gather(

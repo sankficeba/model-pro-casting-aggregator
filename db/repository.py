@@ -155,9 +155,9 @@ async def log_notification(
     *,
     user_id: int,
     message_id: int,
-    filter_id: int,
     success: bool,
     error: str | None = None,
+    filter_id: int | None = None,
 ) -> bool:
     """Записать уведомление. Возвращает True, если запись создана,
     False если уже было (дубль) — это и есть наш дедуп."""

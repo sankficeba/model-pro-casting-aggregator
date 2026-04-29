@@ -199,9 +199,8 @@ class Notification(Base):
     message_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("messages.id", ondelete="CASCADE"), nullable=False
     )
-    filter_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("filters.id", ondelete="CASCADE"), nullable=False
-    )
+    # Хвост от старой модели; сейчас всегда NULL (матч идёт по actor_profiles).
+    filter_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     sent_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

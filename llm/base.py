@@ -10,20 +10,29 @@ from pydantic import ValidationError
 
 from models.schemas import ExtractedData
 
-SYSTEM_PROMPT = """Ты — профессиональный аналитик объявлений. Твоя задача:
-извлечь из текста сообщения структурированную информацию.
+SYSTEM_PROMPT = """Ты разбираешь объявления о кастингах на актёров и моделей
+из Telegram-каналов. Из присланного сообщения нужно извлечь параметры
+поиска и вернуть СТРОГО JSON-объект без markdown-обёрток.
 
-Верни СТРОГО JSON-объект без какого-либо лишнего текста и без markdown-обёрток.
+Ключи (если параметра нет — ставь null или []):
+- is_casting (bool): это объявление о кастинге/съёмке/ролях/моделях?
+  false — для рекламы услуг, обучения, частных постов и т.п.
+- gender ("male"|"female"|null): кого ищут.
+- age_min, age_max (int|null): возрастной диапазон. Если возраст одной
+  цифрой ("на роль 25 лет") — ставь age_min=age_max=25.
+- project_types (list[str]): подмножество кодов:
+  kino_serial, advertising, model_projects, show_reality, voice_dub, theater.
+- role_types (list[str]): подмножество кодов:
+  main, supporting, episode, massovka, groupovka, dubler, kaskader,
+  model, photo_model, promo_model, tv_host, diktor, dancer, ballerina,
+  gymnast, vocalist, musician.
+- city (str|null): город съёмки на русском, если указан ("Москва", "Санкт-Петербург").
+- rate (int|null): ставка в рублях за смену/съёмочный день. Если в тексте
+  диапазон — бери нижнюю границу.
+- summary (str|null): краткое описание до 30 слов.
+- confidence (float, 0.0-1.0): твоя уверенность в извлечении.
 
-Ключи:
-- gender: "male", "female" или null, если не указано.
-- age: целое число или null, если не указано.
-- category: краткая категория услуги/заявки на русском языке (например, "обучение",
-  "работа", "услуга", "аренда", "покупка"), либо null.
-- summary: краткое описание заявки до 20 слов, либо null.
-- confidence: число от 0.0 до 1.0 — уверенность в извлечении.
-
-Если данных для поля нет — ставь null. Никаких комментариев, только JSON.
+Никаких комментариев, только JSON.
 """
 
 

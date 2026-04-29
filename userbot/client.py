@@ -1,5 +1,5 @@
 """Telethon-userbot: слушает каналы, парсит сообщения через LLM,
-пишет историю в БД и рассылает совпадения подписчикам через aiogram-бота."""
+пишет историю в БД и рассылает совпадения подходящим анкетам."""
 from __future__ import annotations
 
 import asyncio
@@ -9,23 +9,32 @@ from aiogram import Bot
 from loguru import logger
 from telethon import TelegramClient, events
 
+from api.reference_data import all_refs
 from config import settings
-from db import repository
-from filters.storage import FilterStorage
+from db import matching, repository
 from llm.base import LLMProvider
 from models.schemas import ExtractedData
+
+# Сборка label-словарей для красивых названий в уведомлениях
+_REFS = all_refs()
+_PROJECT_LABELS = {it["code"]: it["label"] for it in _REFS["project_types"]}
+_ROLE_LABELS = {it["code"]: it["label"] for it in _REFS["role_types"]}
+
+
+def _labels(codes: list[str], mapping: dict[str, str]) -> str:
+    if not codes:
+        return "—"
+    return ", ".join(mapping.get(c, c) for c in codes)
 
 
 class Userbot:
     def __init__(
         self,
         llm: LLMProvider,
-        storage: FilterStorage,
         bot: Bot,
         session_dir: str | Path = "sessions",
     ):
         self.llm = llm
-        self.storage = storage
         self.bot = bot
         Path(session_dir).mkdir(parents=True, exist_ok=True)
         self.client = TelegramClient(
@@ -51,11 +60,27 @@ class Userbot:
         if chat_username:
             link = f"https://t.me/{chat_username}/{message.id}"
 
+        age_str = "—"
+        if data.age_min is not None and data.age_max is not None:
+            age_str = (
+                f"{data.age_min}"
+                if data.age_min == data.age_max
+                else f"{data.age_min}–{data.age_max}"
+            )
+        elif data.age_min is not None:
+            age_str = f"от {data.age_min}"
+        elif data.age_max is not None:
+            age_str = f"до {data.age_max}"
+
+        gender_ru = {"male": "м", "female": "ж"}.get(data.gender or "", "—")
+        rate_str = f"{data.rate} ₽" if data.rate is not None else "—"
+
         lines = [
-            "<b>Найдена подходящая заявка</b>",
-            f"Категория: {data.category or '-'}",
-            f"Пол: {data.gender or '-'} | Возраст: {data.age if data.age is not None else '-'}",
-            f"Уверенность: {data.confidence:.2f}",
+            "<b>🎬 Подходящий кастинг</b>",
+            f"Тип проекта: {_labels(data.project_types, _PROJECT_LABELS)}",
+            f"Роль: {_labels(data.role_types, _ROLE_LABELS)}",
+            f"Пол: {gender_ru} | Возраст: {age_str}",
+            f"Город: {data.city or '—'} | Ставка: {rate_str}",
             "",
             data.summary or (message.message or "")[:300],
         ]
@@ -71,9 +96,20 @@ class Userbot:
 
         # 1. Парсинг через LLM
         data = await self.llm.extract(text)
-        logger.debug("Extracted: {}", data.model_dump())
+        logger.info(
+            "LLM extract: casting={} gender={} age={}-{} project={} role={} city={} rate={} conf={:.2f}",
+            data.is_casting,
+            data.gender,
+            data.age_min,
+            data.age_max,
+            data.project_types,
+            data.role_types,
+            data.city,
+            data.rate,
+            data.confidence,
+        )
 
-        # 2. Сохраняем сообщение в БД (даже если confidence низкая — для истории)
+        # 2. История в БД (даже если is_casting=false — для дебага и аналитики)
         chat = event.message.chat
         chat_id = getattr(chat, "id", 0)
         chat_username = getattr(chat, "username", None)
@@ -84,37 +120,26 @@ class Userbot:
             text=text,
             extracted=data,
         )
-
-        # Слишком низкая уверенность — не рассылаем
-        if data.confidence == 0.0 or message_db_id is None:
+        if message_db_id is None:
             return
 
-        # 3. Подбираем фильтры
-        matches = await self.storage.find_matches(data)
-        if not matches:
+        # 3. Подбор анкет
+        user_ids = await matching.find_matching_profiles(data)
+        if not user_ids:
+            logger.debug("Нет подходящих анкет для сообщения {}", message_db_id)
             return
-
-        # Получаем фильтры с их БД-id, чтобы записать в notifications
-        from db.models import Filter
-        from sqlalchemy import select
-        from db.session import AsyncSessionLocal
-
-        async with AsyncSessionLocal() as session:
-            res = await session.execute(select(Filter))
-            filter_rows = {f.user_id: f.id for f in res.scalars().all()}
 
         notification_text = self._format_notification(data, event.message, chat_username)
 
-        for f in matches:
-            # Дедуп: если уже отправляли — пропустить
-            if await repository.already_notified(f.user_id, message_db_id):
+        for user_id in user_ids:
+            if await repository.already_notified(user_id, message_db_id):
                 continue
 
             success = False
             err: str | None = None
             try:
                 await self.bot.send_message(
-                    f.user_id,
+                    user_id,
                     notification_text,
                     parse_mode="HTML",
                     disable_web_page_preview=True,
@@ -122,24 +147,23 @@ class Userbot:
                 success = True
             except Exception as e:  # noqa: BLE001
                 err = str(e)
-                logger.warning("Не удалось отправить пользователю {}: {}", f.user_id, e)
+                logger.warning("Не удалось отправить пользователю {}: {}", user_id, e)
 
-            filter_id = filter_rows.get(f.user_id)
-            if filter_id is not None:
-                await repository.log_notification(
-                    user_id=f.user_id,
-                    message_id=message_db_id,
-                    filter_id=filter_id,
-                    success=success,
-                    error=err,
-                )
+            await repository.log_notification(
+                user_id=user_id,
+                message_id=message_db_id,
+                success=success,
+                error=err,
+            )
             await asyncio.sleep(0.05)  # лёгкий троттлинг
 
     async def start(self) -> None:
         await self.client.start(phone=settings.tg_phone)
         entities = await self._resolve_channels()
         if not entities:
-            logger.warning("Список каналов пуст или ни один не разрешился — userbot работает «вхолостую»")
+            logger.warning(
+                "Список каналов пуст или ни один не разрешился — userbot работает «вхолостую»"
+            )
 
         @self.client.on(events.NewMessage(chats=entities or None))
         async def _handler(event):  # noqa: ANN001

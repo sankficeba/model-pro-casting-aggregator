@@ -1,33 +1,26 @@
-"""Заглушка LLM: без внешних API, парсит сообщение по простым правилам.
-Нужна, чтобы тестировать пайплайн end-to-end, пока нет реального LLM-ключа."""
+"""Заглушка LLM: без внешних API, грубое извлечение по ключевым словам.
+Нужна, чтобы тестировать пайплайн без реального LLM-ключа."""
 from __future__ import annotations
 
 import re
 
 from loguru import logger
 
-from llm.base import LLMProvider, _try_parse_json  # noqa: F401  # переиспользуем не нужно
+from llm.base import LLMProvider
 from models.schemas import ExtractedData
 
-
-# Ключевые слова для пола (русский + английский)
 _MALE_WORDS = {
-    "мужчина", "мужчины", "парень", "парня", "парни", "мальчик", "юноша",
-    "мужской", "мужского", "сын", "муж", "male", "man", "boy", "guy",
+    "мужчина", "мужчины", "парень", "парни", "юноша", "мужской",
+    "male", "man", "boy",
 }
 _FEMALE_WORDS = {
-    "женщина", "женщины", "девушка", "девушку", "девушки", "девочка", "дама",
-    "женский", "женского", "дочь", "жена", "female", "woman", "girl", "lady",
+    "женщина", "девушка", "девочка", "женский", "дама",
+    "female", "woman", "girl",
 }
-
-# Категории по ключевым словам (фрагменты подстрок)
-_CATEGORY_PATTERNS = [
-    ("обучение", ["обучен", "курс", "урок", "репетит", "школа", "тренинг", "lesson", "course"]),
-    ("работа", ["работа", "вакансия", "ищу сотрудник", "наём", "hiring", "job", "вакан"]),
-    ("аренда", ["аренда", "сниму", "сдаю", "сдается", "сдаётся", "rent"]),
-    ("покупка", ["куплю", "продам", "продаю", "покупка", "продажа", "buy", "sell"]),
-    ("услуга", ["услуг", "service"]),
-]
+_CASTING_HINTS = (
+    "кастинг", "съёмк", "съемк", "роль", "актёр", "актер", "актрис",
+    "модел", "проект", "клип", "сериал", "реклам",
+)
 
 
 def _detect_gender(text: str) -> str | None:
@@ -39,51 +32,46 @@ def _detect_gender(text: str) -> str | None:
     return None
 
 
-def _detect_age(text: str) -> int | None:
-    # Сначала пробуем «25 лет», «35-летний», «возраст 30»
-    m = re.search(r"\b(\d{1,2})\s*(?:лет|года|год|y\.?o\.?|years?)\b", text, re.IGNORECASE)
+def _detect_age_range(text: str) -> tuple[int | None, int | None]:
+    # Сначала диапазон: "18-30", "20–35", "от 25 до 40"
+    m = re.search(r"(\d{1,2})\s*[-–—]\s*(\d{1,2})", text)
+    if m:
+        lo, hi = int(m.group(1)), int(m.group(2))
+        if 5 <= lo <= 100 and 5 <= hi <= 100 and lo <= hi:
+            return lo, hi
+    m = re.search(r"от\s+(\d{1,2})\s+до\s+(\d{1,2})", text, re.IGNORECASE)
+    if m:
+        return int(m.group(1)), int(m.group(2))
+    # Одиночный возраст
+    m = re.search(r"\b(\d{1,2})\s*(?:лет|года|год)\b", text, re.IGNORECASE)
     if m:
         age = int(m.group(1))
         if 5 <= age <= 100:
-            return age
-    m = re.search(r"возраст[:\s]+(\d{1,2})", text, re.IGNORECASE)
-    if m:
-        age = int(m.group(1))
-        if 5 <= age <= 100:
-            return age
-    return None
-
-
-def _detect_category(text: str) -> str | None:
-    low = text.lower()
-    for cat, patterns in _CATEGORY_PATTERNS:
-        if any(p in low for p in patterns):
-            return cat
-    return None
+            return age, age
+    return None, None
 
 
 class StubProvider(LLMProvider):
     """Эмулирует LLM regex-эвристиками. Никаких внешних запросов."""
 
     async def _complete_json(self, system: str, user: str) -> str:  # noqa: ARG002
-        # Не используется — мы переопределяем extract напрямую
         return "{}"
 
     async def extract(self, text: str) -> ExtractedData:
+        low = text.lower()
+        is_casting = any(h in low for h in _CASTING_HINTS)
         gender = _detect_gender(text)
-        age = _detect_age(text)
-        category = _detect_category(text)
-        summary = text.strip().replace("\n", " ")[:120]
+        age_min, age_max = _detect_age_range(text)
+        summary = text.strip().replace("\n", " ")[:160]
 
-        # Уверенность зависит от количества распознанных полей.
-        hits = sum(x is not None for x in (gender, age, category))
-        # Базовая уверенность 0.5, чтобы сообщения с дефолтным min_confidence=0.5 проходили
-        confidence = min(1.0, 0.5 + 0.15 * hits)
+        hits = sum(x is not None for x in (gender, age_min)) + (1 if is_casting else 0)
+        confidence = min(1.0, 0.4 + 0.15 * hits)
 
         result = ExtractedData(
-            gender=gender,
-            age=age,
-            category=category,
+            is_casting=is_casting,
+            gender=gender,  # type: ignore[arg-type]
+            age_min=age_min,
+            age_max=age_max,
             summary=summary or None,
             confidence=confidence,
         )
