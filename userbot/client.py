@@ -70,33 +70,51 @@ class Userbot:
     async def _resolve_channels(self) -> list:
         await repository.seed_channels_if_empty(settings.tg_channels, added_by=0)
         rows = await repository.list_channels(active_only=True)
-        usernames = [f"@{r.username}" for r in rows]
 
-        if not usernames:
+        if not rows:
             logger.warning("Нет активных каналов в БД — userbot работает «вхолостую»")
             return []
 
         entities = []
-        for ch in usernames:
+        for row in rows:
+            # Какой ссылкой адресуем канал — публичный username или
+            # приватный chat_id (t.me/c/<id> → -100<id> в БД).
+            if row.tg_chat_id is not None:
+                ref_for_log = f"id={row.tg_chat_id}"
+                ref_for_get = row.tg_chat_id
+                is_private = True
+            else:
+                ref_for_log = f"@{row.username}"
+                ref_for_get = f"@{row.username}"
+                is_private = False
+
             try:
-                entity = await self.client.get_entity(ch)
+                entity = await self.client.get_entity(ref_for_get)
             except Exception as e:  # noqa: BLE001
-                logger.error("Не удалось получить entity для {}: {}", ch, e)
+                logger.error("Не удалось получить entity для {}: {}", ref_for_log, e)
                 continue
 
-            # get_entity только резолвит, не вступает. Чтобы Telethon
-            # получал NewMessage из канала, аккаунт-юзербот должен в нём
-            # состоять. Дёргаем JoinChannelRequest идемпотентно.
+            # Для приватных каналов аккаунт уже должен быть в них —
+            # вступить через JoinChannelRequest нельзя без invite-hash.
+            if is_private:
+                logger.info("Слушаю приватный канал {} (entity id={})",
+                            ref_for_log, getattr(entity, "id", "?"))
+                entities.append(entity)
+                continue
+
+            # Публичный канал: get_entity только резолвит, не вступает.
+            # Чтобы Telethon получал NewMessage, аккаунт должен состоять.
+            # Дёргаем JoinChannelRequest идемпотентно.
             try:
                 await self.client(JoinChannelRequest(entity))
-                logger.info("Вступил в канал {} (id={})", ch, getattr(entity, "id", "?"))
+                logger.info("Вступил в канал {} (id={})", ref_for_log, getattr(entity, "id", "?"))
             except UserAlreadyParticipantError:
-                logger.info("Уже состою в канале {} (id={})", ch, getattr(entity, "id", "?"))
+                logger.info("Уже состою в канале {} (id={})", ref_for_log, getattr(entity, "id", "?"))
             except (ChannelPrivateError, InviteHashExpiredError) as e:
-                logger.warning("Канал {} недоступен ({}); событий не будет", ch, type(e).__name__)
+                logger.warning("Канал {} недоступен ({}); событий не будет", ref_for_log, type(e).__name__)
                 continue
             except Exception as e:  # noqa: BLE001
-                logger.warning("Не удалось вступить в {}: {}", ch, e)
+                logger.warning("Не удалось вступить в {}: {}", ref_for_log, e)
                 continue
 
             entities.append(entity)

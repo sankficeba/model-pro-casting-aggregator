@@ -240,6 +240,31 @@ def _normalize_username(raw: str) -> str:
     return raw.lstrip("@").strip("/").lower()
 
 
+def _parse_channel_ref(raw: str) -> tuple[str | None, int | None]:
+    """Возвращает (username, tg_chat_id). Ровно одно поле не None.
+
+    - `@my_channel` / `https://t.me/my_channel` → (`my_channel`, None)
+    - `https://t.me/c/<id>[/<msg_id>]` → (None, -100<id>) — приватный канал.
+    - Невалидный ввод → (None, None).
+    """
+    raw = raw.strip()
+    for prefix in ("https://t.me/", "http://t.me/", "t.me/"):
+        if raw.startswith(prefix):
+            raw = raw[len(prefix):]
+            break
+    raw = raw.strip("/")
+    if raw.startswith("c/"):
+        chat_part = raw[2:].split("/", 1)[0]
+        if chat_part.isdigit():
+            # t.me/c/<id> — Telethon ожидает -100<id> для каналов/супергрупп.
+            return None, int(f"-100{chat_part}")
+        return None, None
+    norm = raw.lstrip("@").lower()
+    if not norm:
+        return None, None
+    return norm, None
+
+
 async def list_channels(active_only: bool = True) -> list[Channel]:
     async with AsyncSessionLocal() as session:
         stmt = select(Channel).order_by(Channel.id)
@@ -249,16 +274,23 @@ async def list_channels(active_only: bool = True) -> list[Channel]:
         return list(res.scalars().all())
 
 
-async def add_channel(username: str, added_by: int) -> Optional[Channel]:
-    """Добавить канал. Если уже существует и active — None.
-    Если был неактивен — реактивируем."""
-    norm = _normalize_username(username)
-    if not norm:
+async def add_channel(ref: str, added_by: int) -> Optional[Channel]:
+    """Добавить канал по @username или по приватной ссылке t.me/c/<id>.
+
+    Если уже существует и active — None. Если был неактивен — реактивируем.
+    """
+    username, tg_chat_id = _parse_channel_ref(ref)
+    if username is None and tg_chat_id is None:
         return None
     async with AsyncSessionLocal() as session:
-        existing = await session.execute(
-            select(Channel).where(Channel.username == norm)
-        )
+        if username is not None:
+            existing = await session.execute(
+                select(Channel).where(Channel.username == username)
+            )
+        else:
+            existing = await session.execute(
+                select(Channel).where(Channel.tg_chat_id == tg_chat_id)
+            )
         row = existing.scalar_one_or_none()
         if row is not None:
             if row.active:
@@ -268,22 +300,33 @@ async def add_channel(username: str, added_by: int) -> Optional[Channel]:
             await session.commit()
             await session.refresh(row)
             return row
-        ch = Channel(username=norm, added_by=added_by, active=True)
+        ch = Channel(
+            username=username,
+            tg_chat_id=tg_chat_id,
+            added_by=added_by,
+            active=True,
+        )
         session.add(ch)
         await session.commit()
         await session.refresh(ch)
         return ch
 
 
-async def remove_channel(username: str) -> bool:
+async def remove_channel(ref: str) -> bool:
     """Деактивировать канал. True если действительно был активен."""
-    norm = _normalize_username(username)
-    if not norm:
+    username, tg_chat_id = _parse_channel_ref(ref)
+    if username is None and tg_chat_id is None:
         return False
     async with AsyncSessionLocal() as session:
-        existing = await session.execute(
-            select(Channel).where(Channel.username == norm, Channel.active.is_(True))
-        )
+        if username is not None:
+            stmt = select(Channel).where(
+                Channel.username == username, Channel.active.is_(True)
+            )
+        else:
+            stmt = select(Channel).where(
+                Channel.tg_chat_id == tg_chat_id, Channel.active.is_(True)
+            )
+        existing = await session.execute(stmt)
         row = existing.scalar_one_or_none()
         if row is None:
             return False

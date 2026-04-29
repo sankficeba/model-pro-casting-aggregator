@@ -83,12 +83,19 @@ def build_dispatcher(bot: Bot) -> Dispatcher:
         if not rows:
             await message.answer("Список каналов пуст.")
             return
+        def _label(r) -> str:
+            if r.username:
+                return f"@{r.username}"
+            if r.tg_chat_id is not None:
+                return f"приватный (id {r.tg_chat_id})"
+            return f"channel#{r.id}"
+
         active = [r for r in rows if r.active]
         inactive = [r for r in rows if not r.active]
         lines = ["<b>Активные каналы:</b>"]
-        lines += [f"• @{r.username}" for r in active] or ["—"]
+        lines += [f"• {_label(r)}" for r in active] or ["—"]
         if inactive:
-            lines += ["", "<i>Отключённые:</i>"] + [f"• @{r.username}" for r in inactive]
+            lines += ["", "<i>Отключённые:</i>"] + [f"• {_label(r)}" for r in inactive]
         await message.answer("\n".join(lines), parse_mode="HTML")
 
     @dp.message(Command("addchannel"))
@@ -97,13 +104,21 @@ def build_dispatcher(bot: Bot) -> Dispatcher:
             return
         parts = (message.text or "").split(maxsplit=1)
         if len(parts) < 2 or not parts[1].strip():
-            await message.answer("Использование: <code>/addchannel @username</code>", parse_mode="HTML")
+            await message.answer(
+                "Использование:\n"
+                "• <code>/addchannel @username</code> — публичный\n"
+                "• <code>/addchannel https://t.me/c/&lt;id&gt;</code> — приватный (нужно быть его участником)",
+                parse_mode="HTML",
+            )
             return
         ch = await repository.add_channel(parts[1], added_by=message.from_user.id)
         if ch is None:
-            await message.answer("Канал уже в активном списке.")
+            await message.answer("Канал уже в активном списке или ссылка не распознана.")
             return
-        await _restart_self(bot, message, f"✅ Канал @{ch.username} добавлен.")
+        ch_label = (
+            f"@{ch.username}" if ch.username else f"приватный (id {ch.tg_chat_id})"
+        )
+        await _restart_self(bot, message, f"✅ Канал {ch_label} добавлен.")
 
     @dp.message(Command("removechannel"))
     async def cmd_remove_channel(message: Message) -> None:
