@@ -138,12 +138,22 @@ class ActorProfile(Base):
 
 class Channel(Base):
     """Telegram-канал, который слушает userbot. Управляется из бота
-    командами /addchannel / /removechannel."""
+    командами /addchannel / /removechannel.
+
+    Поддерживаются два способа адресации:
+    - Публичный канал по username (`@my_channel`).
+    - Приватный канал по числовому id (`https://t.me/c/<id>`) — заполняется
+      tg_chat_id (полная форма с -100, например -1001968214811). В этом
+      случае username NULL. JoinChannelRequest пропускаем — на приватные
+      каналы можно попасть только по invite-ссылке руками.
+    Хотя бы одно из (username, tg_chat_id) должно быть задано.
+    """
 
     __tablename__ = "channels"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    username: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    username: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, unique=True)
+    tg_chat_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True, unique=True)
     added_by: Mapped[int] = mapped_column(BigInteger, nullable=False)
     added_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
