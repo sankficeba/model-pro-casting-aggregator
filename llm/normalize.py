@@ -9,7 +9,7 @@ set'ов в db.matching ничего не находит, и пользоват�
 from __future__ import annotations
 
 from api.reference_data import all_refs
-from models.schemas import ExtractedData
+from models.schemas import PostExtraction, VacancyExtraction
 
 
 def _build_indexes() -> tuple[dict[str, set[str]], dict[str, dict[str, str]]]:
@@ -37,16 +37,16 @@ def _normalize_one(category: str, raw: str) -> str | None:
         return None
     if s in valid:
         return s
-    # Точный label-матч (без учёта регистра)
     code = label_map.get(s.lower())
     if code:
         return code
-    # Допускаем мелкие отклонения: тире/подчёркивания/лишние пробелы
     cleaned = s.lower().replace("-", " ").replace("_", " ").strip()
     code = label_map.get(cleaned)
     if code:
         return code
-    return None
+    # Try matching first word of multi-word phrases
+    first_word = cleaned.split()[0] if cleaned.split() else ""
+    return label_map.get(first_word)
 
 
 def _normalize_list(category: str, raw: list[str]) -> list[str]:
@@ -60,11 +60,18 @@ def _normalize_list(category: str, raw: list[str]) -> list[str]:
     return out
 
 
-def normalize_extracted(data: ExtractedData) -> ExtractedData:
-    """Возвращает копию ExtractedData с нормализованными списками кодов."""
+def _normalize_vacancy(v: VacancyExtraction) -> VacancyExtraction:
+    return v.model_copy(
+        update={"role_types": _normalize_list("role_types", v.role_types)}
+    )
+
+
+def normalize_extracted(data: PostExtraction) -> PostExtraction:
+    """Возвращает копию PostExtraction с нормализованными списками кодов
+    на уровне поста (project_types) и каждой вакансии (role_types)."""
     return data.model_copy(
         update={
             "project_types": _normalize_list("project_types", data.project_types),
-            "role_types": _normalize_list("role_types", data.role_types),
+            "vacancies": [_normalize_vacancy(v) for v in data.vacancies],
         }
     )
