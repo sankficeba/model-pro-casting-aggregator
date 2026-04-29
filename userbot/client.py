@@ -103,19 +103,22 @@ class Userbot:
                 continue
 
             # Публичный канал: get_entity только резолвит, не вступает.
-            # Чтобы Telethon получал NewMessage, аккаунт должен состоять.
-            # Дёргаем JoinChannelRequest идемпотентно.
+            # Дёргаем JoinChannelRequest идемпотентно (best-effort) — если
+            # упало (FloodWait/pending-approval/прочее), всё равно подключаем
+            # entity к фильтру Telethon: аккаунт мог уже быть участником с
+            # прошлых рестартов, и тогда NewMessage всё равно дойдут.
             try:
                 await self.client(JoinChannelRequest(entity))
                 logger.info("Вступил в канал {} (id={})", ref_for_log, getattr(entity, "id", "?"))
             except UserAlreadyParticipantError:
                 logger.info("Уже состою в канале {} (id={})", ref_for_log, getattr(entity, "id", "?"))
             except (ChannelPrivateError, InviteHashExpiredError) as e:
+                # Канал реально недоступен — entity бесполезен.
                 logger.warning("Канал {} недоступен ({}); событий не будет", ref_for_log, type(e).__name__)
                 continue
             except Exception as e:  # noqa: BLE001
-                logger.warning("Не удалось вступить в {}: {}", ref_for_log, e)
-                continue
+                # FloodWait и т.п. — не критично, entity всё равно слушаем.
+                logger.warning("JoinChannelRequest для {} не прошёл ({}); продолжаем слушать", ref_for_log, e)
 
             entities.append(entity)
         return entities
