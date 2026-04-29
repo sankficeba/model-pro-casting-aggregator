@@ -165,6 +165,9 @@ async def insert_message_with_vacancies(
                             age_min=v.age_min,
                             age_max=v.age_max,
                             rate=v.rate,
+                            ethnicity=list(v.ethnicity),
+                            height_min=v.height_min,
+                            height_max=v.height_max,
                             description=v.description,
                             role_label=v.role_label,
                         )

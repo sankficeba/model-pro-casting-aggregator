@@ -238,6 +238,19 @@ function MessagesTab() {
                         {v.rate != null && (
                           <> · {v.rate.toLocaleString("ru-RU")} ₽</>
                         )}
+                        {v.height_min != null && (
+                          <>
+                            {" "}
+                            · рост {v.height_min}
+                            {v.height_max !== v.height_min && v.height_max != null
+                              ? `–${v.height_max}`
+                              : ""}
+                            {" "}см
+                          </>
+                        )}
+                        {v.ethnicity.length > 0 && (
+                          <> · {v.ethnicity.join(",")}</>
+                        )}
                         {v.role_types.length > 0 && (
                           <> · {v.role_types.join(",")}</>
                         )}

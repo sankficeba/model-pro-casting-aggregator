@@ -63,3 +63,20 @@ def test_format_one_matched_vacancy_role_label_fallback():
     assert "main" not in txt.split("Открыть")[0]
     # Должен быть либо description, либо русский label роли
     assert "героин" in txt.lower() or "Главная" in txt
+
+
+def test_format_includes_height_and_ethnicity():
+    post = _post()
+    vacancies = [
+        VacancyExtraction(role_types=["model"], gender="female",
+                          age_min=20, age_max=30, rate=10000,
+                          height_min=170, height_max=180,
+                          ethnicity=["asian"],
+                          role_label="Модель"),
+    ]
+    txt = Userbot._format_notification(
+        post=post, vacancies=vacancies, matched_idxs=[0],
+        message=FakeMsg(), chat_username=None,
+    )
+    assert "170" in txt and "180" in txt
+    assert "asian" in txt or "рост" in txt.lower()

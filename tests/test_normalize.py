@@ -28,6 +28,19 @@ def test_normalizes_per_vacancy_role_types():
     assert out.vacancies[1].role_types == ["episode"]  # неизвестный код выкинули
 
 
+def test_normalizes_per_vacancy_ethnicity():
+    p = PostExtraction(
+        is_casting=True,
+        vacancies=[
+            VacancyExtraction(ethnicity=["Азиатский", "slavic"]),  # label + code
+            VacancyExtraction(ethnicity=["мусор", "arab"]),
+        ],
+    )
+    out = normalize_extracted(p)
+    assert out.vacancies[0].ethnicity == ["asian", "slavic"]
+    assert out.vacancies[1].ethnicity == ["arab"]
+
+
 def test_preserves_non_normalized_fields():
     p = PostExtraction(
         is_casting=True,

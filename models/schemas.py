@@ -14,6 +14,9 @@ class VacancyExtraction(BaseModel):
     age_min: Optional[int] = Field(None, ge=0, le=120)
     age_max: Optional[int] = Field(None, ge=0, le=120)
     rate: Optional[int] = Field(None, ge=0)
+    ethnicity: list[str] = []
+    height_min: Optional[int] = Field(None, ge=50, le=250)
+    height_max: Optional[int] = Field(None, ge=50, le=250)
     description: Optional[str] = None
     role_label: Optional[str] = None
 

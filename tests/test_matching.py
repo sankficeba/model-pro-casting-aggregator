@@ -18,6 +18,8 @@ class FakeProfile:
     min_rate: int | None = None
     city: str | None = None
     ready_for_travel: bool = False
+    ethnicity: list[str] = field(default_factory=list)
+    height_cm: int | None = None
 
 
 def _post(**kw) -> PostExtraction:
@@ -100,4 +102,58 @@ def test_unspecified_fields_pass_through():
     p = _post()
     v = _v()  # пусто
     prof = FakeProfile()
+    assert matches(prof, p, v) is True
+
+
+def test_ethnicity_mismatch_rejected():
+    p = _post()
+    v = _v(ethnicity=["asian"])
+    prof = FakeProfile(ethnicity=["slavic"])
+    assert matches(prof, p, v) is False
+
+
+def test_ethnicity_intersection_accepted():
+    p = _post()
+    v = _v(ethnicity=["asian", "central_asian"])
+    prof = FakeProfile(ethnicity=["central_asian", "mixed"])
+    assert matches(prof, p, v) is True
+
+
+def test_ethnicity_unspecified_in_profile_passes():
+    """В вакансии ethnicity указан, у профиля — нет: фильтр не применяем."""
+    p = _post()
+    v = _v(ethnicity=["asian"])
+    prof = FakeProfile(ethnicity=[])
+    assert matches(prof, p, v) is True
+
+
+def test_height_outside_range_rejected():
+    p = _post()
+    v = _v(height_min=170, height_max=180)
+    prof = FakeProfile(height_cm=165)
+    assert matches(prof, p, v) is False
+
+
+def test_height_inside_range_accepted():
+    p = _post()
+    v = _v(height_min=170, height_max=180)
+    prof = FakeProfile(height_cm=175)
+    assert matches(prof, p, v) is True
+
+
+def test_height_one_sided_min():
+    """В вакансии задан только нижний предел, верхний — без ограничений."""
+    p = _post()
+    v = _v(height_min=180)
+    prof = FakeProfile(height_cm=190)
+    assert matches(prof, p, v) is True
+    prof_low = FakeProfile(height_cm=170)
+    assert matches(prof_low, p, v) is False
+
+
+def test_height_unspecified_in_profile_passes():
+    """В вакансии есть рост, в профиле height_cm=None: фильтр не применяем."""
+    p = _post()
+    v = _v(height_min=180, height_max=200)
+    prof = FakeProfile(height_cm=None)
     assert matches(prof, p, v) is True

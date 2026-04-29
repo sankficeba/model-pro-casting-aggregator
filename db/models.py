@@ -248,6 +248,11 @@ class Vacancy(Base):
     age_min: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     age_max: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     rate: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    ethnicity: Mapped[list[str]] = mapped_column(
+        ARRAY(Text), default=list, server_default="{}", nullable=False,
+    )
+    height_min: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    height_max: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     role_label: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
 

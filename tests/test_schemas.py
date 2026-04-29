@@ -14,8 +14,28 @@ def test_vacancy_minimal_defaults():
     assert v.age_min is None
     assert v.age_max is None
     assert v.rate is None
+    assert v.ethnicity == []
+    assert v.height_min is None
+    assert v.height_max is None
     assert v.description is None
     assert v.role_label is None
+
+
+def test_vacancy_ethnicity_and_height():
+    v = VacancyExtraction(
+        ethnicity=["asian", "central_asian"],
+        height_min=170, height_max=180,
+    )
+    assert v.ethnicity == ["asian", "central_asian"]
+    assert v.height_min == 170
+    assert v.height_max == 180
+
+
+def test_height_validation_bounds():
+    with pytest.raises(ValidationError):
+        VacancyExtraction(height_min=20)
+    with pytest.raises(ValidationError):
+        VacancyExtraction(height_max=300)
 
 
 def test_post_minimal_defaults():

@@ -57,7 +57,10 @@ def _normalize_list(category: str, raw: list[str]) -> list[str]:
 
 def _normalize_vacancy(v: VacancyExtraction) -> VacancyExtraction:
     return v.model_copy(
-        update={"role_types": _normalize_list("role_types", v.role_types)}
+        update={
+            "role_types": _normalize_list("role_types", v.role_types),
+            "ethnicity": _normalize_list("ethnicity", v.ethnicity),
+        }
     )
 
 

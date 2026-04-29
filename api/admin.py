@@ -43,6 +43,9 @@ class AdminVacancy(BaseModel):
     age_min: Optional[int] = None
     age_max: Optional[int] = None
     rate: Optional[int] = None
+    ethnicity: list[str] = []
+    height_min: Optional[int] = None
+    height_max: Optional[int] = None
     description: Optional[str] = None
     role_label: Optional[str] = None
 
@@ -182,7 +185,10 @@ async def list_messages(
                     id=v.id, idx=v.idx,
                     role_types=list(v.role_types or []),
                     gender=v.gender, age_min=v.age_min, age_max=v.age_max,
-                    rate=v.rate, description=v.description, role_label=v.role_label,
+                    rate=v.rate,
+                    ethnicity=list(v.ethnicity or []),
+                    height_min=v.height_min, height_max=v.height_max,
+                    description=v.description, role_label=v.role_label,
                 )
                 for v in m.vacancies
             ],

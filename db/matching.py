@@ -56,6 +56,21 @@ def matches(profile: ActorProfile, post: PostExtraction, vacancy: VacancyExtract
     if vacancy.rate is not None and profile.min_rate is not None and vacancy.rate < profile.min_rate:
         return False
 
+    # Этническая внешность (per-vacancy): если в вакансии указан список —
+    # анкета должна подходить хотя бы под один из перечисленных типов.
+    # Если у профиля этнос не задан — пропускаем (нет основания фильтровать).
+    if vacancy.ethnicity and profile.ethnicity:
+        if not _intersect(vacancy.ethnicity, profile.ethnicity):
+            return False
+
+    # Рост (per-vacancy): если у вакансии указан диапазон — рост из профиля
+    # должен в него попасть. Если в профиле height_cm не задан — пропускаем.
+    if (vacancy.height_min is not None or vacancy.height_max is not None) and profile.height_cm is not None:
+        v_lo = vacancy.height_min if vacancy.height_min is not None else 0
+        v_hi = vacancy.height_max if vacancy.height_max is not None else 999
+        if not (v_lo <= profile.height_cm <= v_hi):
+            return False
+
     # Город (post-level), с поправкой на ready_for_travel
     if post.city and profile.city:
         if post.city.lower() != profile.city.lower() and not profile.ready_for_travel:

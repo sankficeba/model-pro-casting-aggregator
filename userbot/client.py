@@ -104,8 +104,23 @@ class Userbot:
             v = vacancies[idx]
             gender_ru = {"male": "м", "female": "ж"}.get(v.gender or "", "—")
             rate_str = f"{v.rate} ₽" if v.rate is not None else "ставка не указана"
+            extras: list[str] = []
+            if v.height_min is not None or v.height_max is not None:
+                lo = v.height_min if v.height_min is not None else ""
+                hi = v.height_max if v.height_max is not None else ""
+                if lo and hi and lo != hi:
+                    extras.append(f"рост {lo}–{hi} см")
+                elif lo and hi and lo == hi:
+                    extras.append(f"рост {lo} см")
+                elif lo:
+                    extras.append(f"рост от {lo} см")
+                elif hi:
+                    extras.append(f"рост до {hi} см")
+            if v.ethnicity:
+                extras.append(", ".join(v.ethnicity))
+            extras_str = (" · " + " · ".join(extras)) if extras else ""
             lines.append(
-                f"• <b>{_vacancy_title(v)}</b> — {_format_age(v)}, {gender_ru}, {rate_str}"
+                f"• <b>{_vacancy_title(v)}</b> — {_format_age(v)}, {gender_ru}, {rate_str}{extras_str}"
             )
 
         lines.append("")

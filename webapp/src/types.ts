@@ -107,6 +107,9 @@ export interface AdminVacancyRow {
   age_min: number | null;
   age_max: number | null;
   rate: number | null;
+  ethnicity: string[];
+  height_min: number | null;
+  height_max: number | null;
   description: string | null;
   role_label: string | null;
 }
