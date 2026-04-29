@@ -37,8 +37,9 @@ SYSTEM_PROMPT = """Ты разбираешь объявления о касти�
       "age_max": int|null,
       "rate": int|null,                  // ставка в рублях за смену; диапазон — нижняя граница
       "ethnicity": [str],                 // подмножество кодов внешности:
-                                          // slavic, caucasian, asian, central_asian,
-                                          // african, arab, latin, mixed, other.
+                                          // slavic, european, caucasian, asian,
+                                          // central_asian, african, arab, latin,
+                                          // mixed, other.
                                           // Пустой массив если не указано.
       "height_min": int|null,             // рост в см, нижняя граница
       "height_max": int|null,             // рост в см, верхняя граница;
