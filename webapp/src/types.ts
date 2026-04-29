@@ -99,23 +99,37 @@ export interface AdminProfileRow {
   updated_at: string;
 }
 
+export interface AdminVacancyRow {
+  id: number;
+  idx: number;
+  role_types: string[];
+  gender: string | null;
+  age_min: number | null;
+  age_max: number | null;
+  rate: number | null;
+  ethnicity: string[];
+  height_min: number | null;
+  height_max: number | null;
+  body_type: string[];
+  hair_color: string[];
+  hair_length: string[];
+  description: string | null;
+  role_label: string | null;
+}
+
 export interface AdminMessageRow {
   id: number;
   tg_chat_username: string | null;
   tg_message_id: number;
   text: string;
   is_casting: boolean;
-  gender: string | null;
-  age_min: number | null;
-  age_max: number | null;
   project_types: string[];
-  role_types: string[];
   city: string | null;
-  rate: number | null;
   summary: string | null;
   confidence: number;
   received_at: string;
   notified_count: number;
+  vacancies: AdminVacancyRow[];
 }
 
 export const EMPTY_PROFILE: Profile = {

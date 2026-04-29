@@ -205,28 +205,72 @@ function MessagesTab() {
               <div className="mt-2 text-slate-200 break-words">
                 {m.summary || m.text.slice(0, 200)}
               </div>
-              {(m.gender ||
-                m.age_min != null ||
-                m.project_types.length > 0 ||
-                m.role_types.length > 0 ||
-                m.city ||
-                m.rate != null) && (
+              {(m.project_types.length > 0 || m.city) && (
                 <div className="text-slate-400 text-xs mt-1.5 space-x-2 break-words">
-                  {m.gender && <span>{m.gender === "male" ? "м" : "ж"}</span>}
-                  {m.age_min != null && (
-                    <span>
-                      · {m.age_min}
-                      {m.age_max !== m.age_min ? `–${m.age_max}` : ""} лет
-                    </span>
-                  )}
                   {m.city && <span>· {m.city}</span>}
-                  {m.rate != null && <span>· {m.rate.toLocaleString("ru-RU")} ₽</span>}
                   {m.project_types.length > 0 && (
                     <span>· проекты: {m.project_types.join(",")}</span>
                   )}
-                  {m.role_types.length > 0 && (
-                    <span>· роли: {m.role_types.join(",")}</span>
-                  )}
+                </div>
+              )}
+              {m.vacancies.length > 0 && (
+                <div className="mt-2 space-y-1">
+                  <div className="text-xs text-slate-500">
+                    Вакансии ({m.vacancies.length}):
+                  </div>
+                  <ul className="space-y-1">
+                    {m.vacancies.map((v) => (
+                      <li
+                        key={v.id}
+                        className="text-xs text-slate-300 bg-bg-card rounded px-2 py-1"
+                      >
+                        <span className="font-medium">
+                          {v.role_label ?? v.role_types[0] ?? "Роль"}
+                        </span>
+                        {v.gender && <> · {v.gender === "male" ? "м" : "ж"}</>}
+                        {v.age_min != null && (
+                          <>
+                            {" "}
+                            · {v.age_min}
+                            {v.age_max !== v.age_min ? `–${v.age_max}` : ""} лет
+                          </>
+                        )}
+                        {v.rate != null && (
+                          <> · {v.rate.toLocaleString("ru-RU")} ₽</>
+                        )}
+                        {v.height_min != null && (
+                          <>
+                            {" "}
+                            · рост {v.height_min}
+                            {v.height_max !== v.height_min && v.height_max != null
+                              ? `–${v.height_max}`
+                              : ""}
+                            {" "}см
+                          </>
+                        )}
+                        {v.ethnicity.length > 0 && (
+                          <> · {v.ethnicity.join(",")}</>
+                        )}
+                        {v.body_type.length > 0 && (
+                          <> · {v.body_type.join(",")}</>
+                        )}
+                        {v.hair_color.length > 0 && (
+                          <> · волосы: {v.hair_color.join(",")}</>
+                        )}
+                        {v.hair_length.length > 0 && (
+                          <> · длина: {v.hair_length.join(",")}</>
+                        )}
+                        {v.role_types.length > 0 && (
+                          <> · {v.role_types.join(",")}</>
+                        )}
+                        {v.description && (
+                          <div className="text-slate-400 mt-0.5 break-words">
+                            {v.description}
+                          </div>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
                 </div>
               )}
             </li>

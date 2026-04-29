@@ -50,6 +50,7 @@ ROLE_TYPES = _items([
 
 ETHNICITY = _items([
     ("slavic", "Славянский"),
+    ("european", "Европейский"),
     ("caucasian", "Кавказский"),
     ("asian", "Азиатский"),
     ("central_asian", "Среднеазиатский"),

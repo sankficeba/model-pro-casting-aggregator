@@ -9,9 +9,9 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError
 
-from db.models import Channel, Filter, Message, Notification, User
+from db.models import Channel, Filter, Message, Notification, User, Vacancy
 from db.session import AsyncSessionLocal
-from models.schemas import ExtractedData, UserFilter
+from models.schemas import PostExtraction, UserFilter
 
 
 # ---------- USERS ----------
@@ -102,18 +102,22 @@ def _filter_to_schema(row: Filter) -> UserFilter:
 
 # ---------- MESSAGES ----------
 
-async def insert_message(
+async def insert_message_with_vacancies(
     *,
     tg_chat_id: int,
     tg_chat_username: str | None,
     tg_message_id: int,
     text: str,
-    extracted: ExtractedData,
-) -> Optional[int]:
-    """Вставить сообщение. Если такое уже было (chat_id, msg_id) — вернуть его id.
-    Возвращает id строки в таблице messages, либо None при ошибке."""
+    extracted: PostExtraction,
+) -> tuple[Optional[int], list[int]]:
+    """Вставить пост и его вакансии одной транзакцией.
+
+    Возвращает (message_id, [vacancy_id, ...]).
+    Если такое сообщение уже было (chat_id, msg_id) — возвращает
+    существующий message_id и существующие vacancy_id (без пересоздания).
+    """
     async with AsyncSessionLocal() as session:
-        stmt = (
+        msg_stmt = (
             pg_insert(Message)
             .values(
                 tg_chat_id=tg_chat_id,
@@ -121,13 +125,8 @@ async def insert_message(
                 tg_message_id=tg_message_id,
                 text=text,
                 is_casting=extracted.is_casting,
-                gender=extracted.gender,
-                age_min=extracted.age_min,
-                age_max=extracted.age_max,
                 project_types=list(extracted.project_types),
-                role_types=list(extracted.role_types),
                 city=extracted.city,
-                rate=extracted.rate,
                 summary=extracted.summary,
                 confidence=extracted.confidence,
             )
@@ -135,23 +134,65 @@ async def insert_message(
             .returning(Message.id)
         )
         try:
-            res = await session.execute(stmt)
-            await session.commit()
-            inserted_id = res.scalar_one_or_none()
-            if inserted_id is not None:
-                return inserted_id
-            # Был дубль — достаём существующий id
-            existing = await session.execute(
-                select(Message.id).where(
-                    Message.tg_chat_id == tg_chat_id,
-                    Message.tg_message_id == tg_message_id,
+            res = await session.execute(msg_stmt)
+            message_id = res.scalar_one_or_none()
+            freshly_inserted = message_id is not None
+
+            if message_id is None:
+                # Дубль — достаём существующий
+                existing = await session.execute(
+                    select(Message.id).where(
+                        Message.tg_chat_id == tg_chat_id,
+                        Message.tg_message_id == tg_message_id,
+                    )
                 )
-            )
-            return existing.scalar_one_or_none()
+                message_id = existing.scalar_one_or_none()
+                if message_id is None:
+                    await session.rollback()
+                    return None, []
+
+            vacancy_ids: list[int] = []
+
+            if freshly_inserted and extracted.is_casting and extracted.vacancies:
+                for idx, v in enumerate(extracted.vacancies):
+                    vac_stmt = (
+                        pg_insert(Vacancy)
+                        .values(
+                            message_id=message_id,
+                            idx=idx,
+                            role_types=list(v.role_types),
+                            gender=v.gender,
+                            age_min=v.age_min,
+                            age_max=v.age_max,
+                            rate=v.rate,
+                            ethnicity=list(v.ethnicity),
+                            height_min=v.height_min,
+                            height_max=v.height_max,
+                            body_type=list(v.body_type),
+                            hair_color=list(v.hair_color),
+                            hair_length=list(v.hair_length),
+                            description=v.description,
+                            role_label=v.role_label,
+                        )
+                        .returning(Vacancy.id)
+                    )
+                    vac_res = await session.execute(vac_stmt)
+                    vacancy_ids.append(vac_res.scalar_one())
+            else:
+                # Дубль или non-casting: подхватываем существующие вакансии
+                vac_existing = await session.execute(
+                    select(Vacancy.id)
+                    .where(Vacancy.message_id == message_id)
+                    .order_by(Vacancy.idx)
+                )
+                vacancy_ids = [v for v in vac_existing.scalars().all()]
+
+            await session.commit()
+            return message_id, vacancy_ids
         except Exception as e:  # noqa: BLE001
-            logger.exception("insert_message failed: {}", e)
+            logger.exception("insert_message_with_vacancies failed: {}", e)
             await session.rollback()
-            return None
+            return None, []
 
 
 # ---------- NOTIFICATIONS ----------
@@ -163,6 +204,7 @@ async def log_notification(
     success: bool,
     error: str | None = None,
     filter_id: int | None = None,
+    matched_vacancy_ids: list[int] | None = None,
 ) -> bool:
     """Записать уведомление. Возвращает True, если запись создана,
     False если уже было (дубль) — это и есть наш дедуп."""
@@ -175,6 +217,7 @@ async def log_notification(
                     filter_id=filter_id,
                     success=success,
                     error=error,
+                    matched_vacancy_ids=matched_vacancy_ids,
                 )
             )
             await session.commit()

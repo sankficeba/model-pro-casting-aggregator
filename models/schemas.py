@@ -6,27 +6,44 @@ from typing import Literal, Optional
 from pydantic import BaseModel, Field
 
 
-class ExtractedData(BaseModel):
-    """Структура, которую LLM извлекает из объявления о кастинге."""
+class VacancyExtraction(BaseModel):
+    """Одна вакансия (роль) внутри поста."""
 
-    is_casting: bool = False
+    role_types: list[str] = []
     gender: Optional[Literal["male", "female"]] = None
-    # Возрастной диапазон, который ищут в кастинге.
     age_min: Optional[int] = Field(None, ge=0, le=120)
     age_max: Optional[int] = Field(None, ge=0, le=120)
-    # Подмножество кодов из api/reference_data.py
-    project_types: list[str] = []
-    role_types: list[str] = []
-    city: Optional[str] = None
     rate: Optional[int] = Field(None, ge=0)
+    ethnicity: list[str] = []
+    height_min: Optional[int] = Field(None, ge=50, le=250)
+    height_max: Optional[int] = Field(None, ge=50, le=250)
+    body_type: list[str] = []
+    hair_color: list[str] = []
+    hair_length: list[str] = []
+    description: Optional[str] = None
+    role_label: Optional[str] = None
+
+
+class PostExtraction(BaseModel):
+    """Структура, которую LLM извлекает из объявления о кастинге.
+
+    Поля поста (project_types, city, summary, is_casting, confidence) —
+    общие для всего объявления; vacancies — список ролей, у каждой свои
+    условия (gender / age / rate / role_types).
+    """
+
+    is_casting: bool = False
+    project_types: list[str] = []
+    city: Optional[str] = None
     summary: Optional[str] = None
     confidence: float = Field(0.0, ge=0.0, le=1.0)
+    vacancies: list[VacancyExtraction] = []
 
 
 class UserFilter(BaseModel):
     """Устаревшая модель текстового фильтра. Сейчас матчинг идёт по
-    actor_profiles (см. db.matching), но схема пока остаётся для
-    совместимости с историческими данными в таблице filters.
+    actor_profiles (см. db.matching), но схема остаётся для совместимости
+    с историческими данными в таблице filters.
     """
 
     user_id: int
