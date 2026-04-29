@@ -136,6 +136,21 @@ class ActorProfile(Base):
     user: Mapped[User] = relationship(back_populates="profile")
 
 
+class Channel(Base):
+    """Telegram-канал, который слушает userbot. Управляется из бота
+    командами /addchannel / /removechannel."""
+
+    __tablename__ = "channels"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    username: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    added_by: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    added_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+
+
 class Filter(Base):
     """Один фильтр пользователя. У пользователя может быть несколько фильтров."""
 

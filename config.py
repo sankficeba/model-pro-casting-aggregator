@@ -43,12 +43,25 @@ class Settings(BaseSettings):
 
     # Прочее
     log_level: str = Field("INFO", alias="LOG_LEVEL")
+    admin_ids_raw: str = Field("", alias="ADMIN_IDS")
 
     @property
     def tg_channels(self) -> list[str]:
         if not self.tg_channels_raw:
             return []
         return [c.strip() for c in self.tg_channels_raw.split(",") if c.strip()]
+
+    @property
+    def admin_ids(self) -> set[int]:
+        """Set telegram user_id'ов, которым разрешены админ-команды бота."""
+        if not self.admin_ids_raw:
+            return set()
+        out: set[int] = set()
+        for x in self.admin_ids_raw.split(","):
+            x = x.strip()
+            if x.isdigit():
+                out.add(int(x))
+        return out
 
     @property
     def db_dsn(self) -> str:

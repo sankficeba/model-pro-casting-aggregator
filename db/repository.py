@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError
 
-from db.models import Filter, Message, Notification, User
+from db.models import Channel, Filter, Message, Notification, User
 from db.session import AsyncSessionLocal
 from models.schemas import ExtractedData, UserFilter
 
@@ -177,6 +177,94 @@ async def log_notification(
         except IntegrityError:
             await session.rollback()
             return False
+
+
+# ---------- CHANNELS ----------
+
+
+def _normalize_username(raw: str) -> str:
+    """@MyChannel / https://t.me/MyChannel -> mychannel."""
+    raw = raw.strip()
+    if raw.startswith("https://t.me/"):
+        raw = raw[len("https://t.me/"):]
+    elif raw.startswith("t.me/"):
+        raw = raw[len("t.me/"):]
+    return raw.lstrip("@").strip("/").lower()
+
+
+async def list_channels(active_only: bool = True) -> list[Channel]:
+    async with AsyncSessionLocal() as session:
+        stmt = select(Channel).order_by(Channel.id)
+        if active_only:
+            stmt = stmt.where(Channel.active.is_(True))
+        res = await session.execute(stmt)
+        return list(res.scalars().all())
+
+
+async def add_channel(username: str, added_by: int) -> Optional[Channel]:
+    """Добавить канал. Если уже существует и active — None.
+    Если был неактивен — реактивируем."""
+    norm = _normalize_username(username)
+    if not norm:
+        return None
+    async with AsyncSessionLocal() as session:
+        existing = await session.execute(
+            select(Channel).where(Channel.username == norm)
+        )
+        row = existing.scalar_one_or_none()
+        if row is not None:
+            if row.active:
+                return None
+            row.active = True
+            row.added_by = added_by
+            await session.commit()
+            await session.refresh(row)
+            return row
+        ch = Channel(username=norm, added_by=added_by, active=True)
+        session.add(ch)
+        await session.commit()
+        await session.refresh(ch)
+        return ch
+
+
+async def remove_channel(username: str) -> bool:
+    """Деактивировать канал. True если действительно был активен."""
+    norm = _normalize_username(username)
+    if not norm:
+        return False
+    async with AsyncSessionLocal() as session:
+        existing = await session.execute(
+            select(Channel).where(Channel.username == norm, Channel.active.is_(True))
+        )
+        row = existing.scalar_one_or_none()
+        if row is None:
+            return False
+        row.active = False
+        await session.commit()
+        return True
+
+
+async def seed_channels_if_empty(usernames: list[str], added_by: int = 0) -> int:
+    """Если в БД нет каналов — заносит туда usernames из конфига.
+    Возвращает количество вставленных строк."""
+    if not usernames:
+        return 0
+    async with AsyncSessionLocal() as session:
+        existing = await session.execute(select(Channel.id).limit(1))
+        if existing.scalar_one_or_none() is not None:
+            return 0
+        added = 0
+        for u in usernames:
+            norm = _normalize_username(u)
+            if not norm:
+                continue
+            session.add(Channel(username=norm, added_by=added_by, active=True))
+            added += 1
+        await session.commit()
+        return added
+
+
+# ---------- NOTIFICATIONS (продолжение) ----------
 
 
 async def already_notified(user_id: int, message_id: int) -> bool:

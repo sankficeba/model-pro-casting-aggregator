@@ -44,8 +44,18 @@ class Userbot:
         )
 
     async def _resolve_channels(self) -> list:
+        # Сначала переносим .env-список в БД, если БД пустая (одноразово).
+        await repository.seed_channels_if_empty(settings.tg_channels, added_by=0)
+
+        rows = await repository.list_channels(active_only=True)
+        usernames = [f"@{r.username}" for r in rows]
+
+        if not usernames:
+            logger.warning("Нет активных каналов в БД — userbot работает «вхолостую»")
+            return []
+
         entities = []
-        for ch in settings.tg_channels:
+        for ch in usernames:
             try:
                 entity = await self.client.get_entity(ch)
                 entities.append(entity)
@@ -169,5 +179,8 @@ class Userbot:
         async def _handler(event):  # noqa: ANN001
             await self._handle_message(event)
 
-        logger.info("Userbot запущен, слушаю каналы: {}", settings.tg_channels)
+        logger.info(
+            "Userbot запущен, слушаю каналы: {}",
+            [getattr(e, "username", getattr(e, "id", "?")) for e in entities],
+        )
         await self.client.run_until_disconnected()
