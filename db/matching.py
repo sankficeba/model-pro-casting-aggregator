@@ -4,10 +4,11 @@ from __future__ import annotations
 from typing import Iterable
 
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
-from db.models import ActorProfile
+from db.models import ActorProfile, Message, Vacancy
 from db.session import AsyncSessionLocal
-from models.schemas import ExtractedData
+from models.schemas import PostExtraction, VacancyExtraction
 
 # Минимальная уверенность LLM для рассылки. Ниже — игнорируем сообщение.
 MIN_CONFIDENCE = 0.5
@@ -21,58 +22,61 @@ def _intersect(a: Iterable[str], b: Iterable[str]) -> bool:
     return bool(set(a) & set(b))
 
 
-def matches(profile: ActorProfile, data: ExtractedData) -> bool:
-    """True, если анкета подходит под объявление.
+def matches(profile: ActorProfile, post: PostExtraction, vacancy: VacancyExtraction) -> bool:
+    """True, если анкета подходит под конкретную вакансию в этом посте.
 
-    Если параметр в объявлении не указан — фильтр по нему не применяется
-    (отдаём пользователю «возможно подходит», даже если LLM пропустил поле).
-    Если параметр есть в объявлении и в профиле — должны совпасть/пересечься.
+    project_types и city берём с уровня поста (общие);
+    gender / age / role_types / rate — с уровня вакансии.
+    Если параметр не указан в объявлении — фильтр по нему не применяется.
     """
-    # Пол
-    if data.gender and profile.gender and data.gender != profile.gender:
+    # Пол (per-vacancy)
+    if vacancy.gender and profile.gender and vacancy.gender != profile.gender:
         return False
 
-    # Возраст: пересечение диапазонов
-    if data.age_min is not None or data.age_max is not None:
-        msg_lo = data.age_min if data.age_min is not None else 0
-        msg_hi = data.age_max if data.age_max is not None else 120
+    # Возраст (per-vacancy)
+    if vacancy.age_min is not None or vacancy.age_max is not None:
+        msg_lo = vacancy.age_min if vacancy.age_min is not None else 0
+        msg_hi = vacancy.age_max if vacancy.age_max is not None else 120
         prof_lo = profile.play_age_min if profile.play_age_min is not None else 0
         prof_hi = profile.play_age_max if profile.play_age_max is not None else 120
         if not _ranges_overlap(msg_lo, msg_hi, prof_lo, prof_hi):
             return False
 
-    # Типы проектов: пересечение, если у обеих сторон что-то задано
-    if data.project_types and profile.project_types:
-        if not _intersect(data.project_types, profile.project_types):
+    # Типы проектов (post-level)
+    if post.project_types and profile.project_types:
+        if not _intersect(post.project_types, profile.project_types):
             return False
 
-    # Типы ролей
-    if data.role_types and profile.role_types:
-        if not _intersect(data.role_types, profile.role_types):
+    # Типы ролей (per-vacancy)
+    if vacancy.role_types and profile.role_types:
+        if not _intersect(vacancy.role_types, profile.role_types):
             return False
 
-    # Ставка: если объявление предлагает меньше, чем требует пользователь — мимо
-    if data.rate is not None and profile.min_rate is not None and data.rate < profile.min_rate:
+    # Ставка (per-vacancy)
+    if vacancy.rate is not None and profile.min_rate is not None and vacancy.rate < profile.min_rate:
         return False
 
-    # Город: если указан и не совпадает — мимо, кроме случая когда пользователь
-    # готов к командировкам.
-    if data.city and profile.city:
-        if data.city.lower() != profile.city.lower() and not profile.ready_for_travel:
+    # Город (post-level), с поправкой на ready_for_travel
+    if post.city and profile.city:
+        if post.city.lower() != profile.city.lower() and not profile.ready_for_travel:
             return False
 
     return True
 
 
-async def find_matching_profiles(data: ExtractedData) -> list[int]:
-    """Возвращает user_id'ы анкет, подходящих под объявление.
+async def find_matching_vacancies(
+    post: PostExtraction,
+    vacancies: list[VacancyExtraction],
+) -> dict[int, list[int]]:
+    """Возвращает {user_id: [индексы подошедших вакансий в списке `vacancies`]}.
 
-    Учитываем только анкеты, у которых уже было нажато «Завершить»
-    (completed_at IS NOT NULL) — иначе будем спамить пользователей,
-    которые ещё в процессе заполнения.
+    Гейтим по is_casting/confidence на уровне поста.
+    Учитываем только анкеты с completed_at IS NOT NULL.
+    Индексы соответствуют позициям в `vacancies`, что 1-в-1 совпадает с idx
+    в БД, потому что Vacancy сохраняется с idx=enumerate(vacancies).
     """
-    if not data.is_casting or data.confidence < MIN_CONFIDENCE:
-        return []
+    if not post.is_casting or post.confidence < MIN_CONFIDENCE or not vacancies:
+        return {}
 
     async with AsyncSessionLocal() as session:
         res = await session.execute(
@@ -80,4 +84,9 @@ async def find_matching_profiles(data: ExtractedData) -> list[int]:
         )
         profiles = res.scalars().all()
 
-    return [p.user_id for p in profiles if matches(p, data)]
+    out: dict[int, list[int]] = {}
+    for p in profiles:
+        hit_idxs = [i for i, v in enumerate(vacancies) if matches(p, post, v)]
+        if hit_idxs:
+            out[p.user_id] = hit_idxs
+    return out
