@@ -5,29 +5,8 @@ import shlex
 
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import Command, CommandStart
-from aiogram.types import (
-    KeyboardButton,
-    Message,
-    ReplyKeyboardMarkup,
-    WebAppInfo,
-)
+from aiogram.types import Message
 from loguru import logger
-
-WEBAPP_URL = "https://modelpro.agency/"
-
-
-def _miniapp_keyboard() -> ReplyKeyboardMarkup:
-    """Reply-клавиатура с кнопкой запуска Mini App."""
-    return ReplyKeyboardMarkup(
-        keyboard=[[
-            KeyboardButton(
-                text="📋 Открыть анкету",
-                web_app=WebAppInfo(url=WEBAPP_URL),
-            )
-        ]],
-        resize_keyboard=True,
-        is_persistent=True,
-    )
 
 from db import repository
 from filters.storage import FilterStorage
@@ -109,11 +88,10 @@ def build_dispatcher(storage: FilterStorage) -> Dispatcher:
             username=message.from_user.username,
         )
         await message.answer(
-            "Привет! Нажми кнопку ниже, чтобы заполнить анкету для подбора "
-            "кастингов. После этого я начну присылать тебе подходящие "
-            "объявления из отслеживаемых Telegram-каналов.\n\n" + HELP_TEXT,
+            "Привет! Заполни анкету через кнопку Mini App рядом с полем ввода — "
+            "после этого я начну присылать тебе подходящие объявления из "
+            "отслеживаемых Telegram-каналов.\n\n" + HELP_TEXT,
             parse_mode="HTML",
-            reply_markup=_miniapp_keyboard(),
         )
 
     @dp.message(Command("help"))
