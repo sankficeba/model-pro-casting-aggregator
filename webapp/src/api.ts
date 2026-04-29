@@ -131,4 +131,6 @@ export const api = {
   getProfile: () => request<Profile>("/profile"),
   updateProfile: (data: Profile) =>
     request<Profile>("/profile", { method: "PUT", body: JSON.stringify(data) }),
+  completeProfile: () =>
+    request<Profile>("/profile/complete", { method: "POST" }),
 };

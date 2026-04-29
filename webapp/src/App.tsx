@@ -112,7 +112,10 @@ export default function App() {
       const ok = await save(true);
       if (ok) {
         notify("success");
-        // Дать пользователю увидеть «Сохранено» и закрыть Mini App
+        // Уведомляем бота и закрываем Mini App.
+        // Ошибка уведомления не должна блокировать завершение — бэк её
+        // только логирует, мы тоже игнорируем.
+        api.completeProfile().catch(() => undefined);
         setTimeout(closeApp, 1500);
       }
     }

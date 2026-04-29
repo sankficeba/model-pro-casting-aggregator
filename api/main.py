@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import sys
 
+import httpx
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
@@ -12,6 +13,26 @@ from api.auth import TelegramUser, current_user
 from api.reference_data import all_refs
 from api.schemas import ProfileResponse, ProfileUpdate
 from config import settings
+
+COMPLETION_MESSAGE = (
+    "✅ Анкета успешно заполнена. "
+    "Теперь вам будут поступать подходящие кастинги."
+)
+
+
+async def _notify_user(chat_id: int, text: str) -> None:
+    """Отправить пользователю сообщение через Bot API."""
+    url = f"https://api.telegram.org/bot{settings.bot_token}/sendMessage"
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            r = await client.post(url, json={"chat_id": chat_id, "text": text})
+            if r.status_code != 200:
+                logger.warning(
+                    "sendMessage failed for {}: {} {}",
+                    chat_id, r.status_code, r.text,
+                )
+    except httpx.HTTPError as e:
+        logger.warning("sendMessage error for {}: {}", chat_id, e)
 
 
 def _setup_logging() -> None:
@@ -66,3 +87,18 @@ async def update_my_profile(
     user: TelegramUser = Depends(current_user),
 ) -> ProfileResponse:
     return await profile_repo.upsert_profile(user.id, user.username, data)
+
+
+@app.post("/api/profile/complete", response_model=ProfileResponse)
+async def complete_my_profile(
+    user: TelegramUser = Depends(current_user),
+) -> ProfileResponse:
+    """Финальное завершение анкеты: уведомляем пользователя в боте."""
+    p = await profile_repo.get_profile(user.id)
+    if p is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Профиль не найден",
+        )
+    await _notify_user(user.id, COMPLETION_MESSAGE)
+    return p
