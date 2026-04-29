@@ -8,6 +8,12 @@ from pathlib import Path
 from aiogram import Bot
 from loguru import logger
 from telethon import TelegramClient, events
+from telethon.errors import (
+    ChannelPrivateError,
+    InviteHashExpiredError,
+    UserAlreadyParticipantError,
+)
+from telethon.tl.functions.channels import JoinChannelRequest
 
 from api.reference_data import all_refs
 from config import settings
@@ -74,10 +80,26 @@ class Userbot:
         for ch in usernames:
             try:
                 entity = await self.client.get_entity(ch)
-                entities.append(entity)
-                logger.info("Подписан на канал {} (id={})", ch, getattr(entity, "id", "?"))
             except Exception as e:  # noqa: BLE001
                 logger.error("Не удалось получить entity для {}: {}", ch, e)
+                continue
+
+            # get_entity только резолвит, не вступает. Чтобы Telethon
+            # получал NewMessage из канала, аккаунт-юзербот должен в нём
+            # состоять. Дёргаем JoinChannelRequest идемпотентно.
+            try:
+                await self.client(JoinChannelRequest(entity))
+                logger.info("Вступил в канал {} (id={})", ch, getattr(entity, "id", "?"))
+            except UserAlreadyParticipantError:
+                logger.info("Уже состою в канале {} (id={})", ch, getattr(entity, "id", "?"))
+            except (ChannelPrivateError, InviteHashExpiredError) as e:
+                logger.warning("Канал {} недоступен ({}); событий не будет", ch, type(e).__name__)
+                continue
+            except Exception as e:  # noqa: BLE001
+                logger.warning("Не удалось вступить в {}: {}", ch, e)
+                continue
+
+            entities.append(entity)
         return entities
 
     @staticmethod
