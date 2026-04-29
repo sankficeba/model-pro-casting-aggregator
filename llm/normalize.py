@@ -41,12 +41,7 @@ def _normalize_one(category: str, raw: str) -> str | None:
     if code:
         return code
     cleaned = s.lower().replace("-", " ").replace("_", " ").strip()
-    code = label_map.get(cleaned)
-    if code:
-        return code
-    # Try matching first word of multi-word phrases
-    first_word = cleaned.split()[0] if cleaned.split() else ""
-    return label_map.get(first_word)
+    return label_map.get(cleaned)
 
 
 def _normalize_list(category: str, raw: list[str]) -> list[str]:

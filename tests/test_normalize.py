@@ -19,7 +19,7 @@ def test_normalizes_per_vacancy_role_types():
     p = PostExtraction(
         is_casting=True,
         vacancies=[
-            VacancyExtraction(role_types=["главная роль"]),  # label
+            VacancyExtraction(role_types=["Главная"]),  # label
             VacancyExtraction(role_types=["episode", "trash-неизвестный"]),
         ],
     )
