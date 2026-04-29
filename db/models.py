@@ -214,8 +214,47 @@ class Message(Base):
         DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
     )
 
+    vacancies: Mapped[list["Vacancy"]] = relationship(
+        back_populates="message",
+        cascade="all, delete-orphan",
+        order_by="Vacancy.idx",
+    )
+
     __table_args__ = (
         UniqueConstraint("tg_chat_id", "tg_message_id", name="uq_messages_chat_msg"),
+    )
+
+
+class Vacancy(Base):
+    """Одна вакансия (роль) внутри объявления о кастинге.
+    Один Message → 0..N Vacancy."""
+
+    __tablename__ = "vacancies"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    message_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("messages.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    # Порядок вакансии в посте (0,1,2...): даёт стабильный UX и
+    # защищает от дубля при ретрае LLM-extract'а.
+    idx: Mapped[int] = mapped_column(Integer, nullable=False)
+    role_types: Mapped[list[str]] = mapped_column(
+        ARRAY(Text), default=list, server_default="{}", nullable=False,
+    )
+    gender: Mapped[Optional[str]] = mapped_column(String(8), nullable=True)
+    age_min: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    age_max: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    rate: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    role_label: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+
+    message: Mapped["Message"] = relationship(back_populates="vacancies")
+
+    __table_args__ = (
+        UniqueConstraint("message_id", "idx", name="uq_vacancies_message_idx"),
     )
 
 
@@ -238,6 +277,9 @@ class Notification(Base):
     )
     success: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    matched_vacancy_ids: Mapped[Optional[list[int]]] = mapped_column(
+        ARRAY(Integer), nullable=True,
+    )
 
     __table_args__ = (
         # Дедуп: один пользователь не получает одно и то же сообщение дважды
