@@ -117,13 +117,8 @@ export interface AdminMessageRow {
   tg_message_id: number;
   text: string;
   is_casting: boolean;
-  gender: string | null;
-  age_min: number | null;
-  age_max: number | null;
   project_types: string[];
-  role_types: string[];
   city: string | null;
-  rate: number | null;
   summary: string | null;
   confidence: number;
   received_at: string;

@@ -53,13 +53,8 @@ class AdminMessage(BaseModel):
     tg_message_id: int
     text: str
     is_casting: bool
-    gender: Optional[str] = None
-    age_min: Optional[int] = None
-    age_max: Optional[int] = None
     project_types: list[str] = []
-    role_types: list[str] = []
     city: Optional[str] = None
-    rate: Optional[int] = None
     summary: Optional[str] = None
     confidence: float
     received_at: datetime
@@ -176,13 +171,8 @@ async def list_messages(
             tg_message_id=m.tg_message_id,
             text=m.text,
             is_casting=m.is_casting,
-            gender=m.gender,
-            age_min=m.age_min,
-            age_max=m.age_max,
             project_types=list(m.project_types or []),
-            role_types=list(m.role_types or []),
             city=m.city,
-            rate=m.rate,
             summary=m.summary,
             confidence=m.confidence,
             received_at=m.received_at,

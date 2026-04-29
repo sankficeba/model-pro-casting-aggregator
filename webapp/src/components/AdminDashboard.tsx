@@ -205,27 +205,11 @@ function MessagesTab() {
               <div className="mt-2 text-slate-200 break-words">
                 {m.summary || m.text.slice(0, 200)}
               </div>
-              {(m.gender ||
-                m.age_min != null ||
-                m.project_types.length > 0 ||
-                m.role_types.length > 0 ||
-                m.city ||
-                m.rate != null) && (
+              {(m.project_types.length > 0 || m.city) && (
                 <div className="text-slate-400 text-xs mt-1.5 space-x-2 break-words">
-                  {m.gender && <span>{m.gender === "male" ? "м" : "ж"}</span>}
-                  {m.age_min != null && (
-                    <span>
-                      · {m.age_min}
-                      {m.age_max !== m.age_min ? `–${m.age_max}` : ""} лет
-                    </span>
-                  )}
                   {m.city && <span>· {m.city}</span>}
-                  {m.rate != null && <span>· {m.rate.toLocaleString("ru-RU")} ₽</span>}
                   {m.project_types.length > 0 && (
                     <span>· проекты: {m.project_types.join(",")}</span>
-                  )}
-                  {m.role_types.length > 0 && (
-                    <span>· роли: {m.role_types.join(",")}</span>
                   )}
                 </div>
               )}

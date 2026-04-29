@@ -153,12 +153,23 @@ class Userbot:
             if await repository.already_notified(user_id, message_db_id):
                 continue
 
+            # Защита от рассинхрона: при повторном Telegram-дубле длина
+            # vacancy_ids (из БД, исторические) может не совпадать с длиной
+            # post.vacancies (свежий extract). Берём только в-границах.
+            matched_db_ids = [vacancy_ids[i] for i in hit_idxs if i < len(vacancy_ids)]
+            if not matched_db_ids:
+                logger.warning(
+                    "Skip notify user={} msg={}: vacancy_ids len mismatch "
+                    "(db={}, extracted={})",
+                    user_id, message_db_id, len(vacancy_ids), len(post.vacancies),
+                )
+                continue
+
             notification_text = self._format_notification(
                 post=post, vacancies=post.vacancies,
                 matched_idxs=hit_idxs,
                 message=event.message, chat_username=chat_username,
             )
-            matched_db_ids = [vacancy_ids[i] for i in hit_idxs]
 
             success = False
             err: str | None = None
