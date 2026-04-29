@@ -1,5 +1,6 @@
 """Заглушка LLM: без внешних API, грубое извлечение по ключевым словам.
-Нужна, чтобы тестировать пайплайн без реального LLM-ключа."""
+Эмулирует один-вакансия-на-пост (мульти-вакансия для regex-стаба нереалистична).
+"""
 from __future__ import annotations
 
 import re
@@ -7,14 +8,14 @@ import re
 from loguru import logger
 
 from llm.base import LLMProvider
-from models.schemas import ExtractedData
+from models.schemas import PostExtraction, VacancyExtraction
 
 _MALE_WORDS = {
     "мужчина", "мужчины", "парень", "парни", "юноша", "мужской",
     "male", "man", "boy",
 }
 _FEMALE_WORDS = {
-    "женщина", "девушка", "девочка", "женский", "дама",
+    "женщина", "девушка", "девушку", "девочка", "женский", "дама",
     "female", "woman", "girl",
 }
 _CASTING_HINTS = (
@@ -57,7 +58,7 @@ class StubProvider(LLMProvider):
     async def _complete_json(self, system: str, user: str) -> str:  # noqa: ARG002
         return "{}"
 
-    async def extract(self, text: str) -> ExtractedData:
+    async def extract(self, text: str) -> PostExtraction:
         low = text.lower()
         is_casting = any(h in low for h in _CASTING_HINTS)
         gender = _detect_gender(text)
@@ -67,13 +68,22 @@ class StubProvider(LLMProvider):
         hits = sum(x is not None for x in (gender, age_min)) + (1 if is_casting else 0)
         confidence = min(1.0, 0.4 + 0.15 * hits)
 
-        result = ExtractedData(
+        vacancies: list[VacancyExtraction] = []
+        if is_casting:
+            vacancies = [
+                VacancyExtraction(
+                    gender=gender,  # type: ignore[arg-type]
+                    age_min=age_min,
+                    age_max=age_max,
+                    description=summary or None,
+                ),
+            ]
+
+        result = PostExtraction(
             is_casting=is_casting,
-            gender=gender,  # type: ignore[arg-type]
-            age_min=age_min,
-            age_max=age_max,
             summary=summary or None,
             confidence=confidence,
+            vacancies=vacancies,
         )
         logger.debug("StubProvider extracted: {}", result.model_dump())
         return result
