@@ -1,27 +1,39 @@
 """Тесты bot.response.compose_response — сборка отклика по шаблону."""
 from __future__ import annotations
 
-from dataclasses import dataclass
+import json
+from dataclasses import dataclass, field
 
 import pytest
 
 from api.schemas import ProfileResponse
-from bot.response import compose_response
+from bot.response import compose_response, compose_response_llm
+from llm.base import LLMProvider
 
 
 @dataclass
 class FakeMessage:
     project_types: list[str]
+    city: str | None = None
+    summary: str | None = None
 
 
 @dataclass
 class FakeVacancy:
+    id: int = 1
     role_label: str | None = None
-    role_types: list[str] = None  # type: ignore[assignment]
-
-    def __post_init__(self):
-        if self.role_types is None:
-            self.role_types = []
+    role_types: list[str] = field(default_factory=list)
+    gender: str | None = None
+    age_min: int | None = None
+    age_max: int | None = None
+    rate: int | None = None
+    ethnicity: list[str] = field(default_factory=list)
+    height_min: int | None = None
+    height_max: int | None = None
+    body_type: list[str] = field(default_factory=list)
+    hair_color: list[str] = field(default_factory=list)
+    hair_length: list[str] = field(default_factory=list)
+    description: str | None = None
 
 
 def _profile(**kw) -> ProfileResponse:
@@ -122,3 +134,48 @@ def test_compose_no_age_no_extras():
     assert "Откликаюсь" in out
     assert "Параметры:" not in out
     assert "Опыт" not in out
+
+
+# ---------- LLM-режим ----------
+
+
+class _FakeLLM(LLMProvider):
+    """Возвращает фиксированный JSON. Не делает сетевых вызовов."""
+
+    def __init__(self, raw: str) -> None:
+        self._raw = raw
+        self.last_user: str | None = None
+
+    async def _complete_json(self, system: str, user: str) -> str:  # noqa: ARG002
+        self.last_user = user
+        return self._raw
+
+
+async def test_compose_llm_uses_llm_text():
+    msg = FakeMessage(project_types=["kino_serial"], city="Москва")
+    vac = FakeVacancy(role_label="Мама", role_types=["main"], age_min=35, age_max=45)
+    raw = json.dumps({"text": "Здравствуйте! Очень хочу попробоваться на эту роль."})
+    llm = _FakeLLM(raw)
+    out = await compose_response_llm(_profile(), msg, vac, llm)  # type: ignore[arg-type]
+    assert "Очень хочу попробоваться" in out
+
+
+async def test_compose_llm_falls_back_on_invalid_json():
+    """LLM вернул мусор — откатываемся на шаблон, не падаем."""
+    msg = FakeMessage(project_types=[])
+    vac = FakeVacancy(role_label="Лена", role_types=["main"])
+    llm = _FakeLLM("not a json at all")
+    out = await compose_response_llm(_profile(), msg, vac, llm)  # type: ignore[arg-type]
+    assert "Откликаюсь на роль «Лена»" in out  # ⇐ из шаблона
+
+
+async def test_compose_llm_payload_includes_vacancy_and_profile():
+    """В user-payload передаются ключи candidate и vacancy."""
+    msg = FakeMessage(project_types=[], city="Москва")
+    vac = FakeVacancy(role_label="X", role_types=["main"])
+    llm = _FakeLLM(json.dumps({"text": "ok"}))
+    await compose_response_llm(_profile(), msg, vac, llm)  # type: ignore[arg-type]
+    payload = json.loads(llm.last_user or "{}")
+    assert "candidate" in payload and "vacancy" in payload
+    assert payload["vacancy"]["role_label"] == "X"
+    assert payload["candidate"]["full_name"] == "Иван Иванов"
