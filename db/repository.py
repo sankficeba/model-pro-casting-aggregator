@@ -195,6 +195,23 @@ async def insert_message_with_vacancies(
             return None, []
 
 
+async def get_vacancy_with_message(
+    vacancy_id: int,
+) -> Optional[tuple[Vacancy, Message]]:
+    """Загрузить вакансию + её родительский Message за один заход.
+    Используется хэндлером отклика — нужны обе сущности для шаблона."""
+    async with AsyncSessionLocal() as session:
+        res = await session.execute(
+            select(Vacancy, Message)
+            .join(Message, Message.id == Vacancy.message_id)
+            .where(Vacancy.id == vacancy_id)
+        )
+        row = res.first()
+        if row is None:
+            return None
+        return row[0], row[1]
+
+
 # ---------- NOTIFICATIONS ----------
 
 async def log_notification(

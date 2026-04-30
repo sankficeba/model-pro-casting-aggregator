@@ -6,6 +6,7 @@ import asyncio
 from pathlib import Path
 
 from aiogram import Bot
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from loguru import logger
 from telethon import TelegramClient, events
 from telethon.errors import (
@@ -229,6 +230,20 @@ class Userbot:
                 message=event.message, chat_username=chat_username,
             )
 
+            # Инлайн-клавиатура: «Сгенерировать отклик» на каждую подошедшую
+            # роль. callback_data = `respond:<vacancy_id>`, vacancy_id точно
+            # влезает в 64-байтовый лимит Telegram'а.
+            kb_buttons: list[list[InlineKeyboardButton]] = []
+            for i, db_id in zip(hit_idxs, matched_db_ids):
+                title = _vacancy_title(post.vacancies[i])
+                kb_buttons.append([
+                    InlineKeyboardButton(
+                        text=f"✍ Отклик: {title}"[:64],
+                        callback_data=f"respond:{db_id}",
+                    )
+                ])
+            reply_markup = InlineKeyboardMarkup(inline_keyboard=kb_buttons)
+
             success = False
             err: str | None = None
             try:
@@ -237,6 +252,7 @@ class Userbot:
                     notification_text,
                     parse_mode="HTML",
                     disable_web_page_preview=True,
+                    reply_markup=reply_markup,
                 )
                 success = True
             except Exception as e:  # noqa: BLE001

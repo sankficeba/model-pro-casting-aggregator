@@ -6,9 +6,11 @@ import os
 
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import Command, CommandStart
-from aiogram.types import Message, ReplyKeyboardRemove
+from aiogram.types import CallbackQuery, Message, ReplyKeyboardRemove
 from loguru import logger
 
+from api import profile_repo
+from bot.response import compose_response
 from config import settings
 from db import repository
 
@@ -136,6 +138,48 @@ def build_dispatcher(bot: Bot) -> Dispatcher:
             await message.answer("Такого активного канала не нашёл.")
             return
         await _restart_self(bot, message, "🗑 Канал отключён.")
+
+    # ---------- Inline-кнопка «Сгенерировать отклик» под уведомлением ----------
+
+    @dp.callback_query(F.data.startswith("respond:"))
+    async def cb_respond(query: CallbackQuery) -> None:
+        # callback_data: "respond:<vacancy_id>"
+        try:
+            vacancy_id = int((query.data or "").split(":", 1)[1])
+        except (ValueError, IndexError):
+            await query.answer("Некорректные данные кнопки.", show_alert=True)
+            return
+
+        user_id = query.from_user.id if query.from_user else 0
+        profile = await profile_repo.get_profile(user_id)
+        if profile is None:
+            await query.answer(
+                "Сначала заполни анкету в Mini App — без неё нечего вставлять в отклик.",
+                show_alert=True,
+            )
+            return
+
+        loaded = await repository.get_vacancy_with_message(vacancy_id)
+        if loaded is None:
+            await query.answer("Вакансия не найдена.", show_alert=True)
+            return
+        vacancy, message_row = loaded
+
+        text = compose_response(profile, message_row, vacancy)
+        # Оборачиваем в <pre> для удобного однотап-копирования в Telegram.
+        from html import escape
+
+        body = escape(text)
+        try:
+            await query.message.answer(  # type: ignore[union-attr]
+                f"<b>Готовый отклик</b> — нажми и удерживай, чтобы скопировать:\n\n<pre>{body}</pre>",
+                parse_mode="HTML",
+                disable_web_page_preview=True,
+            )
+            await query.answer()
+        except Exception as e:  # noqa: BLE001
+            logger.warning("Не удалось отправить отклик user={}: {}", user_id, e)
+            await query.answer("Не получилось отправить отклик. Попробуй ещё раз.", show_alert=True)
 
     # ---------- Fallback ----------
 
