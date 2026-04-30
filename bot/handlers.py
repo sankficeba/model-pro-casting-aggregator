@@ -10,9 +10,10 @@ from aiogram.types import CallbackQuery, Message, ReplyKeyboardRemove
 from loguru import logger
 
 from api import profile_repo
-from bot.response import compose_response
+from bot.response import compose_response, compose_response_llm
 from config import settings
 from db import repository
+from llm.base import LLMProvider
 
 HELP_TEXT_USER = (
     "<b>Команды:</b>\n"
@@ -56,7 +57,7 @@ async def _restart_self(bot: Bot, message: Message, reason: str) -> None:
     os._exit(0)
 
 
-def build_dispatcher(bot: Bot) -> Dispatcher:
+def build_dispatcher(bot: Bot, llm: LLMProvider | None = None) -> Dispatcher:
     dp = Dispatcher()
 
     @dp.message(CommandStart())
@@ -165,7 +166,13 @@ def build_dispatcher(bot: Bot) -> Dispatcher:
             return
         vacancy, message_row = loaded
 
-        text = compose_response(profile, message_row, vacancy)
+        # Если LLM-провайдер прокинут — собираем «живой» текст; на любую
+        # ошибку (нет сети, плохой JSON и т.п.) compose_response_llm
+        # сам откатится на детерминированный шаблон.
+        if llm is not None:
+            text = await compose_response_llm(profile, message_row, vacancy, llm)
+        else:
+            text = compose_response(profile, message_row, vacancy)
         # Оборачиваем в <pre> для удобного однотап-копирования в Telegram.
         from html import escape
 
@@ -193,7 +200,7 @@ def build_dispatcher(bot: Bot) -> Dispatcher:
     return dp
 
 
-async def run_bot(bot: Bot) -> None:
-    dp = build_dispatcher(bot)
+async def run_bot(bot: Bot, llm: LLMProvider | None = None) -> None:
+    dp = build_dispatcher(bot, llm=llm)
     logger.info("aiogram-бот запущен")
     await dp.start_polling(bot)

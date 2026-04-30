@@ -1,14 +1,21 @@
-"""Шаблон автоматического отклика на вакансию.
+"""Сборка автоматического отклика на вакансию.
 
-Берём данные из анкеты пользователя + контекст вакансии и собираем готовый
-текст, который пользователь может скопировать и отправить кастинг-директору.
-Никаких LLM-вызовов — детерминированный шаблон.
+Два режима:
+- compose_response — детерминированный шаблон без LLM. Гарантированный
+  fallback, не тратит токены.
+- compose_response_llm — даёт LLM собрать «живой» текст под конкретную
+  вакансию. На любую ошибку откатывается на шаблон.
 """
 from __future__ import annotations
+
+import json
+
+from loguru import logger
 
 from api.reference_data import all_refs
 from api.schemas import ProfileResponse
 from db.models import Message, Vacancy
+from llm.base import LLMProvider, _try_parse_json
 
 _REFS = all_refs()
 _PROJECT_LABELS = {it["code"]: it["label"] for it in _REFS["project_types"]}
@@ -127,3 +134,121 @@ def compose_response(
     lines.append("Готов(а) обсудить условия, пробы, расписание.")
 
     return "\n".join(lines)
+
+
+# ---------- LLM-режим ----------
+
+_RESPONSE_SYSTEM_PROMPT = """Ты помогаешь актёру/модели написать короткий
+персональный отклик на конкретную вакансию из объявления о кастинге.
+
+Правила:
+- Текст на русском, тон — вежливый, дружелюбный, профессиональный, без
+  излишнего пафоса и канцелярита.
+- 5–10 коротких строк. Без эмодзи. Без заголовков. Без markdown.
+- Опирайся ТОЛЬКО на данные анкеты и описание вакансии. Не выдумывай
+  опыт, награды, навыки, города или факты.
+- Подчеркни, чем кандидат подходит именно под эту роль (роль, возраст,
+  пол, рост, внешность, телосложение — если они совпадают с требованием).
+- Контакты приведи в конце отдельным блоком, по одному на строке.
+  Никаких кликабельных ссылок-приукрас, плоский текст.
+- Если каких-то данных в анкете нет — просто опусти соответствующую
+  фразу, не пиши «не указано», «—» и т.п.
+- Заверши готовностью обсудить пробы/условия.
+
+Ответ — СТРОГО JSON-объект без markdown:
+{"text": "<готовый текст отклика, переносы строк через \\n>"}
+"""
+
+
+def _profile_to_dict(p: ProfileResponse) -> dict:
+    """Сериализация анкеты для LLM — только осмысленные для отклика поля."""
+    refs = _REFS
+    proj_lbl = {it["code"]: it["label"] for it in refs["project_types"]}
+    role_lbl = {it["code"]: it["label"] for it in refs["role_types"]}
+    eth_lbl = {it["code"]: it["label"] for it in refs["ethnicity"]}
+    body_lbl = {it["code"]: it["label"] for it in refs["body_type"]}
+    hair_lbl = {it["code"]: it["label"] for it in refs["hair_colors"]}
+    hair_len_lbl = {it["code"]: it["label"] for it in refs["hair_lengths"]}
+
+    return {
+        "full_name": p.full_name,
+        "gender": p.gender,
+        "city": p.city,
+        "ready_for_travel": p.ready_for_travel,
+        "actual_age": p.actual_age,
+        "play_age": (
+            f"{p.play_age_min}–{p.play_age_max}"
+            if p.play_age_min is not None and p.play_age_max is not None
+            else None
+        ),
+        "project_types": [proj_lbl.get(c, c) for c in (p.project_types or [])],
+        "role_types": [role_lbl.get(c, c) for c in (p.role_types or [])],
+        "height_cm": p.height_cm,
+        "ethnicity": [eth_lbl.get(c, c) for c in (p.ethnicity or [])],
+        "body_type": [body_lbl.get(c, c) for c in (p.body_type or [])],
+        "hair_color": hair_lbl.get(p.hair_color, p.hair_color) if p.hair_color else None,
+        "hair_length": hair_len_lbl.get(p.hair_length, p.hair_length) if p.hair_length else None,
+        "has_experience": p.has_experience,
+        "phone": p.phone,
+        "email": p.email,
+        "vk_url": p.vk_url,
+        "portfolio_url": p.portfolio_url,
+        "video_url": p.video_url,
+        "professional_url": p.professional_url,
+    }
+
+
+def _vacancy_to_dict(message: Message, vacancy: Vacancy) -> dict:
+    """Сериализация вакансии + контекста поста для LLM."""
+    eth_lbl = {it["code"]: it["label"] for it in _REFS["ethnicity"]}
+    body_lbl = {it["code"]: it["label"] for it in _REFS["body_type"]}
+    hair_lbl = {it["code"]: it["label"] for it in _REFS["hair_colors"]}
+    hair_len_lbl = {it["code"]: it["label"] for it in _REFS["hair_lengths"]}
+
+    return {
+        "role_label": vacancy.role_label,
+        "role_types": [_ROLE_LABELS.get(c, c) for c in (vacancy.role_types or [])],
+        "gender": vacancy.gender,
+        "age_min": vacancy.age_min,
+        "age_max": vacancy.age_max,
+        "rate": vacancy.rate,
+        "ethnicity": [eth_lbl.get(c, c) for c in (vacancy.ethnicity or [])],
+        "height_min": vacancy.height_min,
+        "height_max": vacancy.height_max,
+        "body_type": [body_lbl.get(c, c) for c in (vacancy.body_type or [])],
+        "hair_color": [hair_lbl.get(c, c) for c in (vacancy.hair_color or [])],
+        "hair_length": [hair_len_lbl.get(c, c) for c in (vacancy.hair_length or [])],
+        "description": vacancy.description,
+        "project_types": [_PROJECT_LABELS.get(c, c) for c in (message.project_types or [])],
+        "city": message.city,
+        "summary": message.summary,
+    }
+
+
+async def compose_response_llm(
+    profile: ProfileResponse,
+    message: Message,
+    vacancy: Vacancy,
+    llm: LLMProvider,
+) -> str:
+    """LLM-вариант. На любую ошибку откатывается на шаблон compose_response."""
+    user_payload = {
+        "candidate": _profile_to_dict(profile),
+        "vacancy": _vacancy_to_dict(message, vacancy),
+    }
+    try:
+        raw = await llm._complete_json(
+            _RESPONSE_SYSTEM_PROMPT,
+            json.dumps(user_payload, ensure_ascii=False),
+        )
+        data = _try_parse_json(raw)
+        text = (data.get("text") or "").strip()
+        if not text:
+            raise ValueError("LLM вернул пустой text")
+        return text
+    except Exception as e:  # noqa: BLE001
+        logger.warning(
+            "compose_response_llm fallback to template (vacancy_id={}): {}",
+            vacancy.id, e,
+        )
+        return compose_response(profile, message, vacancy)
