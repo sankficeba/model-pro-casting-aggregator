@@ -2,6 +2,7 @@
 Используется userbot'ом и aiogram-ботом."""
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from loguru import logger
@@ -102,12 +103,78 @@ def _filter_to_schema(row: Filter) -> UserFilter:
 
 # ---------- MESSAGES ----------
 
+async def find_canonical(
+    text_hash: str, within_days: int = 7
+) -> Optional[Message]:
+    """Найти canonical-row с таким же `text_hash` внутри окна.
+
+    Canonical — это row, у которого `canonical_message_id IS NULL`
+    (он сам и есть оригинал, не дубликат). Окно отсекает старые
+    реальные перепосты («второй заход на роль» через месяц считается
+    новым кастингом).
+
+    Возвращает первый найденный (минимальный id) или None.
+    """
+    if not text_hash:
+        return None
+    cutoff = datetime.now(timezone.utc) - timedelta(days=within_days)
+    async with AsyncSessionLocal() as session:
+        res = await session.execute(
+            select(Message)
+            .where(
+                Message.text_hash == text_hash,
+                Message.canonical_message_id.is_(None),
+                Message.received_at > cutoff,
+            )
+            .order_by(Message.id.asc())
+            .limit(1)
+        )
+        return res.scalar_one_or_none()
+
+
+async def insert_duplicate_message(
+    *,
+    tg_chat_id: int,
+    tg_chat_username: str | None,
+    tg_message_id: int,
+    text: str,
+    text_hash: str,
+    canonical_message_id: int,
+) -> Optional[int]:
+    """Записать повторное появление того же кастинга в другом канале.
+
+    Сохраняем raw text «как пришло» (для аудита), линкуем на canonical,
+    LLM-поля оставляем дефолтными (не вызываем экстрактор).
+    Idempotent по (tg_chat_id, tg_message_id) через ON CONFLICT.
+    """
+    async with AsyncSessionLocal() as session:
+        stmt = (
+            pg_insert(Message)
+            .values(
+                tg_chat_id=tg_chat_id,
+                tg_chat_username=tg_chat_username,
+                tg_message_id=tg_message_id,
+                text=text,
+                text_hash=text_hash,
+                canonical_message_id=canonical_message_id,
+                # is_casting и прочие LLM-поля — дефолт (не извлекали)
+            )
+            .on_conflict_do_nothing(index_elements=["tg_chat_id", "tg_message_id"])
+            .returning(Message.id)
+        )
+        res = await session.execute(stmt)
+        message_id = res.scalar_one_or_none()
+        await session.commit()
+        return message_id
+
+
 async def insert_message_with_vacancies(
     *,
     tg_chat_id: int,
     tg_chat_username: str | None,
     tg_message_id: int,
     text: str,
+    text_hash: str | None,
     extracted: PostExtraction,
 ) -> tuple[Optional[int], list[int]]:
     """Вставить пост и его вакансии одной транзакцией.
@@ -124,6 +191,7 @@ async def insert_message_with_vacancies(
                 tg_chat_username=tg_chat_username,
                 tg_message_id=tg_message_id,
                 text=text,
+                text_hash=text_hash,
                 is_casting=extracted.is_casting,
                 project_types=list(extracted.project_types),
                 city=extracted.city,
