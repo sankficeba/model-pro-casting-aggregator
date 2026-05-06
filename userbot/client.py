@@ -19,6 +19,7 @@ from telethon.tl.functions.channels import JoinChannelRequest
 from api.reference_data import all_refs
 from config import settings
 from db import matching, repository
+from db.dedup import text_hash
 from llm.base import LLMProvider
 from models.schemas import PostExtraction, VacancyExtraction
 
@@ -179,6 +180,30 @@ class Userbot:
             return
         logger.debug("Новое сообщение: {!r}", text[:120])
 
+        chat = event.message.chat
+        chat_id = getattr(chat, "id", 0)
+        chat_username = getattr(chat, "username", None)
+
+        # Дедуп: если такой же текст (после нормализации) уже был у нас
+        # за последние 7 дней — это форвард/копия. Пишем «теневой» row
+        # с FK на canonical, LLM не дёргаем, нотификации не шлём.
+        th = text_hash(text)
+        canonical = await repository.find_canonical(th)
+        if canonical is not None:
+            await repository.insert_duplicate_message(
+                tg_chat_id=chat_id,
+                tg_chat_username=chat_username,
+                tg_message_id=event.message.id,
+                text=text,
+                text_hash=th,
+                canonical_message_id=canonical.id,
+            )
+            logger.info(
+                "Дубль: chat={} msg={} text_hash={} canonical={}",
+                chat_username or chat_id, event.message.id, th, canonical.id,
+            )
+            return
+
         post = await self.llm.extract(text)
         logger.info(
             "LLM extract: casting={} project={} city={} vacancies={} conf={:.2f}",
@@ -186,14 +211,12 @@ class Userbot:
             len(post.vacancies), post.confidence,
         )
 
-        chat = event.message.chat
-        chat_id = getattr(chat, "id", 0)
-        chat_username = getattr(chat, "username", None)
         message_db_id, vacancy_ids = await repository.insert_message_with_vacancies(
             tg_chat_id=chat_id,
             tg_chat_username=chat_username,
             tg_message_id=event.message.id,
             text=text,
+            text_hash=th,
             extracted=post,
         )
         if message_db_id is None:
