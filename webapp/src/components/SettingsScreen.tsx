@@ -33,8 +33,11 @@ export function SettingsScreen({ subscriptions, onChange, onEditForm, onAddCateg
   };
 
   return (
-    <div className="min-h-screen p-5 space-y-4">
-      <button onClick={onBack} className="text-slate-400 hover:text-white transition">← Назад</button>
+    <div className="min-h-screen pb-5">
+      <div className="sticky top-0 z-20 bg-bg/90 backdrop-blur border-b border-bg-card">
+        <button onClick={onBack} className="px-4 py-3 text-slate-400 hover:text-white transition">← Назад</button>
+      </div>
+      <div className="p-5 space-y-4">
       <h1 className="text-2xl font-semibold">Настройки</h1>
       <div className="space-y-3">
         {ALL.map((c) => {
@@ -91,6 +94,7 @@ export function SettingsScreen({ subscriptions, onChange, onEditForm, onAddCateg
           {error}
         </div>
       )}
+      </div>
     </div>
   );
 }

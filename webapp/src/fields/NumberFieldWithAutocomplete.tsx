@@ -38,14 +38,14 @@ export function NumberFieldWithAutocomplete({
         value={value ?? ""}
         onChange={(e) => {
           const digits = e.target.value.replace(/\D/g, "");
-          if (digits === "") {
-            onChange(null);
-            return;
-          }
-          let n = Number(digits);
+          onChange(digits === "" ? null : Number(digits));
+        }}
+        onBlur={() => {
+          if (value == null) return;
+          let n = value;
           if (max !== undefined && n > max) n = max;
           if (min !== undefined && n < min) n = min;
-          onChange(n);
+          if (n !== value) onChange(n);
         }}
         placeholder={placeholder}
         className="w-full bg-bg-card rounded-card px-3 py-2 outline-none focus:ring-1 ring-accent"

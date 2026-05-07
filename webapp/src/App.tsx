@@ -119,12 +119,14 @@ export default function App() {
       }[screen.category];
       return (
         <div>
-          <button
-            onClick={() => setScreen({ kind: "menu" })}
-            className="m-4 text-slate-400 hover:text-white"
-          >
-            ← Назад
-          </button>
+          <div className="sticky top-0 z-20 bg-bg/90 backdrop-blur border-b border-bg-card">
+            <button
+              onClick={() => setScreen({ kind: "menu" })}
+              className="px-4 py-3 text-slate-400 hover:text-white"
+            >
+              ← Назад
+            </button>
+          </div>
           <FormComponent onDone={refreshMe} />
         </div>
       );

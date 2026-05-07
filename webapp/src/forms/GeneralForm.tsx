@@ -135,6 +135,15 @@ export function GeneralForm({ onDone }: Props) {
           onChange={(v) => update({ city: v })}
           required
         />
+        <label className="flex items-center gap-2 text-sm text-slate-300">
+          <input
+            type="checkbox"
+            checked={!!data.ready_for_travel}
+            onChange={(e) => update({ ready_for_travel: e.target.checked })}
+            className="accent-accent w-4 h-4"
+          />
+          Готов(а) к командировкам
+        </label>
         <NumberFieldWithAutocomplete
           field="actual_age"
           label="Возраст"
@@ -151,15 +160,6 @@ export function GeneralForm({ onDone }: Props) {
           onChange={(v) => update({ min_rate: v })}
           min={0}
         />
-        <label className="flex items-center gap-2 text-sm text-slate-300">
-          <input
-            type="checkbox"
-            checked={!!data.ready_for_travel}
-            onChange={(e) => update({ ready_for_travel: e.target.checked })}
-            className="accent-accent w-4 h-4"
-          />
-          Готов(а) к командировкам
-        </label>
       </section>
 
       <section className="space-y-3">
