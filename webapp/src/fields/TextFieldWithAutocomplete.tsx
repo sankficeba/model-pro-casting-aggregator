@@ -9,6 +9,7 @@ interface Props {
   placeholder?: string;
   type?: "text" | "email" | "tel" | "url";
   required?: boolean;
+  staticSuggestions?: string[];
 }
 
 export function TextFieldWithAutocomplete({
@@ -19,14 +20,18 @@ export function TextFieldWithAutocomplete({
   placeholder,
   type = "text",
   required,
+  staticSuggestions,
 }: Props) {
-  const suggestions = useFieldSuggestions(field).filter(
+  const userSuggestions = useFieldSuggestions(field).filter(
     (s): s is string => typeof s === "string",
   );
+  const merged = Array.from(
+    new Set([...userSuggestions, ...(staticSuggestions ?? [])]),
+  );
   const [focused, setFocused] = useState(false);
-  const filtered = suggestions
+  const filtered = merged
     .filter((s) => !value || s.toLowerCase().includes(value.toLowerCase()))
-    .slice(0, 5);
+    .slice(0, 6);
 
   return (
     <label className="block space-y-1">
