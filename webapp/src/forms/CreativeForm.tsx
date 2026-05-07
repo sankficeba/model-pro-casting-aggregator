@@ -56,7 +56,41 @@ export function CreativeForm({ onDone }: Props) {
     });
   };
 
+  const validate = (): string[] => {
+    const missing: string[] = [];
+    if (!data.full_name?.trim()) missing.push("ФИО");
+    if (!data.gender) missing.push("Пол");
+    if (!data.city?.trim()) missing.push("Город");
+    if (data.actual_age == null) missing.push("Возраст");
+    if (!data.project_types || data.project_types.length === 0)
+      missing.push("Типы проектов");
+    if (!data.role_types || data.role_types.length === 0)
+      missing.push("Типы ролей");
+    if (data.height_cm == null) missing.push("Рост, см");
+    if (!data.ethnicity || data.ethnicity.length === 0)
+      missing.push("Этнотип");
+    if (!data.body_type || data.body_type.length === 0)
+      missing.push("Телосложение");
+    if (!data.hair_color) missing.push("Цвет волос");
+    if (!data.hair_length) missing.push("Длина волос");
+    if (!data.phone?.trim()) missing.push("Телефон");
+    if (!data.email?.trim()) missing.push("Email");
+    if (
+      data.telegram_user &&
+      data.telegram_user.trim() &&
+      validateTelegramUser(data.telegram_user.trim()) !== null
+    ) {
+      missing.push("Telegram (исправь формат)");
+    }
+    return missing;
+  };
+
   const finish = async () => {
+    const missing = validate();
+    if (missing.length > 0) {
+      setError("Заполни обязательные поля: " + missing.join(", "));
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
