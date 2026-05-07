@@ -32,13 +32,21 @@ export function NumberFieldWithAutocomplete({
         {required && <span className="text-red-400 ml-0.5">*</span>}
       </span>
       <input
-        type="number"
+        type="text"
+        inputMode="numeric"
+        pattern="[0-9]*"
         value={value ?? ""}
-        onChange={(e) =>
-          onChange(e.target.value === "" ? null : Number(e.target.value))
-        }
-        min={min}
-        max={max}
+        onChange={(e) => {
+          const digits = e.target.value.replace(/\D/g, "");
+          if (digits === "") {
+            onChange(null);
+            return;
+          }
+          let n = Number(digits);
+          if (max !== undefined && n > max) n = max;
+          if (min !== undefined && n < min) n = min;
+          onChange(n);
+        }}
         placeholder={placeholder}
         className="w-full bg-bg-card rounded-card px-3 py-2 outline-none focus:ring-1 ring-accent"
       />
