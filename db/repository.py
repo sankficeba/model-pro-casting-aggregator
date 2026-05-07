@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from loguru import logger
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError
 
@@ -355,6 +355,25 @@ async def log_notification(
             # (user_id, text_hash). Оба означают «уже уведомили».
             await session.rollback()
             return False
+
+
+async def update_notification_failed(
+    *, user_id: int, message_id: int, error: str
+) -> None:
+    """Пометить уже-вставленную нотификацию как failed после упавшего send_message.
+
+    Используется когда мы оптимистично ставим success=True перед send_message
+    (для UNIQUE-дедупа), а потом отправка упала — обновляем запись."""
+    async with AsyncSessionLocal() as session:
+        await session.execute(
+            update(Notification)
+            .where(
+                Notification.user_id == user_id,
+                Notification.message_id == message_id,
+            )
+            .values(success=False, error=error)
+        )
+        await session.commit()
 
 
 # ---------- CHANNELS ----------
