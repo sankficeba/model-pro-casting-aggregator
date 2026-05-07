@@ -33,6 +33,13 @@ CATEGORY_TO_SCHEMA = {
     "admin": AdminProfileSchema,
 }
 
+CATEGORY_LABELS = {
+    "creative": "Творческие позиции",
+    "event": "Event-персонал",
+    "general": "Разнорабочие",
+    "admin": "Администрирование",
+}
+
 FIRST_COMPLETION_MESSAGE = (
     "✅ Анкета успешно заполнена. "
     "Теперь вам будут поступать подходящие кастинги."
@@ -40,6 +47,32 @@ FIRST_COMPLETION_MESSAGE = (
 RECOMPLETION_MESSAGE = (
     "✏️ Анкета успешно изменена. Подборка кастингов обновлена."
 )
+
+
+def _category_completion_text(category: str, was_first_time: bool) -> str:
+    label = CATEGORY_LABELS.get(category, category)
+    if was_first_time:
+        return (
+            f"✅ Анкета «{label}» успешно заполнена. "
+            "Теперь вам будут поступать подходящие вакансии."
+        )
+    return (
+        f"✏️ Анкета «{label}» успешно изменена. "
+        "Подборка вакансий обновлена."
+    )
+
+
+def _category_toggle_text(category: str, enabled: bool) -> str:
+    label = CATEGORY_LABELS.get(category, category)
+    if enabled:
+        return (
+            f"🔔 Категория «{label}» включена. "
+            "Подходящие вакансии снова будут приходить в уведомлениях."
+        )
+    return (
+        f"🔕 Категория «{label}» отключена. "
+        "Уведомления по ней не будут приходить, пока не включишь обратно."
+    )
 
 
 async def _notify_user(chat_id: int, text: str) -> None:
@@ -172,6 +205,7 @@ async def patch_subscription(
     ok = await repo.toggle_subscription(user.id, category, body.enabled)
     if not ok:
         raise HTTPException(status_code=404, detail="Subscription not found")
+    await _notify_user(user.id, _category_toggle_text(category, body.enabled))
     return {"ok": True}
 
 
@@ -225,6 +259,5 @@ async def complete_category_profile_endpoint(
     p, was_first_time = await repo.complete_category_profile(user.id, category)
     if p is None:
         raise HTTPException(status_code=400, detail="Profile not found")
-    text = FIRST_COMPLETION_MESSAGE if was_first_time else RECOMPLETION_MESSAGE
-    await _notify_user(user.id, text)
+    await _notify_user(user.id, _category_completion_text(category, was_first_time))
     return p
