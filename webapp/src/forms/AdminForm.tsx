@@ -5,6 +5,8 @@ import { TextFieldWithAutocomplete } from "../fields/TextFieldWithAutocomplete";
 import { NumberFieldWithAutocomplete } from "../fields/NumberFieldWithAutocomplete";
 import { MultiSelectField } from "../fields/MultiSelectField";
 import { SelectField } from "../fields/SelectField";
+import { CITIES } from "../cities";
+import { useSuggestionsRefresh } from "../contexts/SuggestionsContext";
 
 const WORK_TYPES = [
   { value: "registration_operator", label: "Оператор регистрации" },
@@ -25,6 +27,11 @@ export function AdminForm({ onDone }: Props) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const refreshSuggestions = useSuggestionsRefresh();
+
+  useEffect(() => {
+    refreshSuggestions();
+  }, [refreshSuggestions]);
 
   useEffect(() => {
     Promise.all([api.getCategoryProfile("admin"), api.getRefs()])
@@ -107,6 +114,7 @@ export function AdminForm({ onDone }: Props) {
         <TextFieldWithAutocomplete
           field="city"
           label="Город"
+          staticSuggestions={CITIES}
           value={data.city ?? ""}
           onChange={(v) => update({ city: v })}
           required

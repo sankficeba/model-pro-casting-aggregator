@@ -5,6 +5,8 @@ import { TextFieldWithAutocomplete } from "../fields/TextFieldWithAutocomplete";
 import { NumberFieldWithAutocomplete } from "../fields/NumberFieldWithAutocomplete";
 import { SelectField } from "../fields/SelectField";
 import { MultiSelectField } from "../fields/MultiSelectField";
+import { CITIES } from "../cities";
+import { useSuggestionsRefresh } from "../contexts/SuggestionsContext";
 
 interface Props {
   onDone: () => void;
@@ -20,6 +22,11 @@ export function CreativeForm({ onDone }: Props) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const refreshSuggestions = useSuggestionsRefresh();
+
+  useEffect(() => {
+    refreshSuggestions();
+  }, [refreshSuggestions]);
 
   useEffect(() => {
     Promise.all([api.getCategoryProfile("creative"), api.getRefs()])
@@ -102,6 +109,7 @@ export function CreativeForm({ onDone }: Props) {
         <TextFieldWithAutocomplete
           field="city"
           label="Город"
+          staticSuggestions={CITIES}
           value={data.city ?? ""}
           onChange={(v) => update({ city: v })}
           required
