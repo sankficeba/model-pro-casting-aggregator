@@ -62,7 +62,32 @@ export function EventForm({ onDone }: Props) {
     });
   };
 
+  const validate = (): string[] => {
+    const missing: string[] = [];
+    if (!data.full_name?.trim()) missing.push("ФИО");
+    if (!data.gender) missing.push("Пол");
+    if (!data.city?.trim()) missing.push("Город");
+    if (data.actual_age == null) missing.push("Возраст");
+    if (!data.work_types || data.work_types.length === 0)
+      missing.push("Должности");
+    if (!data.phone?.trim()) missing.push("Телефон");
+    if (!data.email?.trim()) missing.push("Email");
+    if (
+      data.telegram_user &&
+      data.telegram_user.trim() &&
+      validateTelegramUser(data.telegram_user.trim()) !== null
+    ) {
+      missing.push("Telegram (исправь формат)");
+    }
+    return missing;
+  };
+
   const finish = async () => {
+    const missing = validate();
+    if (missing.length > 0) {
+      setError("Заполни обязательные поля: " + missing.join(", "));
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
