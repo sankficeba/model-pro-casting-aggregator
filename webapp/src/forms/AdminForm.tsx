@@ -36,6 +36,12 @@ export function AdminForm({ onDone }: Props) {
       .finally(() => setLoading(false));
   }, []);
 
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, []);
+
   const update = (patch: Data) => {
     setData((prev) => {
       const next = { ...prev, ...patch };

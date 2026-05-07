@@ -37,6 +37,12 @@ export function EventForm({ onDone }: Props) {
       .finally(() => setLoading(false));
   }, []);
 
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, []);
+
   const update = (patch: Data) => {
     setData((prev) => {
       const next = { ...prev, ...patch };
@@ -106,6 +112,15 @@ export function EventForm({ onDone }: Props) {
           onChange={(v) => update({ city: v })}
           required
         />
+        <label className="flex items-center gap-2 text-sm text-slate-300">
+          <input
+            type="checkbox"
+            checked={!!data.ready_for_travel}
+            onChange={(e) => update({ ready_for_travel: e.target.checked })}
+            className="accent-accent w-4 h-4"
+          />
+          Готов(а) к командировкам
+        </label>
         <NumberFieldWithAutocomplete
           field="actual_age"
           label="Возраст"
@@ -122,6 +137,24 @@ export function EventForm({ onDone }: Props) {
           onChange={(v) => update({ min_rate: v })}
           min={0}
         />
+        <label className="flex items-center gap-2 text-sm cursor-pointer">
+          <input
+            type="checkbox"
+            checked={data.show_negotiable ?? false}
+            onChange={(e) => update({ show_negotiable: e.target.checked })}
+            className="w-4 h-4 accent-accent"
+          />
+          Показывать кастинги без указания ставки
+        </label>
+        <label className="flex items-center gap-2 text-sm cursor-pointer">
+          <input
+            type="checkbox"
+            checked={data.show_noncommercial ?? true}
+            onChange={(e) => update({ show_noncommercial: e.target.checked })}
+            className="w-4 h-4 accent-accent"
+          />
+          Показывать некоммерческие проекты
+        </label>
       </section>
 
       <section className="space-y-3">
