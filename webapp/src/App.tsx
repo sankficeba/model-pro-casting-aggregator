@@ -8,6 +8,7 @@ import {
 import { AdminDashboard } from "./components/AdminDashboard";
 import { CategorySurveyScreen } from "./components/CategorySurveyScreen";
 import { CategoryMenuScreen } from "./components/CategoryMenuScreen";
+import { SettingsScreen } from "./components/SettingsScreen";
 import { SuggestionsProvider } from "./contexts/SuggestionsContext";
 import { CreativeForm } from "./forms/CreativeForm";
 import { EventForm } from "./forms/EventForm";
@@ -130,18 +131,14 @@ export default function App() {
     }
 
     if (screen.kind === "settings") {
-      // Заглушка — заполнится в Task 6.
       return (
-        <div className="min-h-screen p-5 space-y-4">
-          <button
-            onClick={() => setScreen({ kind: "menu" })}
-            className="text-slate-400"
-          >
-            ← Назад
-          </button>
-          <h2 className="text-xl mt-4">Настройки</h2>
-          <p className="text-slate-500 text-sm">Будут реализованы в Task 6.</p>
-        </div>
+        <SettingsScreen
+          subscriptions={subscriptions}
+          onChange={refreshMe}
+          onEditForm={(c) => setScreen({ kind: "form", category: c })}
+          onAddCategory={() => setScreen({ kind: "addCategory" })}
+          onBack={() => setScreen({ kind: "menu" })}
+        />
       );
     }
 
