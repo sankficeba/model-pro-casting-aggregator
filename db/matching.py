@@ -6,7 +6,7 @@ from typing import Iterable
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
-from db.models import ActorProfile, Message, Vacancy
+from db.models import CreativeProfile, Message, UserCategorySubscription, Vacancy
 from db.session import AsyncSessionLocal
 from models.schemas import PostExtraction, VacancyExtraction
 
@@ -22,7 +22,7 @@ def _intersect(a: Iterable[str], b: Iterable[str]) -> bool:
     return bool(set(a) & set(b))
 
 
-def matches(profile: ActorProfile, post: PostExtraction, vacancy: VacancyExtraction) -> bool:
+def matches(profile: CreativeProfile, post: PostExtraction, vacancy: VacancyExtraction) -> bool:
     """True, если анкета подходит под конкретную вакансию в этом посте.
 
     project_types и city берём с уровня поста (общие);
@@ -102,7 +102,8 @@ async def find_matching_vacancies(
     """Возвращает {user_id: [индексы подошедших вакансий в списке `vacancies`]}.
 
     Гейтим по is_casting/confidence на уровне поста.
-    Учитываем только анкеты с completed_at IS NOT NULL.
+    Учитываем только анкеты creative-категории с completed_at IS NOT NULL,
+    у которых подписка включена (UserCategorySubscription.enabled=TRUE).
     Индексы соответствуют позициям в `vacancies`, что 1-в-1 совпадает с idx
     в БД, потому что Vacancy сохраняется с idx=enumerate(vacancies).
     """
@@ -111,7 +112,16 @@ async def find_matching_vacancies(
 
     async with AsyncSessionLocal() as session:
         res = await session.execute(
-            select(ActorProfile).where(ActorProfile.completed_at.is_not(None))
+            select(CreativeProfile)
+            .join(
+                UserCategorySubscription,
+                UserCategorySubscription.user_id == CreativeProfile.user_id,
+            )
+            .where(
+                CreativeProfile.completed_at.is_not(None),
+                UserCategorySubscription.category == "creative",
+                UserCategorySubscription.enabled.is_(True),
+            )
         )
         profiles = res.scalars().all()
 
