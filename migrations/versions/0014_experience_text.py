@@ -1,4 +1,4 @@
-"""experience_text on event_profile and general_profile
+"""experience_text on event_profile, general_profile and admin_profile
 
 Revision ID: 0014_experience_text
 Revises: 0013_per_category_profiles
@@ -25,8 +25,13 @@ def upgrade() -> None:
         "general_profile",
         sa.Column("experience_text", sa.Text(), nullable=True),
     )
+    op.add_column(
+        "admin_profile",
+        sa.Column("experience_text", sa.Text(), nullable=True),
+    )
 
 
 def downgrade() -> None:
+    op.drop_column("admin_profile", "experience_text")
     op.drop_column("general_profile", "experience_text")
     op.drop_column("event_profile", "experience_text")

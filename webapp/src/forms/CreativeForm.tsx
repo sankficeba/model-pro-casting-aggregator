@@ -7,6 +7,7 @@ import { SelectField } from "../fields/SelectField";
 import { MultiSelectField } from "../fields/MultiSelectField";
 import { CITIES } from "../cities";
 import { useSuggestionsRefresh } from "../contexts/SuggestionsContext";
+import { validateTelegramUser } from "../fields/telegramValidation";
 
 interface Props {
   onDone: () => void;
@@ -396,12 +397,15 @@ export function CreativeForm({ onDone }: Props) {
           value={data.phone ?? ""}
           onChange={(v) => update({ phone: v })}
           type="tel"
+          required
         />
         <TextFieldWithAutocomplete
           field="telegram_user"
           label="Telegram username"
           value={data.telegram_user ?? ""}
           onChange={(v) => update({ telegram_user: v })}
+          placeholder="@username"
+          error={validateTelegramUser(data.telegram_user ?? "") ?? undefined}
         />
         <TextFieldWithAutocomplete
           field="vk_url"

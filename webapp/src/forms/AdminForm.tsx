@@ -7,6 +7,7 @@ import { MultiSelectField } from "../fields/MultiSelectField";
 import { SelectField } from "../fields/SelectField";
 import { CITIES } from "../cities";
 import { useSuggestionsRefresh } from "../contexts/SuggestionsContext";
+import { validateTelegramUser } from "../fields/telegramValidation";
 
 const WORK_TYPES = [
   { value: "registration_operator", label: "Оператор регистрации" },
@@ -77,17 +78,6 @@ export function AdminForm({ onDone }: Props) {
 
   if (loading || !refs)
     return <div className="p-6 text-slate-400">Загрузка…</div>;
-
-  const expValue =
-    data.has_experience === true
-      ? "yes"
-      : data.has_experience === false
-        ? "no"
-        : null;
-  const expChange = (v: string | null) =>
-    update({
-      has_experience: v === "yes" ? true : v === "no" ? false : null,
-    });
 
   return (
     <div className="min-h-screen p-5 pb-32 space-y-6">
@@ -166,15 +156,17 @@ export function AdminForm({ onDone }: Props) {
           options={WORK_TYPES}
           required
         />
-        <SelectField
-          label="Опыт работы"
-          value={expValue}
-          onChange={expChange}
-          options={[
-            { value: "yes", label: "Есть" },
-            { value: "no", label: "Нет" },
-          ]}
-        />
+        <label className="block space-y-1">
+          <span className="text-sm text-slate-400">Опыт работы</span>
+          <textarea
+            value={data.experience_text ?? ""}
+            onChange={(e) => update({ experience_text: e.target.value })}
+            placeholder="Опиши свой опыт: где работал(а), сколько по времени, какие задачи выполнял(а)…"
+            rows={4}
+            maxLength={2000}
+            className="w-full bg-bg-card rounded-card px-3 py-2 outline-none focus:ring-1 ring-accent resize-none"
+          />
+        </label>
         <SelectField
           label="Налоговый статус"
           value={data.tax_status ?? null}
@@ -196,12 +188,15 @@ export function AdminForm({ onDone }: Props) {
           value={data.phone ?? ""}
           onChange={(v) => update({ phone: v })}
           type="tel"
+          required
         />
         <TextFieldWithAutocomplete
           field="telegram_user"
           label="Telegram"
           value={data.telegram_user ?? ""}
           onChange={(v) => update({ telegram_user: v })}
+          placeholder="@username"
+          error={validateTelegramUser(data.telegram_user ?? "") ?? undefined}
         />
         <TextFieldWithAutocomplete
           field="vk_url"

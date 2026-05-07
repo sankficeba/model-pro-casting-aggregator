@@ -7,6 +7,7 @@ import { MultiSelectField } from "../fields/MultiSelectField";
 import { SelectField } from "../fields/SelectField";
 import { CITIES } from "../cities";
 import { useSuggestionsRefresh } from "../contexts/SuggestionsContext";
+import { validateTelegramUser } from "../fields/telegramValidation";
 
 const WORK_TYPES = [
   { value: "helper", label: "Хелпер" },
@@ -193,12 +194,15 @@ export function GeneralForm({ onDone }: Props) {
           value={data.phone ?? ""}
           onChange={(v) => update({ phone: v })}
           type="tel"
+          required
         />
         <TextFieldWithAutocomplete
           field="telegram_user"
           label="Telegram"
           value={data.telegram_user ?? ""}
           onChange={(v) => update({ telegram_user: v })}
+          placeholder="@username"
+          error={validateTelegramUser(data.telegram_user ?? "") ?? undefined}
         />
         <TextFieldWithAutocomplete
           field="vk_url"

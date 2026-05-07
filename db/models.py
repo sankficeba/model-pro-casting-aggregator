@@ -345,6 +345,7 @@ class AdminProfile(Base):
         ARRAY(Text), default=list, server_default="{}", nullable=False
     )
     has_experience: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+    experience_text: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     tax_status: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
     phone: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
     vk_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
