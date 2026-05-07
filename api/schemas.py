@@ -181,6 +181,7 @@ class EventProfileSchema(_BaseProfileSchema):
     hair_length: Optional[str] = Field(default=None, max_length=32)
     work_types: list[str] = Field(default_factory=list)
     has_experience: Optional[bool] = None
+    experience_text: Optional[str] = Field(default=None, max_length=2000)
     portfolio_url: Optional[str] = None
     video_url: Optional[str] = None
 
@@ -198,6 +199,7 @@ class GeneralProfileSchema(_BaseProfileSchema):
     physical_fitness: Optional[str] = Field(default=None, max_length=16)
     work_types: list[str] = Field(default_factory=list)
     has_experience: Optional[bool] = None
+    experience_text: Optional[str] = Field(default=None, max_length=2000)
 
     @field_validator("physical_fitness")
     @classmethod
@@ -219,6 +221,7 @@ class AdminProfileSchema(_BaseProfileSchema):
     education: Optional[str] = Field(default=None, max_length=32)
     work_types: list[str] = Field(default_factory=list)
     has_experience: Optional[bool] = None
+    experience_text: Optional[str] = Field(default=None, max_length=2000)
 
     @field_validator("work_types")
     @classmethod

@@ -10,6 +10,7 @@ interface Props {
   type?: "text" | "email" | "tel" | "url";
   required?: boolean;
   staticSuggestions?: string[];
+  error?: string;
 }
 
 export function TextFieldWithAutocomplete({
@@ -21,6 +22,7 @@ export function TextFieldWithAutocomplete({
   type = "text",
   required,
   staticSuggestions,
+  error,
 }: Props) {
   const userSuggestions = useFieldSuggestions(field).filter(
     (s): s is string => typeof s === "string",
@@ -47,7 +49,7 @@ export function TextFieldWithAutocomplete({
           onFocus={() => setFocused(true)}
           onBlur={() => setTimeout(() => setFocused(false), 150)}
           placeholder={placeholder}
-          className="w-full bg-bg-card rounded-card px-3 py-2 outline-none focus:ring-1 ring-accent"
+          className={`w-full bg-bg-card rounded-card px-3 py-2 outline-none focus:ring-1 ${error ? "ring-1 ring-red-500" : "ring-accent"}`}
         />
         {focused &&
           filtered.length > 0 &&
@@ -68,6 +70,7 @@ export function TextFieldWithAutocomplete({
             </ul>
           )}
       </div>
+      {error && <span className="text-xs text-red-400">{error}</span>}
     </label>
   );
 }
