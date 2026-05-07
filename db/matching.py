@@ -131,3 +131,46 @@ async def find_matching_vacancies(
         if hit_idxs:
             out[p.user_id] = hit_idxs
     return out
+
+
+def _orm_to_extractions(
+    message: Message,
+    vacancies: list[Vacancy],
+) -> tuple[PostExtraction, list[VacancyExtraction]]:
+    """Конвертер ORM Message + Vacancy → Pydantic PostExtraction +
+    VacancyExtraction.
+
+    Используется в duplicate-пути userbot._handle_message: когда
+    повторный прилёт того же текста обнаружен через find_canonical,
+    мы поднимаем canonical из БД и прогоняем матчинг по его уже
+    извлечённым вакансиям, не дёргая LLM повторно.
+
+    Поля 1:1 совпадают между ORM и Pydantic — это просто перекладка.
+    """
+    post = PostExtraction(
+        is_casting=message.is_casting,
+        project_types=list(message.project_types),
+        city=message.city,
+        summary=message.summary,
+        confidence=message.confidence,
+        vacancies=[],
+    )
+    vac_extractions = [
+        VacancyExtraction(
+            role_types=list(v.role_types),
+            gender=v.gender,
+            age_min=v.age_min,
+            age_max=v.age_max,
+            rate=v.rate,
+            ethnicity=list(v.ethnicity),
+            height_min=v.height_min,
+            height_max=v.height_max,
+            body_type=list(v.body_type),
+            hair_color=list(v.hair_color),
+            hair_length=list(v.hair_length),
+            description=v.description,
+            role_label=v.role_label,
+        )
+        for v in vacancies
+    ]
+    return post, vac_extractions

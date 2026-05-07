@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from loguru import logger
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError
 
@@ -116,13 +116,13 @@ def _filter_to_schema(row: Filter) -> UserFilter:
 # ---------- MESSAGES ----------
 
 async def find_canonical(
-    text_hash: str, within_days: int = 7
+    text_hash: str, within_days: int = 3
 ) -> Optional[Message]:
     """Найти canonical-row с таким же `text_hash` внутри окна.
 
     Canonical — это row, у которого `canonical_message_id IS NULL`
     (он сам и есть оригинал, не дубликат). Окно отсекает старые
-    реальные перепосты («второй заход на роль» через месяц считается
+    реальные перепосты («второй заход на роль» через 3+ дней считается
     новым кастингом).
 
     Возвращает первый найденный (минимальный id) или None.
@@ -275,6 +275,32 @@ async def insert_message_with_vacancies(
             return None, []
 
 
+async def get_canonical_with_vacancies(
+    canonical_id: int,
+) -> Optional[tuple[Message, list[Vacancy]]]:
+    """Загрузить canonical-row и его вакансии одним заходом.
+
+    Используется в duplicate-пути _handle_message: когда новый прилёт
+    того же текста обнаружен через find_canonical, надо запустить
+    матчинг по уже-извлечённым LLM вакансиям canonical-row'а
+    (без повторного LLM-extract'а).
+    """
+    async with AsyncSessionLocal() as session:
+        msg_res = await session.execute(
+            select(Message).where(Message.id == canonical_id)
+        )
+        msg = msg_res.scalar_one_or_none()
+        if msg is None:
+            return None
+        vac_res = await session.execute(
+            select(Vacancy)
+            .where(Vacancy.message_id == canonical_id)
+            .order_by(Vacancy.idx)
+        )
+        vacancies = list(vac_res.scalars().all())
+        return msg, vacancies
+
+
 async def get_vacancy_with_message(
     vacancy_id: int,
 ) -> Optional[tuple[Vacancy, Message]]:
@@ -298,19 +324,24 @@ async def log_notification(
     *,
     user_id: int,
     message_id: int,
+    text_hash: str | None = None,
     success: bool,
     error: str | None = None,
     filter_id: int | None = None,
     matched_vacancy_ids: list[int] | None = None,
 ) -> bool:
     """Записать уведомление. Возвращает True, если запись создана,
-    False если уже было (дубль) — это и есть наш дедуп."""
+    False если уже было (дубль) — это и есть наш дедуп.
+
+    text_hash денормализуется из Message для UNIQUE(user_id, text_hash)
+    дедупа на race-двойниках (разные message_id, одинаковый текст)."""
     async with AsyncSessionLocal() as session:
         try:
             session.add(
                 Notification(
                     user_id=user_id,
                     message_id=message_id,
+                    text_hash=text_hash,
                     filter_id=filter_id,
                     success=success,
                     error=error,
@@ -320,8 +351,29 @@ async def log_notification(
             await session.commit()
             return True
         except IntegrityError:
+            # Сработал любой UNIQUE: либо (user_id, message_id), либо
+            # (user_id, text_hash). Оба означают «уже уведомили».
             await session.rollback()
             return False
+
+
+async def update_notification_failed(
+    *, user_id: int, message_id: int, error: str
+) -> None:
+    """Пометить уже-вставленную нотификацию как failed после упавшего send_message.
+
+    Используется когда мы оптимистично ставим success=True перед send_message
+    (для UNIQUE-дедупа), а потом отправка упала — обновляем запись."""
+    async with AsyncSessionLocal() as session:
+        await session.execute(
+            update(Notification)
+            .where(
+                Notification.user_id == user_id,
+                Notification.message_id == message_id,
+            )
+            .values(success=False, error=error)
+        )
+        await session.commit()
 
 
 # ---------- CHANNELS ----------

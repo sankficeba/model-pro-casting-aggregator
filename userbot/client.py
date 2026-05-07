@@ -174,6 +174,146 @@ class Userbot:
             lines.append(f"\n<a href=\"{link}\">Открыть сообщение</a>")
         return "\n".join(lines)
 
+    async def _process_canonical(
+        self,
+        *,
+        message_db_id: int,
+        text_hash_value: str,
+        post: PostExtraction,
+        vacancies: list[VacancyExtraction],
+        vacancy_ids: list[int],
+        message,  # noqa: ANN001 — Telethon Message
+        chat_username: str | None,
+    ) -> None:
+        """Общий путь матчинга и рассылки. Вызывается:
+        - На свежий canonical (после успешного insert_message_with_vacancies).
+        - На duplicate-прилёт (после insert_duplicate_message + загрузки
+          canonical-вакансий через get_canonical_with_vacancies).
+
+        text_hash_value пробрасывается в log_notification → UNIQUE
+        (user_id, text_hash) гарантирует «один кастинг = одно уведомление
+        на юзера за всю историю».
+        """
+        if not post.is_casting or not vacancy_ids or not vacancies:
+            return
+
+        user_to_idxs = await matching.find_matching_vacancies(post, vacancies)
+        if not user_to_idxs:
+            logger.debug("Нет подходящих анкет для сообщения {}", message_db_id)
+            return
+
+        for user_id, hit_idxs in user_to_idxs.items():
+            matched_db_ids = [vacancy_ids[i] for i in hit_idxs if i < len(vacancy_ids)]
+            if not matched_db_ids:
+                logger.warning(
+                    "Skip notify user={} msg={}: vacancy_ids len mismatch "
+                    "(db={}, extracted={})",
+                    user_id, message_db_id, len(vacancy_ids), len(vacancies),
+                )
+                continue
+
+            # Оптимистично пишем нотификацию ДО send_message: UNIQUE
+            # (user_id, message_id) и (user_id, text_hash) поймают дубль
+            # на уровне БД без JOIN-запроса.
+            log_ok = await repository.log_notification(
+                user_id=user_id,
+                message_id=message_db_id,
+                text_hash=text_hash_value,
+                success=True,
+                matched_vacancy_ids=matched_db_ids,
+            )
+            if not log_ok:
+                # Уже уведомили (по message_id ИЛИ по text_hash) — не дублируем.
+                continue
+
+            notification_text = self._format_notification(
+                post=post, vacancies=vacancies,
+                matched_idxs=hit_idxs,
+                message=message, chat_username=chat_username,
+            )
+
+            kb_buttons: list[list[InlineKeyboardButton]] = []
+            for i, db_id in zip(hit_idxs, matched_db_ids):
+                title = _vacancy_title(vacancies[i])
+                kb_buttons.append([
+                    InlineKeyboardButton(
+                        text=f"✍ Отклик: {title}"[:64],
+                        callback_data=f"respond:{db_id}",
+                    )
+                ])
+            reply_markup = InlineKeyboardMarkup(inline_keyboard=kb_buttons)
+
+            try:
+                await self.bot.send_message(
+                    user_id,
+                    notification_text,
+                    parse_mode="HTML",
+                    disable_web_page_preview=True,
+                    reply_markup=reply_markup,
+                )
+            except Exception as e:  # noqa: BLE001
+                logger.warning("Не удалось отправить пользователю {}: {}", user_id, e)
+                await repository.update_notification_failed(
+                    user_id=user_id, message_id=message_db_id, error=str(e),
+                )
+            await asyncio.sleep(0.05)
+
+    async def _process_duplicate(
+        self,
+        event,  # noqa: ANN001
+        canonical_msg,  # noqa: ANN001 — db.models.Message
+        text_hash_value: str,
+        chat_id: int,
+        chat_username: str | None,
+    ) -> None:
+        """Обработать duplicate-прилёт: записать аудит-row + запустить
+        матчинг по уже-извлечённым LLM-вакансиям canonical.
+
+        LLM не дёргаем (главная экономия дедупа). Матчинг нужен — новые
+        юзеры, зарегистрированные после canonical-обработки, могут
+        матчить тот же кастинг. UNIQUE(user_id, text_hash) в notifications
+        не даст уже уведомлённым получить дубль."""
+        text = (event.message.message or "").strip()
+        dup_id = await repository.insert_duplicate_message(
+            tg_chat_id=chat_id,
+            tg_chat_username=chat_username,
+            tg_message_id=event.message.id,
+            text=text,
+            text_hash=text_hash_value,
+            canonical_message_id=canonical_msg.id,
+        )
+        logger.info(
+            "Дубль: chat={} msg={} text_hash={} canonical={} dup_row={}",
+            chat_username or chat_id, event.message.id, text_hash_value,
+            canonical_msg.id, dup_id,
+        )
+
+        loaded = await repository.get_canonical_with_vacancies(canonical_msg.id)
+        if loaded is None:
+            logger.warning(
+                "Canonical {} не найден при попытке загрузить — skip match",
+                canonical_msg.id,
+            )
+            return
+        canon_msg, canon_vacancies = loaded
+        post, vac_extractions = matching._orm_to_extractions(canon_msg, canon_vacancies)
+        canonical_vacancy_ids = [v.id for v in canon_vacancies]
+
+        # message_db_id для нотификаций — id duplicate-row'а (для аудита
+        # «по какому именно прилёту юзеру ушло»). Если dup_id is None
+        # (race на (chat_id, msg_id)) — fallback на canonical.id.
+        notify_message_id = dup_id if dup_id is not None else canonical_msg.id
+
+        await self._process_canonical(
+            message_db_id=notify_message_id,
+            text_hash_value=text_hash_value,
+            post=post,
+            vacancies=vac_extractions,
+            vacancy_ids=canonical_vacancy_ids,
+            message=event.message,
+            chat_username=chat_username,
+        )
+
     async def _handle_message(self, event):
         text = (event.message.message or "").strip()
         if not text:
@@ -184,26 +324,15 @@ class Userbot:
         chat_id = getattr(chat, "id", 0)
         chat_username = getattr(chat, "username", None)
 
-        # Дедуп: если такой же текст (после нормализации) уже был у нас
-        # за последние 7 дней — это форвард/копия. Пишем «теневой» row
-        # с FK на canonical, LLM не дёргаем, нотификации не шлём.
         th = text_hash(text)
+
+        # Pre-LLM check: если canonical уже есть в окне 3 дней — duplicate-путь.
         canonical = await repository.find_canonical(th)
         if canonical is not None:
-            await repository.insert_duplicate_message(
-                tg_chat_id=chat_id,
-                tg_chat_username=chat_username,
-                tg_message_id=event.message.id,
-                text=text,
-                text_hash=th,
-                canonical_message_id=canonical.id,
-            )
-            logger.info(
-                "Дубль: chat={} msg={} text_hash={} canonical={}",
-                chat_username or chat_id, event.message.id, th, canonical.id,
-            )
+            await self._process_duplicate(event, canonical, th, chat_id, chat_username)
             return
 
+        # LLM extract — race-окно 2-5 секунд.
         post = await self.llm.extract(text)
         logger.info(
             "LLM extract: casting={} project={} city={} vacancies={} conf={:.2f}",
@@ -211,6 +340,18 @@ class Userbot:
             len(post.vacancies), post.confidence,
         )
 
+        # Re-check: пока шёл LLM, кто-то другой мог закоммитить canonical
+        # с тем же text_hash. Если так — переключаемся в duplicate-путь.
+        canonical = await repository.find_canonical(th)
+        if canonical is not None:
+            logger.info(
+                "Race-loser: canonical {} появился во время LLM-extract для hash {}",
+                canonical.id, th,
+            )
+            await self._process_duplicate(event, canonical, th, chat_id, chat_username)
+            return
+
+        # Свежий canonical — пишем + матчинг + нотификации.
         message_db_id, vacancy_ids = await repository.insert_message_with_vacancies(
             tg_chat_id=chat_id,
             tg_chat_username=chat_username,
@@ -220,76 +361,18 @@ class Userbot:
             extracted=post,
         )
         if message_db_id is None:
+            logger.warning("insert_message_with_vacancies вернул None — skip")
             return
 
-        # Ничего не матчим, если пост отбракован или вакансий нет
-        if not post.is_casting or not vacancy_ids or not post.vacancies:
-            return
-
-        user_to_idxs = await matching.find_matching_vacancies(post, post.vacancies)
-        if not user_to_idxs:
-            logger.debug("Нет подходящих анкет для сообщения {}", message_db_id)
-            return
-
-        for user_id, hit_idxs in user_to_idxs.items():
-            if await repository.already_notified(user_id, message_db_id):
-                continue
-
-            # Защита от рассинхрона: при повторном Telegram-дубле длина
-            # vacancy_ids (из БД, исторические) может не совпадать с длиной
-            # post.vacancies (свежий extract). Берём только в-границах.
-            matched_db_ids = [vacancy_ids[i] for i in hit_idxs if i < len(vacancy_ids)]
-            if not matched_db_ids:
-                logger.warning(
-                    "Skip notify user={} msg={}: vacancy_ids len mismatch "
-                    "(db={}, extracted={})",
-                    user_id, message_db_id, len(vacancy_ids), len(post.vacancies),
-                )
-                continue
-
-            notification_text = self._format_notification(
-                post=post, vacancies=post.vacancies,
-                matched_idxs=hit_idxs,
-                message=event.message, chat_username=chat_username,
-            )
-
-            # Инлайн-клавиатура: «Сгенерировать отклик» на каждую подошедшую
-            # роль. callback_data = `respond:<vacancy_id>`, vacancy_id точно
-            # влезает в 64-байтовый лимит Telegram'а.
-            kb_buttons: list[list[InlineKeyboardButton]] = []
-            for i, db_id in zip(hit_idxs, matched_db_ids):
-                title = _vacancy_title(post.vacancies[i])
-                kb_buttons.append([
-                    InlineKeyboardButton(
-                        text=f"✍ Отклик: {title}"[:64],
-                        callback_data=f"respond:{db_id}",
-                    )
-                ])
-            reply_markup = InlineKeyboardMarkup(inline_keyboard=kb_buttons)
-
-            success = False
-            err: str | None = None
-            try:
-                await self.bot.send_message(
-                    user_id,
-                    notification_text,
-                    parse_mode="HTML",
-                    disable_web_page_preview=True,
-                    reply_markup=reply_markup,
-                )
-                success = True
-            except Exception as e:  # noqa: BLE001
-                err = str(e)
-                logger.warning("Не удалось отправить пользователю {}: {}", user_id, e)
-
-            await repository.log_notification(
-                user_id=user_id,
-                message_id=message_db_id,
-                success=success,
-                error=err,
-                matched_vacancy_ids=matched_db_ids,
-            )
-            await asyncio.sleep(0.05)
+        await self._process_canonical(
+            message_db_id=message_db_id,
+            text_hash_value=th,
+            post=post,
+            vacancies=post.vacancies,
+            vacancy_ids=vacancy_ids,
+            message=event.message,
+            chat_username=chat_username,
+        )
 
     async def start(self) -> None:
         await self.client.start(phone=settings.tg_phone)
