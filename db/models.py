@@ -530,6 +530,9 @@ class Notification(Base):
     )
     # Хвост от старой модели; сейчас всегда NULL (матч идёт по actor_profiles).
     filter_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # Денормализация text_hash из связанного Message: позволяет UNIQUE-дедуп
+    # «один text_hash → одно уведомление на юзера» без JOIN на горячем пути.
+    text_hash: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
     sent_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
