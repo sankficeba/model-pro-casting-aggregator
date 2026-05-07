@@ -14,12 +14,6 @@ const WORK_TYPES = [
   { value: "loader", label: "Грузчик" },
 ];
 
-const PHYSICAL_FITNESS = [
-  { value: "light", label: "До 5 кг" },
-  { value: "medium", label: "5–20 кг" },
-  { value: "heavy", label: "20+ кг" },
-];
-
 interface Props {
   onDone: () => void;
 }
@@ -84,17 +78,6 @@ export function GeneralForm({ onDone }: Props) {
 
   if (loading || !refs)
     return <div className="p-6 text-slate-400">Загрузка…</div>;
-
-  const expValue =
-    data.has_experience === true
-      ? "yes"
-      : data.has_experience === false
-        ? "no"
-        : null;
-  const expChange = (v: string | null) =>
-    update({
-      has_experience: v === "yes" ? true : v === "no" ? false : null,
-    });
 
   return (
     <div className="min-h-screen p-5 pb-32 space-y-6">
@@ -165,12 +148,6 @@ export function GeneralForm({ onDone }: Props) {
           min={120}
           max={220}
         />
-        <SelectField
-          label="Физическая подготовка"
-          value={data.physical_fitness ?? null}
-          onChange={(v) => update({ physical_fitness: v })}
-          options={PHYSICAL_FITNESS}
-        />
       </section>
 
       <section className="space-y-3">
@@ -184,15 +161,17 @@ export function GeneralForm({ onDone }: Props) {
           options={WORK_TYPES}
           required
         />
-        <SelectField
-          label="Опыт работы"
-          value={expValue}
-          onChange={expChange}
-          options={[
-            { value: "yes", label: "Есть" },
-            { value: "no", label: "Нет" },
-          ]}
-        />
+        <label className="block space-y-1">
+          <span className="text-sm text-slate-400">Опыт работы</span>
+          <textarea
+            value={data.experience_text ?? ""}
+            onChange={(e) => update({ experience_text: e.target.value })}
+            placeholder="Опиши свой опыт: где работал(а), сколько по времени, какие задачи выполнял(а)…"
+            rows={4}
+            maxLength={2000}
+            className="w-full bg-bg-card rounded-card px-3 py-2 outline-none focus:ring-1 ring-accent resize-none"
+          />
+        </label>
         <SelectField
           label="Налоговый статус"
           value={data.tax_status ?? null}
