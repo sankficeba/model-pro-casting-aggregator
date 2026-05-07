@@ -12,8 +12,26 @@ from api import admin as admin_module
 from api import profile_repo
 from api.auth import TelegramUser, current_user, is_admin_user
 from api.reference_data import all_refs
-from api.schemas import ProfileResponse, ProfileUpdate
+from api.schemas import (
+    AdminProfileSchema,
+    CreativeProfileSchema,
+    EventProfileSchema,
+    GeneralProfileSchema,
+    ProfileResponse,
+    ProfileUpdate,
+    SubscriptionPatchRequest,
+    SubscriptionsCreateRequest,
+    SuggestionsResponse,
+)
 from config import settings
+from db import repository as repo
+
+CATEGORY_TO_SCHEMA = {
+    "creative": CreativeProfileSchema,
+    "event": EventProfileSchema,
+    "general": GeneralProfileSchema,
+    "admin": AdminProfileSchema,
+}
 
 FIRST_COMPLETION_MESSAGE = (
     "✅ Анкета успешно заполнена. "
@@ -75,11 +93,13 @@ async def health() -> dict:
 
 @app.get("/api/me")
 async def me(user: TelegramUser = Depends(current_user)) -> dict:
-    """Кто я + админ ли. Фронт по этому решает, показывать ли «Админку»."""
+    """Кто я + админ ли + список подписок на категории."""
+    subscriptions = await repo.get_subscriptions(user.id)
     return {
         "user_id": user.id,
         "username": user.username,
         "is_admin": is_admin_user(user),
+        "subscriptions": subscriptions,
     }
 
 
@@ -120,6 +140,91 @@ async def complete_my_profile(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Профиль не найден",
         )
+    text = FIRST_COMPLETION_MESSAGE if was_first_time else RECOMPLETION_MESSAGE
+    await _notify_user(user.id, text)
+    return p
+
+
+# ====================================================================
+# Per-category subscriptions and profiles (mini-app categories feature)
+# ====================================================================
+
+
+@app.post("/api/subscriptions")
+async def create_subscriptions(
+    body: SubscriptionsCreateRequest,
+    user: TelegramUser = Depends(current_user),
+) -> dict:
+    """Создать строки подписки. Идемпотентно. Возвращает обновлённый список."""
+    subs = await repo.set_subscriptions(user.id, list(body.categories))
+    return {"subscriptions": subs}
+
+
+@app.patch("/api/subscriptions/{category}")
+async def patch_subscription(
+    category: str,
+    body: SubscriptionPatchRequest,
+    user: TelegramUser = Depends(current_user),
+) -> dict:
+    """Поменять enabled на категории."""
+    if category not in CATEGORY_TO_SCHEMA:
+        raise HTTPException(status_code=400, detail="Unknown category")
+    ok = await repo.toggle_subscription(user.id, category, body.enabled)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Subscription not found")
+    return {"ok": True}
+
+
+@app.get("/api/profile/suggestions", response_model=SuggestionsResponse)
+async def profile_suggestions(
+    user: TelegramUser = Depends(current_user),
+) -> SuggestionsResponse:
+    """Autocomplete-подсказки: значения, ранее введённые юзером в одноимённых полях
+    других своих профилей."""
+    suggestions = await repo.get_suggestions(user.id)
+    return SuggestionsResponse(suggestions=suggestions)
+
+
+@app.get("/api/profile/{category}")
+async def get_category_profile_endpoint(
+    category: str,
+    user: TelegramUser = Depends(current_user),
+) -> dict:
+    """Профиль категории или пустой объект если не создан."""
+    if category not in CATEGORY_TO_SCHEMA:
+        raise HTTPException(status_code=400, detail="Unknown category")
+    p = await repo.get_category_profile(user.id, category)
+    return p or {"user_id": user.id, "category": category}
+
+
+@app.put("/api/profile/{category}")
+async def upsert_category_profile_endpoint(
+    category: str,
+    body: dict,
+    user: TelegramUser = Depends(current_user),
+) -> dict:
+    """Draft-сохранение. Валидация Pydantic, но без проверки completeness."""
+    if category not in CATEGORY_TO_SCHEMA:
+        raise HTTPException(status_code=400, detail="Unknown category")
+    schema_cls = CATEGORY_TO_SCHEMA[category]
+    validated = schema_cls.model_validate(body)
+    p = await repo.upsert_category_profile(
+        user.id, category, validated.model_dump(exclude_unset=True)
+    )
+    return p or {}
+
+
+@app.post("/api/profile/{category}/complete")
+async def complete_category_profile_endpoint(
+    category: str,
+    user: TelegramUser = Depends(current_user),
+) -> dict:
+    """Финальное завершение анкеты категории — шлёт уведомление в бот."""
+    if category not in CATEGORY_TO_SCHEMA:
+        raise HTTPException(status_code=400, detail="Unknown category")
+    p, was_first_time = await repo.complete_category_profile(user.id, category)
+    if p is None:
+        raise HTTPException(status_code=400, detail="Profile not found")
     text = FIRST_COMPLETION_MESSAGE if was_first_time else RECOMPLETION_MESSAGE
     await _notify_user(user.id, text)
     return p

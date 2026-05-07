@@ -136,6 +136,227 @@ class ActorProfile(Base):
     user: Mapped[User] = relationship(back_populates="profile")
 
 
+class UserCategorySubscription(Base):
+    """Подписка пользователя на категорию. Multi-row, по одной строке на
+    категорию. enabled=False = категория временно выключена в settings, но
+    данные профиля сохранены."""
+
+    __tablename__ = "user_category_subscription"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    category: Mapped[str] = mapped_column(String(16), nullable=False)
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="true")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "category", name="uq_user_category"),
+    )
+
+
+class CreativeProfile(Base):
+    """Анкета для категории «Творческие позиции» (актёры, модели).
+    Поля идентичны старой ActorProfile + telegram_user."""
+
+    __tablename__ = "creative_profile"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False
+    )
+    full_name: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    gender: Mapped[Optional[str]] = mapped_column(String(8), nullable=True)
+    city: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    ready_for_travel: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    actual_age: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    play_age_min: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    play_age_max: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    project_types: Mapped[list[str]] = mapped_column(
+        ARRAY(Text), default=list, server_default="{}", nullable=False
+    )
+    role_types: Mapped[list[str]] = mapped_column(
+        ARRAY(Text), default=list, server_default="{}", nullable=False
+    )
+    min_rate: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    show_negotiable: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    show_noncommercial: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    show_agency: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    height_cm: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    clothing_size: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    shoe_size: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    ethnicity: Mapped[list[str]] = mapped_column(
+        ARRAY(Text), default=list, server_default="{}", nullable=False
+    )
+    body_type: Mapped[list[str]] = mapped_column(
+        ARRAY(Text), default=list, server_default="{}", nullable=False
+    )
+    hair_color: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    hair_length: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    has_experience: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+    education: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    tax_status: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    eye_color: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    marks: Mapped[list[str]] = mapped_column(
+        ARRAY(Text), default=list, server_default="{}", nullable=False
+    )
+    skills_sport: Mapped[list[str]] = mapped_column(
+        ARRAY(Text), default=list, server_default="{}", nullable=False
+    )
+    skills_dance: Mapped[list[str]] = mapped_column(
+        ARRAY(Text), default=list, server_default="{}", nullable=False
+    )
+    skills_vocal: Mapped[list[str]] = mapped_column(
+        ARRAY(Text), default=list, server_default="{}", nullable=False
+    )
+    skills_instruments: Mapped[list[str]] = mapped_column(
+        ARRAY(Text), default=list, server_default="{}", nullable=False
+    )
+    portfolio_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    video_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    professional_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    phone: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    vk_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    telegram_user: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    email: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+
+class EventProfile(Base):
+    """Анкета для категории «Event-персонал» (хостес, промо-модели, аниматоры)."""
+
+    __tablename__ = "event_profile"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False
+    )
+    full_name: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    gender: Mapped[Optional[str]] = mapped_column(String(8), nullable=True)
+    city: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    ready_for_travel: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    actual_age: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    min_rate: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    show_negotiable: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    show_noncommercial: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    height_cm: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    clothing_size: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    shoe_size: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    ethnicity: Mapped[list[str]] = mapped_column(
+        ARRAY(Text), default=list, server_default="{}", nullable=False
+    )
+    body_type: Mapped[list[str]] = mapped_column(
+        ARRAY(Text), default=list, server_default="{}", nullable=False
+    )
+    hair_color: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    hair_length: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    work_types: Mapped[list[str]] = mapped_column(
+        ARRAY(Text), default=list, server_default="{}", nullable=False
+    )
+    has_experience: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+    tax_status: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    portfolio_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    video_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    phone: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    vk_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    telegram_user: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    email: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+
+class GeneralProfile(Base):
+    """Анкета для категории «Разнорабочие» (хелперы, клининг, грузчики)."""
+
+    __tablename__ = "general_profile"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False
+    )
+    full_name: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    gender: Mapped[Optional[str]] = mapped_column(String(8), nullable=True)
+    city: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    ready_for_travel: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    actual_age: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    min_rate: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    height_cm: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    physical_fitness: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
+    work_types: Mapped[list[str]] = mapped_column(
+        ARRAY(Text), default=list, server_default="{}", nullable=False
+    )
+    has_experience: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+    tax_status: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    phone: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    vk_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    telegram_user: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    email: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+
+class AdminProfile(Base):
+    """Анкета для категории «Администрирование» (операторы регистрации, супервайзеры)."""
+
+    __tablename__ = "admin_profile"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False
+    )
+    full_name: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    gender: Mapped[Optional[str]] = mapped_column(String(8), nullable=True)
+    city: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    ready_for_travel: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    actual_age: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    min_rate: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    education: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    work_types: Mapped[list[str]] = mapped_column(
+        ARRAY(Text), default=list, server_default="{}", nullable=False
+    )
+    has_experience: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+    tax_status: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    phone: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    vk_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    telegram_user: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    email: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+
 class Channel(Base):
     """Telegram-канал, который слушает userbot. Управляется из бота
     командами /addchannel / /removechannel.
