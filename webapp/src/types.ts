@@ -75,6 +75,7 @@ export interface MeResponse {
   user_id: number;
   username: string | null;
   is_admin: boolean;
+  subscriptions?: Subscription[];
 }
 
 export interface AdminStats {
@@ -131,6 +132,30 @@ export interface AdminMessageRow {
   notified_count: number;
   vacancies: AdminVacancyRow[];
 }
+
+// ===== Per-category mini app types =====
+
+export type CategoryCode = "creative" | "event" | "general" | "admin";
+
+export interface Subscription {
+  category: CategoryCode;
+  enabled: boolean;
+  profile_completed: boolean;
+}
+
+export const CATEGORY_LABELS: Record<CategoryCode, string> = {
+  creative: "Творческие позиции",
+  event: "Event-персонал",
+  general: "Разнорабочие",
+  admin: "Администрирование",
+};
+
+export const CATEGORY_DESCRIPTIONS: Record<CategoryCode, string> = {
+  creative: "Актёры, модели",
+  event: "Хостес, промо-модели, аниматоры",
+  general: "Хелперы, клининг, грузчики",
+  admin: "Операторы регистрации, супервайзеры",
+};
 
 export const EMPTY_PROFILE: Profile = {
   ready_for_travel: false,

@@ -3,9 +3,11 @@ import type {
   AdminMessageRow,
   AdminProfileRow,
   AdminStats,
+  CategoryCode,
   MeResponse,
   Profile,
   Refs,
+  Subscription,
 } from "./types";
 
 const BASE = "/api";
@@ -141,6 +143,35 @@ export const api = {
     request<Profile>("/profile", { method: "PUT", body: JSON.stringify(data) }),
   completeProfile: () =>
     request<Profile>("/profile/complete", { method: "POST" }),
+
+  // Per-category profile + subscriptions
+  getCategoryProfile: <T = Record<string, unknown>>(category: CategoryCode) =>
+    request<T>(`/profile/${category}`),
+  putCategoryProfile: <T = Record<string, unknown>>(
+    category: CategoryCode,
+    data: unknown,
+  ) =>
+    request<T>(`/profile/${category}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+  completeCategoryProfile: <T = Record<string, unknown>>(category: CategoryCode) =>
+    request<T>(`/profile/${category}/complete`, {
+      method: "POST",
+      body: "{}",
+    }),
+  createSubscriptions: (categories: CategoryCode[]) =>
+    request<{ subscriptions: Subscription[] }>("/subscriptions", {
+      method: "POST",
+      body: JSON.stringify({ categories }),
+    }),
+  patchSubscription: (category: CategoryCode, enabled: boolean) =>
+    request<{ ok: boolean }>(`/subscriptions/${category}`, {
+      method: "PATCH",
+      body: JSON.stringify({ enabled }),
+    }),
+  getSuggestions: () =>
+    request<{ suggestions: Record<string, unknown[]> }>("/profile/suggestions"),
 
   // Admin
   adminStats: () => request<AdminStats>("/admin/stats"),
