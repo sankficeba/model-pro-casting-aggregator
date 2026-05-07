@@ -199,6 +199,16 @@ class Message(Base):
     tg_message_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     text: Mapped[str] = mapped_column(Text, nullable=False)
 
+    # Дедуп форварднутых копий. text_hash — SHA-1 от нормализованного
+    # текста (db/dedup.py). canonical_message_id указывает на первый
+    # row с тем же хэшем; у canonical = NULL.
+    text_hash: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
+    canonical_message_id: Mapped[Optional[int]] = mapped_column(
+        BigInteger,
+        ForeignKey("messages.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
     # Извлечённые LLM поля (текущая схема).
     is_casting: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     gender: Mapped[Optional[str]] = mapped_column(String(8), nullable=True)
