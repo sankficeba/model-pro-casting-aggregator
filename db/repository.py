@@ -10,7 +10,19 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError
 
-from db.models import Channel, Filter, Message, Notification, User, Vacancy
+from db.models import (
+    AdminProfile,
+    Channel,
+    CreativeProfile,
+    EventProfile,
+    Filter,
+    GeneralProfile,
+    Message,
+    Notification,
+    User,
+    UserCategorySubscription,
+    Vacancy,
+)
 from db.session import AsyncSessionLocal
 from models.schemas import PostExtraction, UserFilter
 
@@ -453,3 +465,189 @@ async def already_notified(user_id: int, message_id: int) -> bool:
             )
         )
         return res.scalar_one_or_none() is not None
+
+
+# ====================================================================
+# CATEGORIES & PER-CATEGORY PROFILES (mini-app categories feature)
+# ====================================================================
+
+CATEGORY_TO_MODEL = {
+    "creative": CreativeProfile,
+    "event": EventProfile,
+    "general": GeneralProfile,
+    "admin": AdminProfile,
+}
+
+# Канонические скалярные поля, которые шарятся между категориями
+# и попадают в /api/profile/suggestions. multi-select поля и
+# category-специфичные (project_types, work_types) — НЕ включаем.
+_SUGGESTION_FIELDS = {
+    "full_name", "gender", "city", "actual_age", "min_rate",
+    "height_cm", "clothing_size", "shoe_size",
+    "hair_color", "hair_length",
+    "tax_status", "education", "phone", "vk_url",
+    "telegram_user", "email", "portfolio_url", "video_url",
+}
+
+
+async def get_subscriptions(user_id: int) -> list[dict]:
+    """Список подписок юзера + флаг profile_completed для каждой."""
+    async with AsyncSessionLocal() as session:
+        subs_res = await session.execute(
+            select(UserCategorySubscription).where(UserCategorySubscription.user_id == user_id)
+        )
+        subs = list(subs_res.scalars().all())
+        if not subs:
+            return []
+        result = []
+        for sub in subs:
+            model = CATEGORY_TO_MODEL[sub.category]
+            prof_res = await session.execute(
+                select(model.completed_at).where(model.user_id == user_id)
+            )
+            completed_at = prof_res.scalar_one_or_none()
+            result.append({
+                "category": sub.category,
+                "enabled": sub.enabled,
+                "profile_completed": completed_at is not None,
+            })
+        return result
+
+
+async def set_subscriptions(user_id: int, categories: list[str]) -> list[dict]:
+    """Создать строки подписок для каждой категории. Идемпотентно."""
+    async with AsyncSessionLocal() as session:
+        await upsert_user_in_session(session, user_id)
+        for cat in categories:
+            stmt = (
+                pg_insert(UserCategorySubscription)
+                .values(user_id=user_id, category=cat, enabled=True)
+                .on_conflict_do_nothing(index_elements=["user_id", "category"])
+            )
+            await session.execute(stmt)
+        await session.commit()
+    return await get_subscriptions(user_id)
+
+
+async def toggle_subscription(user_id: int, category: str, enabled: bool) -> bool:
+    """Сменить enabled-флаг. Возвращает True если строка существовала."""
+    async with AsyncSessionLocal() as session:
+        res = await session.execute(
+            select(UserCategorySubscription).where(
+                UserCategorySubscription.user_id == user_id,
+                UserCategorySubscription.category == category,
+            )
+        )
+        sub = res.scalar_one_or_none()
+        if sub is None:
+            return False
+        sub.enabled = enabled
+        await session.commit()
+        return True
+
+
+async def get_category_profile(user_id: int, category: str) -> Optional[dict]:
+    """Вернуть профиль категории как dict (или None)."""
+    model = CATEGORY_TO_MODEL.get(category)
+    if model is None:
+        return None
+    async with AsyncSessionLocal() as session:
+        res = await session.execute(select(model).where(model.user_id == user_id))
+        row = res.scalar_one_or_none()
+        if row is None:
+            return None
+        return _profile_row_to_dict(row)
+
+
+def _profile_row_to_dict(row) -> dict:
+    """Сериализация профиль-row в dict (без SQLAlchemy-метаданных)."""
+    return {
+        c.name: getattr(row, c.name)
+        for c in row.__table__.columns
+    }
+
+
+async def upsert_category_profile(
+    user_id: int, category: str, data: dict
+) -> Optional[dict]:
+    """Draft-сохранение полей в профиль категории. Создаёт или обновляет."""
+    model = CATEGORY_TO_MODEL.get(category)
+    if model is None:
+        return None
+    async with AsyncSessionLocal() as session:
+        await upsert_user_in_session(session, user_id)
+        res = await session.execute(select(model).where(model.user_id == user_id))
+        row = res.scalar_one_or_none()
+        if row is None:
+            row = model(user_id=user_id)
+            session.add(row)
+        for k, v in data.items():
+            if hasattr(row, k) and k not in {"id", "user_id", "created_at", "updated_at", "completed_at"}:
+                setattr(row, k, v)
+        await session.commit()
+        await session.refresh(row)
+        return _profile_row_to_dict(row)
+
+
+async def complete_category_profile(
+    user_id: int, category: str
+) -> tuple[Optional[dict], bool]:
+    """Поставить completed_at=now(). Возвращает (profile_dict, was_first_time)."""
+    model = CATEGORY_TO_MODEL.get(category)
+    if model is None:
+        return None, False
+    async with AsyncSessionLocal() as session:
+        res = await session.execute(select(model).where(model.user_id == user_id))
+        row = res.scalar_one_or_none()
+        if row is None:
+            return None, False
+        was_first_time = row.completed_at is None
+        row.completed_at = datetime.now(timezone.utc)
+        await session.commit()
+        await session.refresh(row)
+        return _profile_row_to_dict(row), was_first_time
+
+
+def _collect_suggestions(profiles: dict[str, dict]) -> dict[str, list]:
+    """Собрать autocomplete-suggestions из профилей юзера.
+
+    profiles: {category_code: {field: value, 'updated_at': dt}}
+    Возвращает {field: [values...]} — только канонические скалярные поля,
+    dedupe, сортировка по updated_at источника DESC.
+    """
+    by_field: dict[str, list[tuple[datetime, object]]] = {}
+    for cat, data in profiles.items():
+        updated = data.get("updated_at")
+        if updated is None:
+            continue
+        for field, value in data.items():
+            if field not in _SUGGESTION_FIELDS:
+                continue
+            if value is None or value == "":
+                continue
+            by_field.setdefault(field, []).append((updated, value))
+
+    result: dict[str, list] = {}
+    for field, items in by_field.items():
+        items.sort(key=lambda x: x[0], reverse=True)
+        seen = set()
+        deduped: list = []
+        for _, val in items:
+            if val in seen:
+                continue
+            seen.add(val)
+            deduped.append(val)
+        result[field] = deduped
+    return result
+
+
+async def get_suggestions(user_id: int) -> dict[str, list]:
+    """Собрать suggestions из всех 4 профилей юзера."""
+    profiles: dict[str, dict] = {}
+    async with AsyncSessionLocal() as session:
+        for cat, model in CATEGORY_TO_MODEL.items():
+            res = await session.execute(select(model).where(model.user_id == user_id))
+            row = res.scalar_one_or_none()
+            if row is not None:
+                profiles[cat] = _profile_row_to_dict(row)
+    return _collect_suggestions(profiles)
