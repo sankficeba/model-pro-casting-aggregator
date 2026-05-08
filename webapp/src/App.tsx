@@ -6,6 +6,7 @@ import {
   isInTelegram,
 } from "./telegram";
 import { AdminDashboard } from "./components/AdminDashboard";
+import { BackgroundShapes } from "./components/BackgroundShapes";
 import { CategorySurveyScreen } from "./components/CategorySurveyScreen";
 import { CategoryMenuScreen } from "./components/CategoryMenuScreen";
 import { SettingsScreen } from "./components/SettingsScreen";
@@ -155,5 +156,10 @@ export default function App() {
     return null;
   };
 
-  return <SuggestionsProvider>{renderScreen()}</SuggestionsProvider>;
+  return (
+    <SuggestionsProvider>
+      <BackgroundShapes />
+      {renderScreen()}
+    </SuggestionsProvider>
+  );
 }
