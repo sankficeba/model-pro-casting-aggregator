@@ -11,6 +11,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError
 
 from db.models import (
+    ActorProfile,
     AdminProfile,
     Channel,
     CreativeProfile,
@@ -707,6 +708,26 @@ async def complete_category_profile(
         await session.commit()
         await session.refresh(row)
         return _profile_row_to_dict(row), was_first_time
+
+
+async def list_legacy_unmigrated_users() -> list[int]:
+    """Список user_id юзеров, заполнивших старую actor_profile анкету,
+    но ещё не выбравших ни одну из новых категорий.
+
+    Используется в админ-команде /broadcast_legacy чтобы разово сообщить
+    им «анкета обновилась, пройдите заново»."""
+    async with AsyncSessionLocal() as session:
+        subbed_subquery = (
+            select(UserCategorySubscription.user_id).distinct().subquery()
+        )
+        res = await session.execute(
+            select(ActorProfile.user_id)
+            .where(
+                ActorProfile.completed_at.is_not(None),
+                ActorProfile.user_id.notin_(select(subbed_subquery.c.user_id)),
+            )
+        )
+        return list(res.scalars().all())
 
 
 def _collect_suggestions(profiles: dict[str, dict]) -> dict[str, list]:
