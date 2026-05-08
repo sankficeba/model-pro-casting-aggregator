@@ -39,3 +39,70 @@ input[type="number"]::-webkit-inner-spin-button {
 input[type="number"] {
   -moz-appearance: textfield;
 }
+
+/* ================== Анимированный фон (BackgroundShapes) ==================
+ * 10 полупрозрачных белых фигур всплывают снизу вверх, вращаясь и
+ * превращаясь из квадратов в круги. Закреплены на viewport, не мешают
+ * скроллу и интерактиву (pointer-events: none). */
+.bg-shapes {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  z-index: 0;
+  pointer-events: none;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.bg-shapes li {
+  position: absolute;
+  display: block;
+  list-style: none;
+  width: 20px;
+  height: 20px;
+  background: rgba(255, 255, 255, 0.07);
+  bottom: -150px;
+  animation: bg-shape-rise 25s linear infinite;
+}
+
+.bg-shapes li:nth-child(1)  { left: 25%; width: 80px;  height: 80px;  animation-delay: 0s;  }
+.bg-shapes li:nth-child(2)  { left: 10%; width: 20px;  height: 20px;  animation-delay: 2s;  animation-duration: 12s; }
+.bg-shapes li:nth-child(3)  { left: 70%; width: 20px;  height: 20px;  animation-delay: 4s;  }
+.bg-shapes li:nth-child(4)  { left: 40%; width: 60px;  height: 60px;  animation-delay: 0s;  animation-duration: 18s; }
+.bg-shapes li:nth-child(5)  { left: 65%; width: 20px;  height: 20px;  animation-delay: 0s;  }
+.bg-shapes li:nth-child(6)  { left: 75%; width: 110px; height: 110px; animation-delay: 3s;  }
+.bg-shapes li:nth-child(7)  { left: 35%; width: 150px; height: 150px; animation-delay: 7s;  }
+.bg-shapes li:nth-child(8)  { left: 50%; width: 25px;  height: 25px;  animation-delay: 15s; animation-duration: 45s; }
+.bg-shapes li:nth-child(9)  { left: 20%; width: 15px;  height: 15px;  animation-delay: 2s;  animation-duration: 35s; }
+.bg-shapes li:nth-child(10) { left: 85%; width: 150px; height: 150px; animation-delay: 0s;  animation-duration: 11s; }
+
+@keyframes bg-shape-rise {
+  0% {
+    transform: translateY(0) rotate(0deg);
+    opacity: 1;
+    border-radius: 0;
+  }
+  100% {
+    transform: translateY(-110vh) rotate(720deg);
+    opacity: 0;
+    border-radius: 50%;
+  }
+}
+
+/* Контент должен быть выше фона. */
+#root > *:not(.bg-shapes) {
+  position: relative;
+  z-index: 1;
+}
+
+/* Уважаем prefers-reduced-motion — выключаем анимацию для тех у кого
+ * включена системная настройка снижения движения. */
+@media (prefers-reduced-motion: reduce) {
+  .bg-shapes li {
+    animation: none;
+    opacity: 0.3;
+  }
+}
