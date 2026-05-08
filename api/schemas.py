@@ -366,6 +366,8 @@ class DeliverySettingsResponse(BaseModel):
     night_mode_enabled: bool
     night_start_hour: int = Field(..., ge=0, le=23)
     night_end_hour: int = Field(..., ge=0, le=23)
+    digest_daily_enabled: bool
+    digest_daily_hour: int = Field(..., ge=0, le=23)
 
 
 class DeliverySettingsUpdate(BaseModel):
@@ -373,3 +375,10 @@ class DeliverySettingsUpdate(BaseModel):
     night_mode_enabled: bool = False
     night_start_hour: int = Field(default=23, ge=0, le=23)
     night_end_hour: int = Field(default=9, ge=0, le=23)
+    digest_daily_enabled: bool = False
+    digest_daily_hour: int = Field(default=20, ge=0, le=23)
+
+
+class DigestStartResponse(BaseModel):
+    sent: bool
+    remaining: int

@@ -56,6 +56,39 @@ async def night_digest_loop(bot: Bot) -> None:
             logger.exception("night_digest_loop error: {}", e)
 
 
+async def daily_digest_loop(bot: Bot) -> None:
+    """Раз в минуту проверяет юзеров digest-режима с включённой ежедневной
+    плашкой: текущий MSK-час == digest_daily_hour, есть pending, сегодня
+    ещё не слали. Отправляет «За сегодня — N объявлений, посмотреть?»."""
+    while True:
+        try:
+            await asyncio.sleep(60)
+            users = await repository.list_users_for_daily_digest_due()
+            for user_id, count in users:
+                text = (
+                    f"📬 <b>Накопленные объявления</b>\n\n"
+                    f"За сегодня — <b>{count}</b> подходящих кастингов. "
+                    f"Хочешь посмотреть?"
+                )
+                kb = InlineKeyboardMarkup(inline_keyboard=[[
+                    InlineKeyboardButton(text="➡ Далее", callback_data="digest:next")
+                ]])
+                try:
+                    await bot.send_message(
+                        user_id, text, parse_mode="HTML", reply_markup=kb
+                    )
+                    await repository.mark_daily_digest_sent(user_id)
+                except Exception as e:  # noqa: BLE001
+                    logger.warning(
+                        "Daily digest send failed for {}: {}", user_id, e,
+                    )
+                await asyncio.sleep(0.05)
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:  # noqa: BLE001
+            logger.exception("daily_digest_loop error: {}", e)
+
+
 async def main() -> None:
     _setup_logging()
     logger.info("Запуск приложения. LLM_PROVIDER={}", settings.llm_provider)
@@ -72,6 +105,7 @@ async def main() -> None:
             userbot.start(),
             run_bot(bot, llm=llm),
             night_digest_loop(bot),
+            daily_digest_loop(bot),
         )
     finally:
         await bot.session.close()

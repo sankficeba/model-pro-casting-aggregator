@@ -61,6 +61,17 @@ class User(Base):
     night_digest_last_sent_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    # Опциональная ежедневная push-плашка для digest-режима: «за сегодня —
+    # N кастингов, посмотреть?» в указанный час МСК.
+    digest_daily_enabled: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+    digest_daily_hour: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=20, server_default="20"
+    )
+    digest_daily_last_sent_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     filters: Mapped[list["Filter"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"

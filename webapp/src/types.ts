@@ -149,6 +149,13 @@ export interface DeliverySettings {
   night_mode_enabled: boolean;
   night_start_hour: number;  // 0-23 MSK
   night_end_hour: number;
+  digest_daily_enabled: boolean;
+  digest_daily_hour: number;  // 0-23 MSK
+}
+
+export interface DigestStartResponse {
+  sent: boolean;
+  remaining: number;
 }
 
 export const CATEGORY_LABELS: Record<CategoryCode, string> = {

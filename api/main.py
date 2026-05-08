@@ -20,6 +20,7 @@ from api.schemas import (
     CreativeProfileSchema,
     DeliverySettingsResponse,
     DeliverySettingsUpdate,
+    DigestStartResponse,
     EventProfileSchema,
     GeneralProfileSchema,
     ProfileResponse,
@@ -392,5 +393,32 @@ async def put_delivery(
         night_mode_enabled=body.night_mode_enabled,
         night_start_hour=body.night_start_hour,
         night_end_hour=body.night_end_hour,
+        digest_daily_enabled=body.digest_daily_enabled,
+        digest_daily_hour=body.digest_daily_hour,
     )
     return DeliverySettingsResponse(**saved)
+
+
+@app.post("/api/digest/start", response_model=DigestStartResponse)
+async def digest_start(
+    user: TelegramUser = Depends(current_user),
+) -> DigestStartResponse:
+    """Кнопка «Пролистать накопленные» в Mini App: достаёт следующее
+    pending-уведомление и шлёт пользователю. Дальше юзер листает кнопкой
+    «Следующее» в чате с ботом."""
+    from aiogram import Bot
+    from aiogram.client.default import DefaultBotProperties
+    from aiogram.enums import ParseMode
+
+    from bot.handlers import _send_next_pending
+
+    bot = Bot(
+        settings.bot_token,
+        default=DefaultBotProperties(parse_mode=ParseMode.HTML),
+    )
+    try:
+        sent = await _send_next_pending(bot, user.id)
+    finally:
+        await bot.session.close()
+    remaining = await repo.count_pending(user.id)
+    return DigestStartResponse(sent=sent, remaining=remaining)

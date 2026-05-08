@@ -796,6 +796,8 @@ async def get_delivery_settings(user_id: int) -> dict:
                 User.night_mode_enabled,
                 User.night_start_hour,
                 User.night_end_hour,
+                User.digest_daily_enabled,
+                User.digest_daily_hour,
             ).where(User.id == user_id)
         )
         row = res.first()
@@ -805,12 +807,16 @@ async def get_delivery_settings(user_id: int) -> dict:
                 "night_mode_enabled": False,
                 "night_start_hour": 23,
                 "night_end_hour": 9,
+                "digest_daily_enabled": False,
+                "digest_daily_hour": 20,
             }
         return {
             "delivery_mode": row[0],
             "night_mode_enabled": row[1],
             "night_start_hour": row[2],
             "night_end_hour": row[3],
+            "digest_daily_enabled": row[4],
+            "digest_daily_hour": row[5],
         }
 
 
@@ -821,11 +827,15 @@ async def set_delivery_settings(
     night_mode_enabled: bool,
     night_start_hour: int,
     night_end_hour: int,
+    digest_daily_enabled: bool,
+    digest_daily_hour: int,
 ) -> dict:
     if delivery_mode not in ("instant", "digest"):
         raise ValueError(f"Invalid delivery_mode: {delivery_mode}")
     if not (0 <= night_start_hour <= 23 and 0 <= night_end_hour <= 23):
         raise ValueError("hours must be 0..23")
+    if not 0 <= digest_daily_hour <= 23:
+        raise ValueError("digest_daily_hour must be 0..23")
     async with AsyncSessionLocal() as session:
         await upsert_user_in_session(session, user_id)
         await session.execute(
@@ -836,6 +846,8 @@ async def set_delivery_settings(
                 night_mode_enabled=night_mode_enabled,
                 night_start_hour=night_start_hour,
                 night_end_hour=night_end_hour,
+                digest_daily_enabled=digest_daily_enabled,
+                digest_daily_hour=digest_daily_hour,
             )
         )
         await session.commit()
@@ -951,6 +963,47 @@ async def mark_night_digest_sent(user_id: int) -> None:
             update(User)
             .where(User.id == user_id)
             .values(night_digest_last_sent_at=datetime.now(timezone.utc))
+        )
+        await session.commit()
+
+
+async def list_users_for_daily_digest_due() -> list[tuple[int, int]]:
+    """Юзеры в digest-режиме с включённой ежедневной плашкой, у которых
+    текущий MSK-час == digest_daily_hour, есть pending, и daily-digest
+    сегодня ещё не уходил. Возвращает [(user_id, count)]."""
+    msk_now = datetime.now(timezone.utc) + _MSK_OFFSET
+    msk_hour = msk_now.hour
+    msk_today_start_utc = (
+        msk_now.replace(hour=0, minute=0, second=0, microsecond=0)
+    ) - _MSK_OFFSET
+    async with AsyncSessionLocal() as session:
+        res = await session.execute(
+            select(
+                User.id,
+                sa_func.count(PendingNotification.id),
+            )
+            .join(
+                PendingNotification,
+                PendingNotification.user_id == User.id,
+            )
+            .where(
+                User.delivery_mode == "digest",
+                User.digest_daily_enabled.is_(True),
+                User.digest_daily_hour == msk_hour,
+                (User.digest_daily_last_sent_at.is_(None))
+                | (User.digest_daily_last_sent_at < msk_today_start_utc),
+            )
+            .group_by(User.id)
+        )
+        return [(uid, cnt) for uid, cnt in res.all()]
+
+
+async def mark_daily_digest_sent(user_id: int) -> None:
+    async with AsyncSessionLocal() as session:
+        await session.execute(
+            update(User)
+            .where(User.id == user_id)
+            .values(digest_daily_last_sent_at=datetime.now(timezone.utc))
         )
         await session.commit()
 
