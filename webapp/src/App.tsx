@@ -19,6 +19,7 @@ import { CategoryMenuScreen } from "./components/CategoryMenuScreen";
 import { DeliverySettingsScreen } from "./components/DeliverySettingsScreen";
 import { SubscriptionBanner } from "./components/SubscriptionBanner";
 import { SubscriptionScreen } from "./components/SubscriptionScreen";
+import { SuccessToast } from "./components/SuccessToast";
 import { SuggestChannelScreen } from "./components/SuggestChannelScreen";
 import { SuggestionsProvider } from "./contexts/SuggestionsContext";
 import { CreativeForm } from "./forms/CreativeForm";
@@ -44,12 +45,28 @@ export default function App() {
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [isAdmin, setIsAdmin] = useState(false);
   const [subStatus, setSubStatus] = useState<SubscriptionStatus | null>(null);
+  const [paymentToast, setPaymentToast] = useState<string | null>(null);
 
-  const fetchSubStatus = async () => {
+  const fetchSubStatus = async (): Promise<SubscriptionStatus | null> => {
     try {
-      setSubStatus(await api.getSubscriptionStatus());
+      const s = await api.getSubscriptionStatus();
+      setSubStatus(s);
+      return s;
     } catch {
       // не валим экран если ручка ещё не задеплоена
+      return null;
+    }
+  };
+
+  /** После редиректа из ЮKassa (?paid=1) пытаемся подтянуть актуальный
+   * статус подписки — webhook может дойти на сервер с задержкой 1-3 сек.
+   * Делаем 5 ретраев с интервалом 1 сек, останавливаемся как только
+   * увидим is_active=true. */
+  const refreshAfterPayment = async () => {
+    for (let i = 0; i < 5; i++) {
+      const s = await fetchSubStatus();
+      if (s?.is_active) return;
+      await new Promise((r) => setTimeout(r, 1000));
     }
   };
 
@@ -82,7 +99,26 @@ export default function App() {
   useEffect(() => {
     initTelegram();
     refreshMe();
-    fetchSubStatus();
+    // Если юзер только что вернулся из ЮKassa после успешной оплаты —
+    // показываем toast и пинаем статус в фоне до момента когда webhook
+    // отработает на сервере. Маркер ?paid=1 чистим из URL, чтобы при
+    // случайном refresh не показывать тост повторно.
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("paid") === "1") {
+      params.delete("paid");
+      const cleanSearch = params.toString();
+      const cleanUrl =
+        window.location.pathname +
+        (cleanSearch ? `?${cleanSearch}` : "") +
+        window.location.hash;
+      window.history.replaceState({}, "", cleanUrl);
+      setPaymentToast(
+        "✅ Оплата прошла. Подписка активирована!"
+      );
+      refreshAfterPayment();
+    } else {
+      fetchSubStatus();
+    }
   }, []);
 
   const renderScreen = () => {
@@ -207,6 +243,12 @@ export default function App() {
   return (
     <SuggestionsProvider>
       <BackgroundShapes />
+      {paymentToast && (
+        <SuccessToast
+          message={paymentToast}
+          onDismiss={() => setPaymentToast(null)}
+        />
+      )}
       {showBanner && (
         <SubscriptionBanner
           status={subStatus}

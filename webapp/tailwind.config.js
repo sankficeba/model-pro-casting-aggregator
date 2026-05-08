@@ -29,9 +29,14 @@ export default {
           "12%, 75%": { opacity: "1", transform: "translateY(0)" },
           "100%": { opacity: "0", transform: "translateY(-4px)" },
         },
+        "toast-in": {
+          "0%": { opacity: "0", transform: "translateY(-12px)" },
+          "100%": { opacity: "1", transform: "translateY(0)" },
+        },
       },
       animation: {
         "fade-in-out": "fade-in-out 3s ease-in-out forwards",
+        "toast-in": "toast-in 220ms ease-out forwards",
       },
     },
   },

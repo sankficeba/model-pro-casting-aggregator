@@ -469,7 +469,11 @@ async def subscription_checkout(
         amount_rub=amount_rub,
         days=days,
     )
-    return_url = settings.subscription_return_url or "https://t.me/"
+    base_return = settings.subscription_return_url or "https://t.me/"
+    # Маркер ?paid=1 нужен чтобы Mini App после редиректа понял, что юзер
+    # только что оплатил и показал toast «Подписка активирована».
+    sep = "&" if "?" in base_return else "?"
+    return_url = f"{base_return}{sep}paid=1"
     try:
         created = await yookassa_client.create_payment(
             amount_rub=amount_rub,
