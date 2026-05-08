@@ -18,6 +18,8 @@ from api.schemas import (
     BlacklistUpdate,
     ChannelSuggestionRequest,
     CreativeProfileSchema,
+    DeliverySettingsResponse,
+    DeliverySettingsUpdate,
     EventProfileSchema,
     GeneralProfileSchema,
     ProfileResponse,
@@ -368,3 +370,27 @@ async def channel_suggestion(
         await _notify_admin_html(admin_id, text, reply_markup)
         sent += 1
     return {"ok": True, "notified_admins": sent}
+
+
+# ---------- Delivery settings ----------
+
+
+@app.get("/api/delivery-settings", response_model=DeliverySettingsResponse)
+async def get_delivery(user: TelegramUser = Depends(current_user)) -> DeliverySettingsResponse:
+    s = await repo.get_delivery_settings(user.id)
+    return DeliverySettingsResponse(**s)
+
+
+@app.put("/api/delivery-settings", response_model=DeliverySettingsResponse)
+async def put_delivery(
+    body: DeliverySettingsUpdate,
+    user: TelegramUser = Depends(current_user),
+) -> DeliverySettingsResponse:
+    saved = await repo.set_delivery_settings(
+        user.id,
+        delivery_mode=body.delivery_mode,
+        night_mode_enabled=body.night_mode_enabled,
+        night_start_hour=body.night_start_hour,
+        night_end_hour=body.night_end_hour,
+    )
+    return DeliverySettingsResponse(**saved)

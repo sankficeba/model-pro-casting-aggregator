@@ -258,6 +258,22 @@ class Userbot:
                 )
                 continue
 
+            # Если у юзера digest или сейчас ночное окно — кладём в очередь
+            # вместо немедленной отправки. Дедуп через UNIQUE(user_id, text_hash)
+            # как у обычных нотификаций.
+            if await repository.should_queue_for_user(user_id):
+                queued = await repository.enqueue_pending_notification(
+                    user_id=user_id,
+                    message_id=message_db_id,
+                    text_hash=text_hash_value,
+                    matched_vacancy_ids=matched_db_ids,
+                )
+                if queued:
+                    logger.info(
+                        "Queued for digest user={} msg={}", user_id, message_db_id,
+                    )
+                continue
+
             # Оптимистично пишем нотификацию ДО send_message: UNIQUE
             # (user_id, message_id) и (user_id, text_hash) поймают дубль
             # на уровне БД без JOIN-запроса.

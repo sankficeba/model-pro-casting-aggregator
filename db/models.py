@@ -42,6 +42,25 @@ class User(Base):
     blacklisted_words: Mapped[list[str]] = mapped_column(
         ARRAY(Text), default=list, server_default="{}", nullable=False
     )
+    # Режим доставки: 'instant' — сразу, 'digest' — копить в очереди и
+    # юзер просматривает через /review.
+    delivery_mode: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="instant", server_default="instant"
+    )
+    # Ночной режим: в этот диапазон MSK часов уведомления накапливаются;
+    # утром (как стрелка перешла night_end_hour) шлётся digest-уведомление.
+    night_mode_enabled: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+    night_start_hour: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=23, server_default="23"
+    )
+    night_end_hour: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=9, server_default="9"
+    )
+    night_digest_last_sent_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     filters: Mapped[list["Filter"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
@@ -589,4 +608,31 @@ class Notification(Base):
     __table_args__ = (
         # Дедуп: один пользователь не получает одно и то же сообщение дважды
         UniqueConstraint("user_id", "message_id", name="uq_notifications_user_msg"),
+    )
+
+
+class PendingNotification(Base):
+    """Очередь нотификаций для digest/night-режима. Записывается вместо
+    немедленной отправки, позже бот извлекает по запросу юзера через
+    кнопки «Следующее»."""
+
+    __tablename__ = "pending_notifications"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    message_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("messages.id", ondelete="CASCADE"), nullable=False
+    )
+    text_hash: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
+    matched_vacancy_ids: Mapped[Optional[list[int]]] = mapped_column(
+        ARRAY(Integer), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "message_id", name="uq_pending_user_msg"),
     )

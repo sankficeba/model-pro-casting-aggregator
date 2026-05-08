@@ -4,6 +4,7 @@ import type {
   AdminProfileRow,
   AdminStats,
   CategoryCode,
+  DeliverySettings,
   MeResponse,
   Profile,
   Refs,
@@ -186,6 +187,15 @@ export const api = {
     request<{ ok: boolean; notified_admins: number }>("/channel-suggestion", {
       method: "POST",
       body: JSON.stringify({ ref, comment: comment || null }),
+    }),
+
+  // Delivery settings
+  getDeliverySettings: () =>
+    request<DeliverySettings>("/delivery-settings"),
+  putDeliverySettings: (settings: DeliverySettings) =>
+    request<DeliverySettings>("/delivery-settings", {
+      method: "PUT",
+      body: JSON.stringify(settings),
     }),
 
   // Admin

@@ -357,3 +357,19 @@ class ChannelSuggestionRequest(BaseModel):
 
     ref: str = Field(..., min_length=1, max_length=200)
     comment: Optional[str] = Field(default=None, max_length=500)
+
+
+# ---------- delivery settings ----------
+
+class DeliverySettingsResponse(BaseModel):
+    delivery_mode: Literal["instant", "digest"]
+    night_mode_enabled: bool
+    night_start_hour: int = Field(..., ge=0, le=23)
+    night_end_hour: int = Field(..., ge=0, le=23)
+
+
+class DeliverySettingsUpdate(BaseModel):
+    delivery_mode: Literal["instant", "digest"] = "instant"
+    night_mode_enabled: bool = False
+    night_start_hour: int = Field(default=23, ge=0, le=23)
+    night_end_hour: int = Field(default=9, ge=0, le=23)
