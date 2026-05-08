@@ -24,7 +24,9 @@ export function CategoryFormShell({
   const isComplete = pct >= 100;
   return (
     <div className="min-h-screen flex flex-col">
-      <div className="flex-1 p-5 pb-4 space-y-6">
+      {/* pb-40 даёт зазор чтобы последние поля (email, vk и т.п.) могли
+       * проскроллиться выше sticky-футера и не были им перекрыты. */}
+      <div className="flex-1 p-5 pb-40 space-y-6">
         <h2 className="text-xl font-semibold">{title}</h2>
         {children}
       </div>
