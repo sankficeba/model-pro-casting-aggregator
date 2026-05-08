@@ -61,3 +61,57 @@ def test_preserves_non_normalized_fields():
     assert v.age_min == 20
     assert v.rate == 5000
     assert v.role_label == "Маша"
+
+
+def test_normalize_event_work_types():
+    p = PostExtraction(
+        is_casting=True,
+        category="event",
+        vacancies=[
+            VacancyExtraction(work_types=["hostess", "animator"]),
+        ],
+    )
+    out = normalize_extracted(p)
+    assert out.vacancies[0].work_types == ["hostess", "animator"]
+
+
+def test_normalize_general_work_types():
+    p = PostExtraction(
+        is_casting=True,
+        category="general",
+        vacancies=[
+            VacancyExtraction(work_types=["loader", "cleaning"]),
+        ],
+    )
+    out = normalize_extracted(p)
+    assert sorted(out.vacancies[0].work_types) == ["cleaning", "loader"]
+
+
+def test_normalize_admin_work_types():
+    p = PostExtraction(
+        is_casting=True,
+        category="admin",
+        vacancies=[
+            VacancyExtraction(work_types=["supervisor", "registration_operator"]),
+        ],
+    )
+    out = normalize_extracted(p)
+    assert sorted(out.vacancies[0].work_types) == ["registration_operator", "supervisor"]
+
+
+def test_normalize_drops_unknown_work_types():
+    p = PostExtraction(
+        is_casting=True,
+        category="event",
+        vacancies=[
+            VacancyExtraction(work_types=["hostess", "garbage_code"]),
+        ],
+    )
+    out = normalize_extracted(p)
+    assert out.vacancies[0].work_types == ["hostess"]
+
+
+def test_normalize_passes_post_category():
+    p = PostExtraction(is_casting=True, category="event", confidence=0.9)
+    out = normalize_extracted(p)
+    assert out.category == "event"

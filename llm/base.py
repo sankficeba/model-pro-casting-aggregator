@@ -11,50 +11,75 @@ from pydantic import ValidationError
 from llm.normalize import normalize_extracted
 from models.schemas import PostExtraction
 
-SYSTEM_PROMPT = """Ты разбираешь объявления о кастингах на актёров и моделей
-из Telegram-каналов. Из присланного сообщения нужно извлечь параметры
+SYSTEM_PROMPT = """Ты разбираешь объявления о работе и кастингах из
+Telegram-каналов. Из присланного сообщения нужно извлечь параметры
 поиска и вернуть СТРОГО JSON-объект без markdown-обёрток.
+
+Категория поста (post.category) — доминирующее направление:
+- "creative"  — кастинги в кино/сериалы/рекламу/театр/модельные проекты;
+                роли: актёры, модели, фотомодели, дикторы, ведущие, танцоры.
+- "event"     — мероприятия, презентации, корпоративы;
+                роли: хостес, промо-модели, аниматоры.
+- "general"   — разнорабочие на event/съёмки;
+                роли: хелпер, клининг, грузчик.
+- "admin"     — администрирование на мероприятиях;
+                роли: оператор регистрации, супервайзер.
 
 Структура поста:
 {
-  "is_casting": bool,                    // это объявление о кастинге?
+  "is_casting": bool,                    // это объявление о работе?
                                          // false для рекламы услуг, обучения и т.п.
-  "project_types": [str],                // подмножество кодов:
+  "category": str|null,                  // доминирующая категория:
+                                         // "creative"|"event"|"general"|"admin"
+                                         // null если не входит в список
+                                         // или is_casting=false
+  "project_types": [str],                // только для creative; подмножество кодов:
                                          // kino_serial, advertising, model_projects,
                                          // show_reality, voice_dub, theater
-  "city": str|null,                      // город съёмки на русском
+                                         // Для event/general/admin — пустой массив.
+  "city": str|null,                      // город на русском
   "summary": str|null,                   // краткое описание поста до 30 слов
   "confidence": float,                   // 0.0-1.0, твоя уверенность
   "vacancies": [                         // список ролей; пустой если is_casting=false
     {
-      "role_types": [str],               // подмножество кодов:
+      "role_types": [str],               // ТОЛЬКО для creative. Подмножество кодов:
                                          // main, supporting, episode, massovka,
                                          // groupovka, dubler, kaskader, model,
                                          // photo_model, promo_model, tv_host, diktor,
-                                         // dancer, ballerina, gymnast, vocalist, musician
+                                         // dancer, ballerina, gymnast, vocalist, musician.
+                                         // Для event/general/admin — пустой массив.
+      "work_types": [str],               // ТОЛЬКО для event/general/admin:
+                                         // - event: hostess, promo_model, animator
+                                         // - general: helper, cleaning, loader
+                                         // - admin: registration_operator, supervisor
+                                         // Для creative — пустой массив.
+      "category": str|null,              // null = наследовать post.category;
+                                         // указывать только если эта роль явно из
+                                         // другой категории чем доминирующая
+                                         // (редкие гибрид-посты).
       "gender": "male"|"female"|null,    // кого ищут на эту роль
       "age_min": int|null,               // нижний возраст; для одного значения 25 — age_min=age_max=25
       "age_max": int|null,
       "rate": int|null,                  // ставка в рублях за смену; диапазон — нижняя граница
-      "ethnicity": [str],                 // подмножество кодов внешности:
+      "ethnicity": [str],                 // подмножество кодов внешности (только creative/event):
                                           // slavic, european, caucasian, asian,
                                           // central_asian, african, arab, latin,
                                           // mixed, other.
-                                          // Пустой массив если не указано.
+                                          // Пустой массив если не указано или
+                                          // не релевантно (general/admin).
       "height_min": int|null,             // рост в см, нижняя граница
       "height_max": int|null,             // рост в см, верхняя граница;
                                           // одно значение "рост 180" → height_min=height_max=180
-      "body_type": [str],                 // подмножество кодов телосложения:
+      "body_type": [str],                 // подмножество кодов телосложения
+                                          // (только creative/event):
                                           // slim, athletic, normal, plus_size, muscular.
-                                          // Пустой массив если не указано.
-      "hair_color": [str],                // подмножество цветов волос:
+      "hair_color": [str],                // подмножество цветов волос (creative/event):
                                           // black, dark_brown, brown, light_brown,
                                           // blond, red, grey, dyed.
-                                          // Несколько вариантов — все перечислить.
-      "hair_length": [str],               // подмножество кодов длины волос:
+      "hair_length": [str],               // подмножество кодов длины волос (creative/event):
                                           // bald, very_short, short, medium, long, very_long.
       "description": str|null,           // фрагмент поста об этой роли
-      "role_label": str|null             // короткое имя роли как в посте: "Мама", "Сын", "Прохожий"
+      "role_label": str|null             // короткое имя роли как в посте: "Мама", "Сын", "Прохожий", "Хостес"
     }
   ]
 }
@@ -62,9 +87,11 @@ SYSTEM_PROMPT = """Ты разбираешь объявления о касти�
 ВАЖНО:
 - Если в посте описана одна роль — vacancies массив длины 1.
 - Если описаны несколько разных ролей с разными условиями (возрастом,
-  гонораром, полом, внешностью, ростом) — заводи на каждую отдельную
+  гонораром, полом, внешностью, ростом, типом работы) — заводи на каждую отдельную
   запись в vacancies.
-- Если is_casting=false — vacancies должно быть пустым массивом.
+- Если is_casting=false — vacancies должно быть пустым массивом, category=null.
+- Для creative-вакансий заполняй role_types, work_types оставь пустым.
+- Для event/general/admin вакансий заполняй work_types, role_types оставь пустым.
 - Никаких комментариев, только JSON.
 """
 

@@ -56,9 +56,27 @@ def _normalize_list(category: str, raw: list[str]) -> list[str]:
 
 
 def _normalize_vacancy(v: VacancyExtraction) -> VacancyExtraction:
+    # work_types: справочник зависит от категории. Если категория не задана
+    # на уровне вакансии (типичный случай) — нормализовать по объединению
+    # всех трёх whitelist'ов; если LLM вернул мусор, он отфильтруется
+    # на следующем уровне (per-category matcher).
+    work_types_normalized = (
+        _normalize_list("work_types_event", v.work_types)
+        + _normalize_list("work_types_general", v.work_types)
+        + _normalize_list("work_types_admin", v.work_types)
+    )
+    # Дедупликация
+    seen: set[str] = set()
+    work_types_dedup: list[str] = []
+    for code in work_types_normalized:
+        if code not in seen:
+            seen.add(code)
+            work_types_dedup.append(code)
+
     return v.model_copy(
         update={
             "role_types": _normalize_list("role_types", v.role_types),
+            "work_types": work_types_dedup,
             "ethnicity": _normalize_list("ethnicity", v.ethnicity),
             "body_type": _normalize_list("body_type", v.body_type),
             "hair_color": _normalize_list("hair_colors", v.hair_color),
