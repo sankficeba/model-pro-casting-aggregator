@@ -10,6 +10,8 @@ import type {
   DeliverySettings,
   DigestStartResponse,
   MeResponse,
+  SubscriptionCheckout,
+  SubscriptionStatus,
   Profile,
   Refs,
   Subscription,
@@ -203,6 +205,15 @@ export const api = {
     }),
   startDigestReview: () =>
     request<DigestStartResponse>("/digest/start", {
+      method: "POST",
+      body: "{}",
+    }),
+
+  // Subscription
+  getSubscriptionStatus: () =>
+    request<SubscriptionStatus>("/subscription/status"),
+  createSubscriptionCheckout: () =>
+    request<SubscriptionCheckout>("/subscription/checkout", {
       method: "POST",
       body: "{}",
     }),

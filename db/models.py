@@ -8,10 +8,12 @@ from sqlalchemy import (
     ARRAY,
     BigInteger,
     Boolean,
+    CheckConstraint,
     DateTime,
     Float,
     ForeignKey,
     Integer,
+    Numeric,
     String,
     Text,
     UniqueConstraint,
@@ -85,6 +87,24 @@ class User(Base):
     # {"age_min":int,"age_max":int,"height_min":int,"height_max":int,"name_query":str}
     broadcast_pending_payload: Mapped[Optional[dict]] = mapped_column(
         JSONB, nullable=True
+    )
+
+    # Подписка: первый /start триггерит trial на N дней, дальше юзер платит
+    # через YooKassa и subscription_active_until сдвигается вперёд.
+    subscription_active_until: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    trial_started_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    # "2d" / "1d" / "3h" — последняя отправленная плашка. Сбрасывается в null
+    # после successful продления.
+    last_expiry_reminder_stage: Mapped[Optional[str]] = mapped_column(
+        String(8), nullable=True
+    )
+    # Throttle для degraded mode после истечения подписки: не чаще 1 уведа в 24ч.
+    last_notify_after_expiry_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
     )
 
     filters: Mapped[list["Filter"]] = relationship(
@@ -660,4 +680,46 @@ class PendingNotification(Base):
 
     __table_args__ = (
         UniqueConstraint("user_id", "message_id", name="uq_pending_user_msg"),
+    )
+
+
+class Payment(Base):
+    """Платёж в YooKassa за продление подписки. status pending→succeeded
+    обновляется в webhook'е после получения payment.succeeded."""
+
+    __tablename__ = "payments"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    yk_payment_id: Mapped[Optional[str]] = mapped_column(
+        String(64), nullable=True, unique=True
+    )
+    idempotency_key: Mapped[str] = mapped_column(
+        String(64), nullable=False, unique=True
+    )
+    amount_rub: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
+    days: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="pending", server_default="pending"
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('pending','succeeded','canceled')",
+            name="ck_payments_status",
+        ),
     )

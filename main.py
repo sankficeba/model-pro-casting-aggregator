@@ -56,6 +56,43 @@ async def night_digest_loop(bot: Bot) -> None:
             logger.exception("night_digest_loop error: {}", e)
 
 
+async def expiry_reminder_loop(bot: Bot) -> None:
+    """Раз в 5 минут шлёт юзерам напоминалки об истечении подписки на стадиях
+    2 суток / 1 сутки / 3 часа до конца. Каждая стадия отправляется один раз."""
+    stage_labels = {
+        "2d": ("⏳ Подписка истекает через 2 дня", "2 дня"),
+        "1d": ("⏳ Подписка истекает завтра", "1 день"),
+        "3h": ("⚠️ Подписка истекает через 3 часа", "3 часа"),
+    }
+    while True:
+        try:
+            await asyncio.sleep(300)
+            for stage in ("2d", "1d", "3h"):
+                users = await repository.list_users_for_expiry_reminder(stage)
+                title, friendly = stage_labels[stage]
+                for user_id, active_until in users:
+                    text = (
+                        f"<b>{title}</b>\n\n"
+                        f"Активна до <b>{active_until.strftime('%d.%m.%Y %H:%M МСК')}</b> "
+                        f"(осталось примерно {friendly}).\n\n"
+                        "Продли подписку в Mini App, чтобы продолжить получать "
+                        "уведомления о кастингах без задержек."
+                    )
+                    try:
+                        await bot.send_message(user_id, text, parse_mode="HTML")
+                        await repository.mark_expiry_reminder_sent(user_id, stage)
+                    except Exception as e:  # noqa: BLE001
+                        logger.warning(
+                            "Expiry reminder send failed user={} stage={}: {}",
+                            user_id, stage, e,
+                        )
+                    await asyncio.sleep(0.05)
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:  # noqa: BLE001
+            logger.exception("expiry_reminder_loop error: {}", e)
+
+
 async def daily_digest_loop(bot: Bot) -> None:
     """Раз в минуту проверяет юзеров digest-режима с включённой ежедневной
     плашкой: текущий MSK-час == digest_daily_hour, есть pending, сегодня
@@ -106,6 +143,7 @@ async def main() -> None:
             run_bot(bot, llm=llm),
             night_digest_loop(bot),
             daily_digest_loop(bot),
+            expiry_reminder_loop(bot),
         )
     finally:
         await bot.session.close()

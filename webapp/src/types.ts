@@ -184,6 +184,21 @@ export interface DigestStartResponse {
   remaining: number;
 }
 
+export interface SubscriptionStatus {
+  active_until: string | null;  // ISO timestamp
+  days_left: number;
+  is_active: boolean;
+  trial_started_at: string | null;
+  plan_price_rub: number;
+  plan_period_days: number;
+  payments_configured: boolean;
+}
+
+export interface SubscriptionCheckout {
+  confirmation_url: string;
+  payment_id: string;
+}
+
 export const CATEGORY_LABELS: Record<CategoryCode, string> = {
   creative: "Творческие позиции",
   event: "Event-персонал",

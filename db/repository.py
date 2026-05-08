@@ -20,6 +20,7 @@ from db.models import (
     GeneralProfile,
     Message,
     Notification,
+    Payment,
     PendingNotification,
     User,
     UserCategorySubscription,
@@ -1193,6 +1194,239 @@ async def get_extended_admin_stats() -> dict:
         "pending_notifications_total": int(pending_total),
         "active_subscriptions_by_category": subs_by_category,
     }
+
+
+# ---------- SUBSCRIPTIONS ----------
+
+
+async def start_trial_if_first_time(user_id: int, trial_days: int) -> Optional[datetime]:
+    """Если у юзера ещё не запускался trial — установить trial_started_at=now()
+    и subscription_active_until=now()+trial_days. Возвращает active_until
+    (новое или существующее)."""
+    async with AsyncSessionLocal() as session:
+        await upsert_user_in_session(session, user_id)
+        res = await session.execute(
+            select(User.trial_started_at, User.subscription_active_until)
+            .where(User.id == user_id)
+        )
+        row = res.first()
+        if row is None:
+            return None
+        if row[0] is not None:
+            return row[1]  # уже был trial — ничего не трогаем
+        now = datetime.now(timezone.utc)
+        active_until = now + timedelta(days=trial_days)
+        await session.execute(
+            update(User)
+            .where(User.id == user_id)
+            .values(
+                trial_started_at=now,
+                subscription_active_until=active_until,
+                last_expiry_reminder_stage=None,
+            )
+        )
+        await session.commit()
+        return active_until
+
+
+async def get_subscription_status(user_id: int) -> dict:
+    """Возвращает {active_until, days_left, is_active, trial_started_at}."""
+    async with AsyncSessionLocal() as session:
+        res = await session.execute(
+            select(
+                User.subscription_active_until,
+                User.trial_started_at,
+            ).where(User.id == user_id)
+        )
+        row = res.first()
+    now = datetime.now(timezone.utc)
+    if row is None:
+        return {
+            "active_until": None,
+            "days_left": 0,
+            "is_active": False,
+            "trial_started_at": None,
+        }
+    active_until: Optional[datetime] = row[0]
+    trial_started_at: Optional[datetime] = row[1]
+    is_active = active_until is not None and active_until > now
+    days_left = 0
+    if is_active and active_until is not None:
+        delta = active_until - now
+        days_left = max(0, (delta.total_seconds() + 86399) // 86400)
+        days_left = int(days_left)
+    return {
+        "active_until": active_until,
+        "days_left": days_left,
+        "is_active": is_active,
+        "trial_started_at": trial_started_at,
+    }
+
+
+async def extend_subscription(user_id: int, days: int) -> datetime:
+    """Продлить подписку на N дней. Если уже истекла — отсчёт с now().
+    Сбрасывает last_expiry_reminder_stage. Возвращает новый active_until."""
+    now = datetime.now(timezone.utc)
+    async with AsyncSessionLocal() as session:
+        await upsert_user_in_session(session, user_id)
+        res = await session.execute(
+            select(User.subscription_active_until).where(User.id == user_id)
+        )
+        current: Optional[datetime] = res.scalar_one_or_none()
+        base = current if current and current > now else now
+        new_active_until = base + timedelta(days=days)
+        await session.execute(
+            update(User)
+            .where(User.id == user_id)
+            .values(
+                subscription_active_until=new_active_until,
+                last_expiry_reminder_stage=None,
+                last_notify_after_expiry_at=None,
+            )
+        )
+        await session.commit()
+        return new_active_until
+
+
+async def list_users_for_expiry_reminder(stage: str) -> list[tuple[int, datetime]]:
+    """Юзеры, которым надо отправить напоминалку для конкретной стадии.
+
+    stage ∈ {"2d","1d","3h"}. Возвращает (user_id, active_until).
+    Условие: active_until ∈ (now+window_low, now+window_high] и
+    last_expiry_reminder_stage != stage и не более ранняя стадия.
+    """
+    if stage not in ("2d", "1d", "3h"):
+        raise ValueError(f"Invalid stage: {stage}")
+    now = datetime.now(timezone.utc)
+    # Окна — закрытое сверху, открытое снизу. «2d» = expires within (1d, 2d].
+    windows = {
+        "2d": (timedelta(days=1), timedelta(days=2)),
+        "1d": (timedelta(hours=3), timedelta(days=1)),
+        "3h": (timedelta(seconds=0), timedelta(hours=3)),
+    }
+    low, high = windows[stage]
+    cutoff_low = now + low
+    cutoff_high = now + high
+    # Не слать одну и ту же стадию повторно. Также не "откатываемся" назад
+    # с более поздней стадии: если уже отправлено "3h", не слать "1d"/"2d".
+    blocked_stages = {
+        "2d": ("2d", "1d", "3h"),
+        "1d": ("1d", "3h"),
+        "3h": ("3h",),
+    }[stage]
+    async with AsyncSessionLocal() as session:
+        res = await session.execute(
+            select(User.id, User.subscription_active_until)
+            .where(
+                User.subscription_active_until.is_not(None),
+                User.subscription_active_until > cutoff_low,
+                User.subscription_active_until <= cutoff_high,
+                (User.last_expiry_reminder_stage.is_(None))
+                | (User.last_expiry_reminder_stage.notin_(blocked_stages)),
+            )
+        )
+        return [(int(uid), au) for uid, au in res.all()]
+
+
+async def mark_expiry_reminder_sent(user_id: int, stage: str) -> None:
+    async with AsyncSessionLocal() as session:
+        await session.execute(
+            update(User)
+            .where(User.id == user_id)
+            .values(last_expiry_reminder_stage=stage)
+        )
+        await session.commit()
+
+
+async def is_subscription_active(user_id: int) -> bool:
+    s = await get_subscription_status(user_id)
+    return bool(s["is_active"])
+
+
+async def should_throttle_after_expiry(user_id: int) -> bool:
+    """True если за последние 24ч юзеру с истёкшей подпиской уже улетело
+    одно уведомление (degraded mode «1 в день»)."""
+    async with AsyncSessionLocal() as session:
+        res = await session.execute(
+            select(User.last_notify_after_expiry_at).where(User.id == user_id)
+        )
+        last: Optional[datetime] = res.scalar_one_or_none()
+    if last is None:
+        return False
+    return (datetime.now(timezone.utc) - last) < timedelta(hours=24)
+
+
+async def record_after_expiry_send(user_id: int) -> None:
+    async with AsyncSessionLocal() as session:
+        await session.execute(
+            update(User)
+            .where(User.id == user_id)
+            .values(last_notify_after_expiry_at=datetime.now(timezone.utc))
+        )
+        await session.commit()
+
+
+# ---------- PAYMENTS ----------
+
+
+async def insert_payment_pending(
+    *,
+    user_id: int,
+    idempotency_key: str,
+    amount_rub: int,
+    days: int,
+) -> int:
+    async with AsyncSessionLocal() as session:
+        p = Payment(
+            user_id=user_id,
+            idempotency_key=idempotency_key,
+            amount_rub=amount_rub,
+            days=days,
+            status="pending",
+        )
+        session.add(p)
+        await session.commit()
+        await session.refresh(p)
+        return p.id
+
+
+async def attach_yk_payment_id(payment_id: int, yk_payment_id: str) -> None:
+    async with AsyncSessionLocal() as session:
+        await session.execute(
+            update(Payment)
+            .where(Payment.id == payment_id)
+            .values(yk_payment_id=yk_payment_id)
+        )
+        await session.commit()
+
+
+async def get_payment_by_yk_id(yk_payment_id: str) -> Optional[Payment]:
+    async with AsyncSessionLocal() as session:
+        res = await session.execute(
+            select(Payment).where(Payment.yk_payment_id == yk_payment_id)
+        )
+        p = res.scalar_one_or_none()
+        if p is not None:
+            session.expunge(p)
+        return p
+
+
+async def mark_payment_status(yk_payment_id: str, status: str) -> bool:
+    """Идемпотентно обновляет статус. Возвращает True если был апдейт
+    с pending → succeeded (то есть нужно продлить подписку именно сейчас)."""
+    if status not in ("succeeded", "canceled"):
+        raise ValueError(f"Invalid payment status: {status}")
+    async with AsyncSessionLocal() as session:
+        res = await session.execute(
+            select(Payment).where(Payment.yk_payment_id == yk_payment_id)
+        )
+        p = res.scalar_one_or_none()
+        if p is None:
+            return False
+        was_pending = p.status == "pending"
+        p.status = status
+        await session.commit()
+        return was_pending and status == "succeeded"
 
 
 async def list_legacy_unmigrated_users() -> list[int]:

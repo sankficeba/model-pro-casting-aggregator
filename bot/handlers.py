@@ -251,8 +251,22 @@ def build_dispatcher(bot: Bot, llm: LLMProvider | None = None) -> Dispatcher:
             message.from_user.id,
             username=message.from_user.username,
         )
+        # Активируем пробный период при первом /start.
+        active_until = await repository.start_trial_if_first_time(
+            message.from_user.id, settings.subscription_trial_days,
+        )
+        trial_note = ""
+        if active_until is not None:
+            # Если только что стартовали trial — сообщим об этом.
+            status = await repository.get_subscription_status(message.from_user.id)
+            if status["is_active"]:
+                trial_note = (
+                    f"\n\n🎁 <b>Пробный период активирован</b> — "
+                    f"бесплатно на {settings.subscription_trial_days} дней "
+                    f"(до {active_until.strftime('%d.%m.%Y')})."
+                )
         await message.answer(
-            GREETING + "\n\n" + _help_for(message.from_user.id),
+            GREETING + trial_note + "\n\n" + _help_for(message.from_user.id),
             parse_mode="HTML",
             reply_markup=ReplyKeyboardRemove(),
         )
