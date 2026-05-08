@@ -109,7 +109,18 @@ export function DeliverySettingsScreen({ onBack }: Props) {
             </div>
           </button>
           <button
-            onClick={() => persist({ ...settings, delivery_mode: "digest" })}
+            onClick={() =>
+              persist({
+                ...settings,
+                delivery_mode: "digest",
+                // При первом переключении на digest сразу включаем
+                // ежедневное напоминание; повторные клики не трогают.
+                digest_daily_enabled:
+                  settings.delivery_mode === "instant"
+                    ? true
+                    : settings.digest_daily_enabled,
+              })
+            }
             className={`w-full p-4 rounded-card border text-left flex items-start gap-3 transition ${
               settings.delivery_mode === "digest"
                 ? "border-accent bg-accent/10"
