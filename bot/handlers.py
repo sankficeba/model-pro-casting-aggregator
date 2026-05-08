@@ -25,7 +25,8 @@ HELP_TEXT_ADMIN = HELP_TEXT_USER + (
     "\n\n<b>Админ:</b>\n"
     "/channels — список каналов\n"
     "/addchannel @username — добавить канал\n"
-    "/removechannel @username — отключить канал"
+    "/removechannel @username — отключить канал\n"
+    "/broadcast_legacy &lt;текст&gt; — разовая рассылка юзерам со старой анкетой"
 )
 
 GREETING = (
@@ -151,6 +152,44 @@ def build_dispatcher(bot: Bot, llm: LLMProvider | None = None) -> Dispatcher:
             await message.answer("Такого активного канала не нашёл.")
             return
         await _restart_self(bot, message, "🗑 Канал отключён.")
+
+    @dp.message(Command("broadcast_legacy"))
+    async def cmd_broadcast_legacy(message: Message) -> None:
+        """Разовая рассылка юзерам со старой actor_profile анкетой,
+        не успевшим выбрать новую категорию. Текст передаётся в команде.
+        """
+        if not _is_admin(message.from_user.id):
+            return
+        parts = (message.text or "").split(maxsplit=1)
+        if len(parts) < 2 or not parts[1].strip():
+            await message.answer(
+                "Использование: <code>/broadcast_legacy &lt;текст&gt;</code>\n\n"
+                "Шлёт указанный текст всем юзерам с заполненным старым "
+                "<code>actor_profile</code>, ещё не выбравшим ни одной "
+                "новой категории. HTML-разметка поддерживается.",
+                parse_mode="HTML",
+            )
+            return
+        body = parts[1]
+        user_ids = await repository.list_legacy_unmigrated_users()
+        if not user_ids:
+            await message.answer("Никого не нашёл (никто не подходит под условие).")
+            return
+        await message.answer(f"Найдено {len(user_ids)} юзеров. Начинаю рассылку…")
+        sent = 0
+        failed = 0
+        for uid in user_ids:
+            try:
+                await bot.send_message(uid, body, parse_mode="HTML")
+                sent += 1
+            except Exception as e:  # noqa: BLE001
+                logger.warning("broadcast_legacy: send to {} failed: {}", uid, e)
+                failed += 1
+            await asyncio.sleep(0.05)
+        await message.answer(
+            f"Готово. Отправлено: <b>{sent}</b>, ошибок: <b>{failed}</b>.",
+            parse_mode="HTML",
+        )
 
     # ---------- Inline-кнопка «Сгенерировать отклик» под уведомлением ----------
 
