@@ -16,6 +16,7 @@ from api.schemas import (
     AdminProfileSchema,
     BlacklistResponse,
     BlacklistUpdate,
+    ChannelSuggestionRequest,
     CreativeProfileSchema,
     EventProfileSchema,
     GeneralProfileSchema,
@@ -90,6 +91,29 @@ async def _notify_user(chat_id: int, text: str) -> None:
                 )
     except httpx.HTTPError as e:
         logger.warning("sendMessage error for {}: {}", chat_id, e)
+
+
+async def _notify_admin_html(chat_id: int, text: str, reply_markup: dict | None = None) -> None:
+    """Отправить админу HTML-сообщение с опциональной inline-клавиатурой."""
+    url = f"https://api.telegram.org/bot{settings.bot_token}/sendMessage"
+    payload: dict = {
+        "chat_id": chat_id,
+        "text": text,
+        "parse_mode": "HTML",
+        "disable_web_page_preview": True,
+    }
+    if reply_markup is not None:
+        payload["reply_markup"] = reply_markup
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            r = await client.post(url, json=payload)
+            if r.status_code != 200:
+                logger.warning(
+                    "admin sendMessage failed for {}: {} {}",
+                    chat_id, r.status_code, r.text,
+                )
+    except httpx.HTTPError as e:
+        logger.warning("admin sendMessage error for {}: {}", chat_id, e)
 
 
 def _setup_logging() -> None:
@@ -281,3 +305,66 @@ async def update_blacklist(
 ) -> BlacklistResponse:
     saved = await repo.set_user_blacklist(user.id, body.words)
     return BlacklistResponse(words=saved)
+
+
+# ---------- Channel suggestion ----------
+
+
+def _normalize_channel_url(ref: str) -> tuple[str, str]:
+    """Из строки ref вытащить (display_label, callback_ref).
+    callback_ref передаётся в callback_data — должен влезть в 64 байта,
+    поэтому берём username или числовой id, без https://t.me/ префикса."""
+    s = ref.strip()
+    # Принимаем https://t.me/username, t.me/username, @username, https://t.me/c/<id>[/...]
+    cleaned = s
+    for prefix in ("https://t.me/", "http://t.me/", "t.me/"):
+        if cleaned.startswith(prefix):
+            cleaned = cleaned[len(prefix):]
+            break
+    cleaned = cleaned.strip("/")
+    if cleaned.startswith("c/"):
+        chat_part = cleaned[2:].split("/", 1)[0]
+        return f"https://t.me/c/{chat_part}", f"c/{chat_part}"
+    cleaned = cleaned.lstrip("@")
+    return f"https://t.me/{cleaned}", cleaned
+
+
+@app.post("/api/channel-suggestion")
+async def channel_suggestion(
+    body: ChannelSuggestionRequest,
+    user: TelegramUser = Depends(current_user),
+) -> dict:
+    """Юзер предлагает канал админу. Шлёт всем админам HTML-сообщение
+    с двумя inline-кнопками (Добавить / Не добавлять)."""
+    display_url, ref_short = _normalize_channel_url(body.ref)
+    user_link = (
+        f"https://t.me/{user.username}" if user.username else f"tg://user?id={user.id}"
+    )
+    user_label = f"@{user.username}" if user.username else f"id {user.id}"
+    comment_block = (
+        f"\n<i>Комментарий:</i> {body.comment}" if body.comment else ""
+    )
+    text = (
+        f"📨 <b>Новое предложение канала</b>\n\n"
+        f"<b>Канал:</b> <a href=\"{display_url}\">{display_url}</a>\n"
+        f"<b>От:</b> <a href=\"{user_link}\">{user_label}</a>"
+        f"{comment_block}"
+    )
+
+    # callback_data ограничен 64 байтами. ref_short может быть длинным
+    # username — обрежем до безопасного размера. Если не влезает в
+    # callback — приложим к тексту, чтобы админ мог скопировать вручную.
+    cb_safe = ref_short[:50]  # запас на префикс "csg:add:"
+    reply_markup = {
+        "inline_keyboard": [
+            [
+                {"text": "✅ Добавить", "callback_data": f"csg:add:{cb_safe}"},
+                {"text": "❌ Не добавлять", "callback_data": f"csg:skip:{cb_safe}"},
+            ]
+        ]
+    }
+    sent = 0
+    for admin_id in settings.admin_ids:
+        await _notify_admin_html(admin_id, text, reply_markup)
+        sent += 1
+    return {"ok": True, "notified_admins": sent}

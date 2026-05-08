@@ -348,3 +348,12 @@ class BlacklistUpdate(BaseModel):
     """PUT /api/blacklist body — полная замена списка."""
 
     words: list[str] = Field(default_factory=list, max_length=200)
+
+
+# ---------- channel suggestion ----------
+
+class ChannelSuggestionRequest(BaseModel):
+    """POST /api/channel-suggestion body — юзер предлагает канал админу."""
+
+    ref: str = Field(..., min_length=1, max_length=200)
+    comment: Optional[str] = Field(default=None, max_length=500)

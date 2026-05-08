@@ -181,6 +181,13 @@ export const api = {
       body: JSON.stringify({ words }),
     }),
 
+  // Channel suggestion
+  suggestChannel: (ref: string, comment?: string) =>
+    request<{ ok: boolean; notified_admins: number }>("/channel-suggestion", {
+      method: "POST",
+      body: JSON.stringify({ ref, comment: comment || null }),
+    }),
+
   // Admin
   adminStats: () => request<AdminStats>("/admin/stats"),
   adminProfiles: (limit = 50, offset = 0) =>

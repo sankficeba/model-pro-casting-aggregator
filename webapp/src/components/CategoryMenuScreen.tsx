@@ -1,4 +1,4 @@
-import { CheckCircle2, AlertCircle, Settings, ShieldCheck, Plus, Ban } from "lucide-react";
+import { CheckCircle2, AlertCircle, Settings, ShieldCheck, Plus, Ban, Megaphone } from "lucide-react";
 import type { CategoryCode, Subscription } from "../types";
 import { CATEGORY_LABELS } from "../types";
 
@@ -8,6 +8,7 @@ interface Props {
   onAddCategory: () => void;
   onSettings: () => void;
   onBlacklist: () => void;
+  onSuggestChannel: () => void;
   onAdmin?: () => void;
   isAdmin?: boolean;
 }
@@ -18,6 +19,7 @@ export function CategoryMenuScreen({
   onAddCategory,
   onSettings,
   onBlacklist,
+  onSuggestChannel,
   onAdmin,
   isAdmin,
 }: Props) {
@@ -94,13 +96,22 @@ export function CategoryMenuScreen({
         </button>
       )}
 
-      <button
-        onClick={onBlacklist}
-        className="w-full mt-4 py-3 rounded-card border border-bg-card text-slate-300 hover:border-accent hover:text-accent transition flex items-center justify-center gap-2"
-      >
-        <Ban className="w-4 h-4" />
-        Чёрный список слов
-      </button>
+      <div className="mt-4 grid grid-cols-1 gap-2">
+        <button
+          onClick={onBlacklist}
+          className="w-full py-3 rounded-card border border-bg-card text-slate-300 hover:border-accent hover:text-accent transition flex items-center justify-center gap-2"
+        >
+          <Ban className="w-4 h-4" />
+          Чёрный список слов
+        </button>
+        <button
+          onClick={onSuggestChannel}
+          className="w-full py-3 rounded-card border border-bg-card text-slate-300 hover:border-accent hover:text-accent transition flex items-center justify-center gap-2"
+        >
+          <Megaphone className="w-4 h-4" />
+          Предложить канал
+        </button>
+      </div>
     </div>
   );
 }
