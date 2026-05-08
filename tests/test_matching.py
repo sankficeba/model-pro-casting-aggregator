@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from db.matching import matches
+from db.matching import _check_creative_match as matches
 from models.schemas import PostExtraction, VacancyExtraction
 
 

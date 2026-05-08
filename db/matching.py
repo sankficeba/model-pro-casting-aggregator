@@ -1,17 +1,35 @@
-"""Сопоставление извлечённого объявления с анкетами пользователей."""
+"""Сопоставление извлечённого объявления с анкетами пользователей.
+
+Per-category архитектура: для каждой категории (creative/event/general/admin)
+своя функция `_check_<cat>_match` с правилами + загрузка соответствующей
+профиль-таблицы. Диспатчер `find_matching_vacancies` определяет
+effective_cat по vacancy.category или post.category и вызывает нужный matcher.
+"""
 from __future__ import annotations
 
-from typing import Iterable
+from typing import Iterable, Optional
 
 from sqlalchemy import select
-from sqlalchemy.orm import selectinload
 
-from db.models import CreativeProfile, Message, UserCategorySubscription, Vacancy
+from db.models import (
+    AdminProfile,
+    CreativeProfile,
+    EventProfile,
+    GeneralProfile,
+    Message,
+    UserCategorySubscription,
+    Vacancy,
+)
 from db.session import AsyncSessionLocal
 from models.schemas import PostExtraction, VacancyExtraction
 
 # Минимальная уверенность LLM для рассылки. Ниже — игнорируем сообщение.
 MIN_CONFIDENCE = 0.5
+
+
+# ============================================================================
+# Низкоуровневые помощники
+# ============================================================================
 
 
 def _ranges_overlap(a_lo: int, a_hi: int, b_lo: int, b_hi: int) -> bool:
@@ -22,77 +40,214 @@ def _intersect(a: Iterable[str], b: Iterable[str]) -> bool:
     return bool(set(a) & set(b))
 
 
-def matches(profile: CreativeProfile, post: PostExtraction, vacancy: VacancyExtraction) -> bool:
-    """True, если анкета подходит под конкретную вакансию в этом посте.
+def _city_ok(post_city: Optional[str], profile_city: Optional[str], travel: bool) -> bool:
+    """Город матчится либо когда совпадает, либо когда юзер готов к разъездам.
+    Если в посте город не указан или у юзера нет — фильтр не применяется."""
+    if not post_city or not profile_city:
+        return True
+    if post_city.lower() == profile_city.lower():
+        return True
+    return travel
 
-    project_types и city берём с уровня поста (общие);
-    gender / age / role_types / rate — с уровня вакансии.
-    Если параметр не указан в объявлении — фильтр по нему не применяется.
-    """
-    # Пол (per-vacancy)
-    if vacancy.gender and profile.gender and vacancy.gender != profile.gender:
+
+def _gender_ok(vacancy_gender: Optional[str], profile_gender: Optional[str]) -> bool:
+    """Если в вакансии указан конкретный пол — должен совпадать с профилем."""
+    if not vacancy_gender:
+        return True
+    if not profile_gender:
+        return True
+    return vacancy_gender == profile_gender
+
+
+def _rate_ok(vacancy_rate: Optional[int], profile_min_rate: Optional[int]) -> bool:
+    """Ставка вакансии должна быть >= минимальной ставки юзера, если оба указаны."""
+    if vacancy_rate is None or profile_min_rate is None:
+        return True
+    return vacancy_rate >= profile_min_rate
+
+
+def _age_overlaps(
+    vacancy_min: Optional[int],
+    vacancy_max: Optional[int],
+    profile_min: Optional[int],
+    profile_max: Optional[int],
+) -> bool:
+    """Диапазон возраста вакансии пересекается с возрастом профиля.
+    Если у вакансии нет возрастных требований — пропускаем."""
+    if vacancy_min is None and vacancy_max is None:
+        return True
+    v_lo = vacancy_min if vacancy_min is not None else 0
+    v_hi = vacancy_max if vacancy_max is not None else 120
+    p_lo = profile_min if profile_min is not None else 0
+    p_hi = profile_max if profile_max is not None else 120
+    return _ranges_overlap(v_lo, v_hi, p_lo, p_hi)
+
+
+def _height_ok(vacancy_min: Optional[int], vacancy_max: Optional[int], profile_height: Optional[int]) -> bool:
+    if vacancy_min is None and vacancy_max is None:
+        return True
+    if profile_height is None:
+        return True  # в профиле не указан — не фильтруем
+    v_lo = vacancy_min if vacancy_min is not None else 0
+    v_hi = vacancy_max if vacancy_max is not None else 999
+    return v_lo <= profile_height <= v_hi
+
+
+# ============================================================================
+# Per-category matchers
+# ============================================================================
+
+
+def _check_creative_match(profile: CreativeProfile, post: PostExtraction, vacancy: VacancyExtraction) -> bool:
+    """True, если creative-профиль подходит под вакансию.
+
+    Использует play_age_min/max (играемый возраст). Учитывает project_types
+    (post-level) и role_types (per-vacancy). Все физические параметры
+    опциональны — фильтруются только если LLM их извлёк."""
+    if not _gender_ok(vacancy.gender, profile.gender):
         return False
-
-    # Возраст (per-vacancy)
-    if vacancy.age_min is not None or vacancy.age_max is not None:
-        msg_lo = vacancy.age_min if vacancy.age_min is not None else 0
-        msg_hi = vacancy.age_max if vacancy.age_max is not None else 120
-        prof_lo = profile.play_age_min if profile.play_age_min is not None else 0
-        prof_hi = profile.play_age_max if profile.play_age_max is not None else 120
-        if not _ranges_overlap(msg_lo, msg_hi, prof_lo, prof_hi):
-            return False
-
-    # Типы проектов (post-level)
+    if not _age_overlaps(vacancy.age_min, vacancy.age_max, profile.play_age_min, profile.play_age_max):
+        return False
     if post.project_types and profile.project_types:
         if not _intersect(post.project_types, profile.project_types):
             return False
-
-    # Типы ролей (per-vacancy)
     if vacancy.role_types and profile.role_types:
         if not _intersect(vacancy.role_types, profile.role_types):
             return False
-
-    # Ставка (per-vacancy)
-    if vacancy.rate is not None and profile.min_rate is not None and vacancy.rate < profile.min_rate:
+    if not _rate_ok(vacancy.rate, profile.min_rate):
         return False
-
-    # Этническая внешность (per-vacancy): если в вакансии указан список —
-    # анкета должна подходить хотя бы под один из перечисленных типов.
-    # Если у профиля этнос не задан — пропускаем (нет основания фильтровать).
     if vacancy.ethnicity and profile.ethnicity:
         if not _intersect(vacancy.ethnicity, profile.ethnicity):
             return False
-
-    # Рост (per-vacancy): если у вакансии указан диапазон — рост из профиля
-    # должен в него попасть. Если в профиле height_cm не задан — пропускаем.
-    if (vacancy.height_min is not None or vacancy.height_max is not None) and profile.height_cm is not None:
-        v_lo = vacancy.height_min if vacancy.height_min is not None else 0
-        v_hi = vacancy.height_max if vacancy.height_max is not None else 999
-        if not (v_lo <= profile.height_cm <= v_hi):
-            return False
-
-    # Телосложение (per-vacancy)
+    if not _height_ok(vacancy.height_min, vacancy.height_max, profile.height_cm):
+        return False
     if vacancy.body_type and profile.body_type:
         if not _intersect(vacancy.body_type, profile.body_type):
             return False
-
-    # Цвет волос (per-vacancy): в профиле один цвет, в вакансии может быть
-    # список разрешённых. Если в профиле не задан — пропускаем.
     if vacancy.hair_color and profile.hair_color:
         if profile.hair_color not in vacancy.hair_color:
             return False
-
-    # Длина волос (per-vacancy): аналогично цвету.
     if vacancy.hair_length and profile.hair_length:
         if profile.hair_length not in vacancy.hair_length:
             return False
-
-    # Город (post-level), с поправкой на ready_for_travel
-    if post.city and profile.city:
-        if post.city.lower() != profile.city.lower() and not profile.ready_for_travel:
-            return False
-
+    if not _city_ok(post.city, profile.city, profile.ready_for_travel):
+        return False
     return True
+
+
+def _check_event_match(profile: EventProfile, post: PostExtraction, vacancy: VacancyExtraction) -> bool:
+    """True, если event-профиль подходит под вакансию.
+
+    Использует actual_age (актуальный, single value). Обязательная проверка
+    work_types (если в вакансии указаны). Физические параметры опциональны."""
+    if vacancy.work_types and profile.work_types:
+        if not _intersect(vacancy.work_types, profile.work_types):
+            return False
+    if not _gender_ok(vacancy.gender, profile.gender):
+        return False
+    if not _age_overlaps(vacancy.age_min, vacancy.age_max, profile.actual_age, profile.actual_age):
+        return False
+    if not _rate_ok(vacancy.rate, profile.min_rate):
+        return False
+    if vacancy.ethnicity and profile.ethnicity:
+        if not _intersect(vacancy.ethnicity, profile.ethnicity):
+            return False
+    if not _height_ok(vacancy.height_min, vacancy.height_max, profile.height_cm):
+        return False
+    if vacancy.body_type and profile.body_type:
+        if not _intersect(vacancy.body_type, profile.body_type):
+            return False
+    if vacancy.hair_color and profile.hair_color:
+        if profile.hair_color not in vacancy.hair_color:
+            return False
+    if vacancy.hair_length and profile.hair_length:
+        if profile.hair_length not in vacancy.hair_length:
+            return False
+    if not _city_ok(post.city, profile.city, profile.ready_for_travel):
+        return False
+    return True
+
+
+def _check_general_match(profile: GeneralProfile, post: PostExtraction, vacancy: VacancyExtraction) -> bool:
+    """True, если general-профиль подходит под вакансию.
+
+    Только work_types + actual_age + gender + rate + city.
+    physical_fitness НЕ матчится (поле осталось для UI/будущего)."""
+    if vacancy.work_types and profile.work_types:
+        if not _intersect(vacancy.work_types, profile.work_types):
+            return False
+    if not _gender_ok(vacancy.gender, profile.gender):
+        return False
+    if not _age_overlaps(vacancy.age_min, vacancy.age_max, profile.actual_age, profile.actual_age):
+        return False
+    if not _rate_ok(vacancy.rate, profile.min_rate):
+        return False
+    if not _city_ok(post.city, profile.city, profile.ready_for_travel):
+        return False
+    return True
+
+
+def _check_admin_match(profile: AdminProfile, post: PostExtraction, vacancy: VacancyExtraction) -> bool:
+    """True, если admin-профиль подходит под вакансию.
+
+    Только work_types + actual_age + rate + city.
+    gender и education НЕ матчятся (gender обычно не указывается, education
+    оставлено в UI для будущего)."""
+    if vacancy.work_types and profile.work_types:
+        if not _intersect(vacancy.work_types, profile.work_types):
+            return False
+    if not _age_overlaps(vacancy.age_min, vacancy.age_max, profile.actual_age, profile.actual_age):
+        return False
+    if not _rate_ok(vacancy.rate, profile.min_rate):
+        return False
+    if not _city_ok(post.city, profile.city, profile.ready_for_travel):
+        return False
+    return True
+
+
+# ============================================================================
+# Диспатчер
+# ============================================================================
+
+
+def _resolve_effective_category(
+    post: PostExtraction, vacancy: VacancyExtraction
+) -> Optional[str]:
+    """Resolve effective category: vacancy.category overrides post.category."""
+    return vacancy.category or post.category
+
+
+async def _load_profiles_for_category(category: str) -> list:
+    """Загружает профили нужной таблицы с фильтром по UserCategorySubscription."""
+    profile_classes = {
+        "creative": CreativeProfile,
+        "event": EventProfile,
+        "general": GeneralProfile,
+        "admin": AdminProfile,
+    }
+    Profile = profile_classes[category]
+    async with AsyncSessionLocal() as session:
+        res = await session.execute(
+            select(Profile)
+            .join(
+                UserCategorySubscription,
+                UserCategorySubscription.user_id == Profile.user_id,
+            )
+            .where(
+                Profile.completed_at.is_not(None),
+                UserCategorySubscription.category == category,
+                UserCategorySubscription.enabled.is_(True),
+            )
+        )
+        return list(res.scalars().all())
+
+
+_CATEGORY_MATCHERS = {
+    "creative": _check_creative_match,
+    "event": _check_event_match,
+    "general": _check_general_match,
+    "admin": _check_admin_match,
+}
 
 
 async def find_matching_vacancies(
@@ -101,36 +256,37 @@ async def find_matching_vacancies(
 ) -> dict[int, list[int]]:
     """Возвращает {user_id: [индексы подошедших вакансий в списке `vacancies`]}.
 
-    Гейтим по is_casting/confidence на уровне поста.
-    Учитываем только анкеты creative-категории с completed_at IS NOT NULL,
-    у которых подписка включена (UserCategorySubscription.enabled=TRUE).
-    Индексы соответствуют позициям в `vacancies`, что 1-в-1 совпадает с idx
-    в БД, потому что Vacancy сохраняется с idx=enumerate(vacancies).
+    Гейтит по is_casting/confidence на уровне поста.
+    Для каждой вакансии resolve effective_category (vacancy.category or
+    post.category), загружает соответствующую профиль-таблицу и проверяет
+    per-category matcher.
     """
     if not post.is_casting or post.confidence < MIN_CONFIDENCE or not vacancies:
         return {}
 
-    async with AsyncSessionLocal() as session:
-        res = await session.execute(
-            select(CreativeProfile)
-            .join(
-                UserCategorySubscription,
-                UserCategorySubscription.user_id == CreativeProfile.user_id,
-            )
-            .where(
-                CreativeProfile.completed_at.is_not(None),
-                UserCategorySubscription.category == "creative",
-                UserCategorySubscription.enabled.is_(True),
-            )
-        )
-        profiles = res.scalars().all()
-
+    # Кэш загруженных профилей по категории — чтобы не грузить дважды,
+    # если в посте несколько вакансий одной категории.
+    profiles_cache: dict[str, list] = {}
     out: dict[int, list[int]] = {}
-    for p in profiles:
-        hit_idxs = [i for i, v in enumerate(vacancies) if matches(p, post, v)]
-        if hit_idxs:
-            out[p.user_id] = hit_idxs
+
+    for idx, v in enumerate(vacancies):
+        eff_cat = _resolve_effective_category(post, v)
+        if eff_cat is None:
+            continue
+        matcher = _CATEGORY_MATCHERS.get(eff_cat)
+        if matcher is None:
+            continue
+        if eff_cat not in profiles_cache:
+            profiles_cache[eff_cat] = await _load_profiles_for_category(eff_cat)
+        for profile in profiles_cache[eff_cat]:
+            if matcher(profile, post, v):
+                out.setdefault(profile.user_id, []).append(idx)
     return out
+
+
+# ============================================================================
+# ORM → Pydantic конвертер (используется в duplicate-пути userbot._handle_message)
+# ============================================================================
 
 
 def _orm_to_extractions(
@@ -139,11 +295,6 @@ def _orm_to_extractions(
 ) -> tuple[PostExtraction, list[VacancyExtraction]]:
     """Конвертер ORM Message + Vacancy → Pydantic PostExtraction +
     VacancyExtraction.
-
-    Используется в duplicate-пути userbot._handle_message: когда
-    повторный прилёт того же текста обнаружен через find_canonical,
-    мы поднимаем canonical из БД и прогоняем матчинг по его уже
-    извлечённым вакансиям, не дёргая LLM повторно.
 
     Поля 1:1 совпадают между ORM и Pydantic — это просто перекладка.
     """
