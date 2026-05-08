@@ -9,6 +9,18 @@ html, body, #root {
   font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
 
+/* Telegram Mini App в fullscreen-режиме располагается под системным
+ * статус-баром и кнопками самого Telegram (Close / expand / menu).
+ * applyTelegramChrome() в src/telegram.ts выставляет CSS-переменные
+ * --tg-safe-top/bottom/left/right из tg.safeAreaInset + contentSafeAreaInset.
+ * Дефолт 0 — для случая когда Mini App открыт не в fullscreen или не в Telegram. */
+#root {
+  padding-top: var(--tg-safe-top, 0px);
+  padding-bottom: var(--tg-safe-bottom, 0px);
+  padding-left: var(--tg-safe-left, 0px);
+  padding-right: var(--tg-safe-right, 0px);
+}
+
 /* Скрываем нативный outline у браузеров — мы рисуем свой */
 *:focus { outline: none; }
 
