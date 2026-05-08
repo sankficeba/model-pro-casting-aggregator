@@ -207,13 +207,13 @@ export default function App() {
   return (
     <SuggestionsProvider>
       <BackgroundShapes />
-      <div className={showBanner ? "pt-14" : ""}>{renderScreen()}</div>
       {showBanner && (
         <SubscriptionBanner
           status={subStatus}
           onClick={() => setScreen({ kind: "subscription" })}
         />
       )}
+      {renderScreen()}
     </SuggestionsProvider>
   );
 }
