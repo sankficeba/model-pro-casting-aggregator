@@ -37,6 +37,11 @@ class User(Base):
     last_active: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+    # Список слов/фраз, при наличии которых в тексте поста уведомление
+    # не отправляется юзеру. Сравнение case-insensitive.
+    blacklisted_words: Mapped[list[str]] = mapped_column(
+        ARRAY(Text), default=list, server_default="{}", nullable=False
+    )
 
     filters: Mapped[list["Filter"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"

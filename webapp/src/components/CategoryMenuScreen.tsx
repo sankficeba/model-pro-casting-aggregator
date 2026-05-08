@@ -1,4 +1,4 @@
-import { CheckCircle2, AlertCircle, Settings, ShieldCheck, Plus } from "lucide-react";
+import { CheckCircle2, AlertCircle, Settings, ShieldCheck, Plus, Ban } from "lucide-react";
 import type { CategoryCode, Subscription } from "../types";
 import { CATEGORY_LABELS } from "../types";
 
@@ -7,6 +7,7 @@ interface Props {
   onOpenForm: (c: CategoryCode) => void;
   onAddCategory: () => void;
   onSettings: () => void;
+  onBlacklist: () => void;
   onAdmin?: () => void;
   isAdmin?: boolean;
 }
@@ -16,6 +17,7 @@ export function CategoryMenuScreen({
   onOpenForm,
   onAddCategory,
   onSettings,
+  onBlacklist,
   onAdmin,
   isAdmin,
 }: Props) {
@@ -91,6 +93,14 @@ export function CategoryMenuScreen({
           Добавить категорию
         </button>
       )}
+
+      <button
+        onClick={onBlacklist}
+        className="w-full mt-4 py-3 rounded-card border border-bg-card text-slate-300 hover:border-accent hover:text-accent transition flex items-center justify-center gap-2"
+      >
+        <Ban className="w-4 h-4" />
+        Чёрный список слов
+      </button>
     </div>
   );
 }

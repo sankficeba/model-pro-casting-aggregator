@@ -14,6 +14,8 @@ from api.auth import TelegramUser, current_user, is_admin_user
 from api.reference_data import all_refs
 from api.schemas import (
     AdminProfileSchema,
+    BlacklistResponse,
+    BlacklistUpdate,
     CreativeProfileSchema,
     EventProfileSchema,
     GeneralProfileSchema,
@@ -261,3 +263,21 @@ async def complete_category_profile_endpoint(
         raise HTTPException(status_code=400, detail="Profile not found")
     await _notify_user(user.id, _category_completion_text(category, was_first_time))
     return p
+
+
+# ---------- Blacklist ----------
+
+
+@app.get("/api/blacklist", response_model=BlacklistResponse)
+async def get_blacklist(user: TelegramUser = Depends(current_user)) -> BlacklistResponse:
+    words = await repo.get_user_blacklist(user.id)
+    return BlacklistResponse(words=words)
+
+
+@app.put("/api/blacklist", response_model=BlacklistResponse)
+async def update_blacklist(
+    body: BlacklistUpdate,
+    user: TelegramUser = Depends(current_user),
+) -> BlacklistResponse:
+    saved = await repo.set_user_blacklist(user.id, body.words)
+    return BlacklistResponse(words=saved)
