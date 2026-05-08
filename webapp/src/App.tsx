@@ -8,6 +8,7 @@ import {
 } from "./telegram";
 import { AdminDashboard } from "./components/AdminDashboard";
 import { BackgroundShapes } from "./components/BackgroundShapes";
+import { BlacklistScreen } from "./components/BlacklistScreen";
 import { CategorySurveyScreen } from "./components/CategorySurveyScreen";
 import { CategoryMenuScreen } from "./components/CategoryMenuScreen";
 import { SettingsScreen } from "./components/SettingsScreen";
@@ -24,6 +25,7 @@ type Screen =
   | { kind: "menu" }
   | { kind: "form"; category: CategoryCode }
   | { kind: "settings" }
+  | { kind: "blacklist" }
   | { kind: "addCategory" }
   | { kind: "admin" };
 
@@ -116,8 +118,13 @@ export default function App() {
           onAddCategory={() => setScreen({ kind: "addCategory" })}
           onSettings={() => setScreen({ kind: "settings" })}
           onAdmin={() => setScreen({ kind: "admin" })}
+          onBlacklist={() => setScreen({ kind: "blacklist" })}
         />
       );
+    }
+
+    if (screen.kind === "blacklist") {
+      return <BlacklistScreen onBack={goToMenu} />;
     }
 
     if (screen.kind === "form") {

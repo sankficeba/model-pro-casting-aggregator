@@ -710,6 +710,61 @@ async def complete_category_profile(
         return _profile_row_to_dict(row), was_first_time
 
 
+async def get_user_blacklist(user_id: int) -> list[str]:
+    """Список запрещённых слов/фраз юзера."""
+    async with AsyncSessionLocal() as session:
+        res = await session.execute(
+            select(User.blacklisted_words).where(User.id == user_id)
+        )
+        words = res.scalar_one_or_none()
+        return list(words or [])
+
+
+async def set_user_blacklist(user_id: int, words: list[str]) -> list[str]:
+    """Полная замена blacklist'а юзера. Чистит дубли и пустые строки."""
+    seen: set[str] = set()
+    cleaned: list[str] = []
+    for w in words:
+        s = (w or "").strip()
+        if not s:
+            continue
+        key = s.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        cleaned.append(s)
+    async with AsyncSessionLocal() as session:
+        await upsert_user_in_session(session, user_id)
+        await session.execute(
+            update(User).where(User.id == user_id).values(blacklisted_words=cleaned)
+        )
+        await session.commit()
+    return cleaned
+
+
+async def filter_users_by_blacklist(user_ids: list[int], text: str) -> list[int]:
+    """Возвращает user_ids, у которых нет запрещённых слов в тексте.
+    Сравнение case-insensitive."""
+    if not user_ids:
+        return []
+    text_lower = (text or "").lower()
+    async with AsyncSessionLocal() as session:
+        res = await session.execute(
+            select(User.id, User.blacklisted_words).where(User.id.in_(user_ids))
+        )
+        ok: list[int] = []
+        for uid, words in res.all():
+            blocked = False
+            for w in (words or []):
+                ws = (w or "").strip().lower()
+                if ws and ws in text_lower:
+                    blocked = True
+                    break
+            if not blocked:
+                ok.append(uid)
+        return ok
+
+
 async def list_legacy_unmigrated_users() -> list[int]:
     """Список user_id юзеров, заполнивших старую actor_profile анкету,
     но ещё не выбравших ни одну из новых категорий.

@@ -173,6 +173,14 @@ export const api = {
   getSuggestions: () =>
     request<{ suggestions: Record<string, unknown[]> }>("/profile/suggestions"),
 
+  // Blacklist
+  getBlacklist: () => request<{ words: string[] }>("/blacklist"),
+  putBlacklist: (words: string[]) =>
+    request<{ words: string[] }>("/blacklist", {
+      method: "PUT",
+      body: JSON.stringify({ words }),
+    }),
+
   // Admin
   adminStats: () => request<AdminStats>("/admin/stats"),
   adminProfiles: (limit = 50, offset = 0) =>

@@ -333,3 +333,18 @@ class SuggestionsResponse(BaseModel):
     список ранее введённых юзером значений (dedupe + sort by updated_at desc)."""
 
     suggestions: dict[str, list]
+
+
+# ---------- blacklist ----------
+
+class BlacklistResponse(BaseModel):
+    """Список запрещённых слов/фраз юзера. При наличии любого в тексте
+    поста уведомление не отправляется."""
+
+    words: list[str]
+
+
+class BlacklistUpdate(BaseModel):
+    """PUT /api/blacklist body — полная замена списка."""
+
+    words: list[str] = Field(default_factory=list, max_length=200)

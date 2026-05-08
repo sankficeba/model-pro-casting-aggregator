@@ -233,6 +233,21 @@ class Userbot:
             logger.debug("Нет подходящих анкет для сообщения {}", message_db_id)
             return
 
+        # Применяем per-user blacklist по raw тексту поста: если у юзера
+        # есть запрещённые слова и они встречаются в посте — пропускаем.
+        raw_text = getattr(message, "message", "") or ""
+        allowed_users = set(
+            await repository.filter_users_by_blacklist(list(user_to_idxs.keys()), raw_text)
+        )
+        blocked_count = len(user_to_idxs) - len(allowed_users)
+        if blocked_count:
+            logger.info(
+                "Blacklist отсёк {} юзеров для msg {}", blocked_count, message_db_id,
+            )
+        user_to_idxs = {uid: idxs for uid, idxs in user_to_idxs.items() if uid in allowed_users}
+        if not user_to_idxs:
+            return
+
         for user_id, hit_idxs in user_to_idxs.items():
             matched_db_ids = [vacancy_ids[i] for i in hit_idxs if i < len(vacancy_ids)]
             if not matched_db_ids:
