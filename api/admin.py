@@ -88,13 +88,18 @@ class AdminStats(BaseModel):
 BroadcastFilter = Literal["all", "creative", "event", "general", "admin"]
 
 
+class BroadcastFilterBody(BaseModel):
+    filter: BroadcastFilter = "all"
+    age_min: Optional[int] = Field(default=None, ge=0, le=120)
+    age_max: Optional[int] = Field(default=None, ge=0, le=120)
+    height_min: Optional[int] = Field(default=None, ge=50, le=250)
+    height_max: Optional[int] = Field(default=None, ge=50, le=250)
+    name_query: Optional[str] = Field(default=None, max_length=128)
+
+
 class BroadcastAudienceResponse(BaseModel):
     filter: BroadcastFilter
     count: int
-
-
-class BroadcastStartRequest(BaseModel):
-    filter: BroadcastFilter
 
 
 class BroadcastStartResponse(BaseModel):
@@ -138,43 +143,78 @@ async def stats(_: TelegramUser = Depends(admin_user)) -> AdminStats:
     )
 
 
-@router.get("/broadcast/audience", response_model=BroadcastAudienceResponse)
+def _filter_kwargs(body: BroadcastFilterBody) -> dict:
+    return {
+        "age_min": body.age_min,
+        "age_max": body.age_max,
+        "height_min": body.height_min,
+        "height_max": body.height_max,
+        "name_query": body.name_query,
+    }
+
+
+def _filter_summary(body: BroadcastFilterBody) -> list[str]:
+    parts: list[str] = []
+    if body.age_min is not None or body.age_max is not None:
+        if body.age_min is not None and body.age_max is not None:
+            parts.append(f"возраст {body.age_min}–{body.age_max}")
+        elif body.age_min is not None:
+            parts.append(f"возраст от {body.age_min}")
+        else:
+            parts.append(f"возраст до {body.age_max}")
+    if body.height_min is not None or body.height_max is not None:
+        if body.height_min is not None and body.height_max is not None:
+            parts.append(f"рост {body.height_min}–{body.height_max} см")
+        elif body.height_min is not None:
+            parts.append(f"рост от {body.height_min} см")
+        else:
+            parts.append(f"рост до {body.height_max} см")
+    if body.name_query:
+        parts.append(f'ФИО содержит «{body.name_query}»')
+    return parts
+
+
+@router.post("/broadcast/audience", response_model=BroadcastAudienceResponse)
 async def broadcast_audience(
-    filter: BroadcastFilter = Query("all"),
+    body: BroadcastFilterBody,
     _: TelegramUser = Depends(admin_user),
 ) -> BroadcastAudienceResponse:
-    count = await repo.count_broadcast_audience(filter)
-    return BroadcastAudienceResponse(filter=filter, count=count)
+    count = await repo.count_broadcast_audience(body.filter, **_filter_kwargs(body))
+    return BroadcastAudienceResponse(filter=body.filter, count=count)
 
 
 @router.post("/broadcast/start", response_model=BroadcastStartResponse)
 async def broadcast_start(
-    body: BroadcastStartRequest,
+    body: BroadcastFilterBody,
     user: TelegramUser = Depends(admin_user),
 ) -> BroadcastStartResponse:
     """Поставить у админа pending-state и попросить его прислать в чат
     сообщение для рассылки. Mini App после этого закрывается."""
-    audience = await repo.count_broadcast_audience(body.filter)
+    audience = await repo.count_broadcast_audience(body.filter, **_filter_kwargs(body))
     if audience == 0:
         raise HTTPException(
             status_code=400,
             detail="В выбранной аудитории сейчас 0 пользователей.",
         )
-    await repo.set_broadcast_pending(user.id, body.filter)
+    # Сохраняем фильтры в БД, чтобы бот при копировании сообщения знал
+    # точную аудиторию (а не пересчитывал её по одному только scope).
+    await repo.set_broadcast_pending(user.id, body.filter, **_filter_kwargs(body))
 
-    label = {
+    scope_label = {
         "all": "всем пользователям",
         "creative": "юзерам с подпиской «Творческие позиции»",
         "event": "юзерам с подпиской «Event-персонал»",
         "general": "юзерам с подпиской «Разнорабочие»",
         "admin": "юзерам с подпиской «Администрирование»",
     }[body.filter]
+    extras = _filter_summary(body)
+    extras_str = (" (" + ", ".join(extras) + ")") if extras else ""
 
     text = (
         "📢 <b>Готово к рассылке</b>\n\n"
         f"Сейчас отправь следующим сообщением то, что хочешь разослать "
-        f"<b>{label}</b> ({audience} чел.). Можно текст, фото, видео, "
-        f"гифку — всё с форматированием и премиум-эмодзи.\n\n"
+        f"<b>{scope_label}</b>{extras_str} — {audience} чел. Можно текст, фото, "
+        f"видео, гифку с форматированием и премиум-эмодзи.\n\n"
         "Отмена: /cancel"
     )
     url = f"https://api.telegram.org/bot{settings.bot_token}/sendMessage"

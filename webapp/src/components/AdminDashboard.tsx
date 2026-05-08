@@ -21,6 +21,7 @@ import type {
   AdminProfileRow,
   AdminStats,
   BroadcastFilter,
+  BroadcastFilterBody,
 } from "../types";
 
 type Tab = "profiles" | "messages";
@@ -168,25 +169,50 @@ function StatsBlock() {
 
 function BroadcastBlock() {
   const [filter, setFilter] = useState<BroadcastFilter>("all");
+  const [ageMin, setAgeMin] = useState<string>("");
+  const [ageMax, setAgeMax] = useState<string>("");
+  const [heightMin, setHeightMin] = useState<string>("");
+  const [heightMax, setHeightMax] = useState<string>("");
+  const [nameQuery, setNameQuery] = useState<string>("");
   const [audience, setAudience] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
+  const buildBody = (): BroadcastFilterBody => {
+    const numOrNull = (s: string) => {
+      const n = parseInt(s, 10);
+      return Number.isFinite(n) ? n : null;
+    };
+    return {
+      filter,
+      age_min: numOrNull(ageMin),
+      age_max: numOrNull(ageMax),
+      height_min: numOrNull(heightMin),
+      height_max: numOrNull(heightMax),
+      name_query: nameQuery.trim() ? nameQuery.trim() : null,
+    };
+  };
+
+  // Дебаунсим — пересчитываем аудиторию через 300 мс после ввода.
   useEffect(() => {
     setAudience(null);
     setError(null);
-    api
-      .adminBroadcastAudience(filter)
-      .then((r) => setAudience(r.count))
-      .catch((e) => setError(String(e)));
-  }, [filter]);
+    const handle = setTimeout(() => {
+      api
+        .adminBroadcastAudience(buildBody())
+        .then((r) => setAudience(r.count))
+        .catch((e) => setError(String(e)));
+    }, 300);
+    return () => clearTimeout(handle);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filter, ageMin, ageMax, heightMin, heightMax, nameQuery]);
 
   const submit = async () => {
     if (audience === null || audience === 0 || submitting) return;
     setSubmitting(true);
     setError(null);
     try {
-      await api.adminBroadcastStart(filter);
+      await api.adminBroadcastStart(buildBody());
       tg?.close();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -228,14 +254,50 @@ function BroadcastBlock() {
                 <div className="font-medium text-sm">{opt.label}</div>
                 <div className="text-xs text-slate-400 mt-0.5">{opt.hint}</div>
               </div>
-              <div className="text-xs text-slate-300 tabular-nums">
-                {filter === opt.code && audience !== null
-                  ? `${audience} чел.`
-                  : ""}
-              </div>
             </div>
           </label>
         ))}
+      </div>
+
+      <div className="space-y-2 pt-1">
+        <div className="text-xs uppercase tracking-wider text-slate-500">
+          Дополнительные фильтры
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <NumberRange
+            label="Возраст"
+            from={ageMin}
+            to={ageMax}
+            onFrom={setAgeMin}
+            onTo={setAgeMax}
+            placeholderFrom="от"
+            placeholderTo="до"
+          />
+          <NumberRange
+            label="Рост, см"
+            from={heightMin}
+            to={heightMax}
+            onFrom={setHeightMin}
+            onTo={setHeightMax}
+            placeholderFrom="от"
+            placeholderTo="до"
+          />
+        </div>
+        <label className="block">
+          <span className="text-xs text-slate-400">ФИО содержит</span>
+          <input
+            type="text"
+            value={nameQuery}
+            onChange={(e) => setNameQuery(e.target.value)}
+            placeholder="Иванов"
+            className="mt-1 w-full bg-bg-card rounded-card px-3 py-2 outline-none focus:ring-1 ring-accent text-sm"
+          />
+        </label>
+        <div className="text-xs text-slate-500">
+          Доп.фильтры применяются к юзерам с заполненной анкетой выбранной
+          категории. Рост есть только в Творческих, Event и Разнорабочих —
+          для Администрирования он игнорируется.
+        </div>
       </div>
 
       {error && (
@@ -257,6 +319,49 @@ function BroadcastBlock() {
             : `Подготовить рассылку${audience !== null ? ` (${audience})` : ""}`}
       </button>
     </section>
+  );
+}
+
+function NumberRange({
+  label,
+  from,
+  to,
+  onFrom,
+  onTo,
+  placeholderFrom,
+  placeholderTo,
+}: {
+  label: string;
+  from: string;
+  to: string;
+  onFrom: (v: string) => void;
+  onTo: (v: string) => void;
+  placeholderFrom: string;
+  placeholderTo: string;
+}) {
+  const sanitize = (v: string) => v.replace(/[^\d]/g, "");
+  return (
+    <label className="block">
+      <span className="text-xs text-slate-400">{label}</span>
+      <div className="mt-1 flex gap-1">
+        <input
+          type="text"
+          inputMode="numeric"
+          value={from}
+          onChange={(e) => onFrom(sanitize(e.target.value))}
+          placeholder={placeholderFrom}
+          className="w-full bg-bg-card rounded-card px-3 py-2 outline-none focus:ring-1 ring-accent text-sm tabular-nums"
+        />
+        <input
+          type="text"
+          inputMode="numeric"
+          value={to}
+          onChange={(e) => onTo(sanitize(e.target.value))}
+          placeholder={placeholderTo}
+          className="w-full bg-bg-card rounded-card px-3 py-2 outline-none focus:ring-1 ring-accent text-sm tabular-nums"
+        />
+      </div>
+    </label>
   );
 }
 

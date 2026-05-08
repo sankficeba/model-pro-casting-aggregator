@@ -93,6 +93,15 @@ export interface AdminStats {
 
 export type BroadcastFilter = "all" | "creative" | "event" | "general" | "admin";
 
+export interface BroadcastFilterBody {
+  filter: BroadcastFilter;
+  age_min?: number | null;
+  age_max?: number | null;
+  height_min?: number | null;
+  height_max?: number | null;
+  name_query?: string | null;
+}
+
 export interface BroadcastAudience {
   filter: BroadcastFilter;
   count: number;

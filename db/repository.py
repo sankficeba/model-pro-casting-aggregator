@@ -1011,9 +1011,30 @@ async def mark_daily_digest_sent(user_id: int) -> None:
 VALID_BROADCAST_FILTERS = {"all", "creative", "event", "general", "admin"}
 
 
-async def set_broadcast_pending(user_id: int, filter_code: str) -> None:
+async def set_broadcast_pending(
+    user_id: int,
+    filter_code: str,
+    *,
+    age_min: int | None = None,
+    age_max: int | None = None,
+    height_min: int | None = None,
+    height_max: int | None = None,
+    name_query: str | None = None,
+) -> None:
     if filter_code not in VALID_BROADCAST_FILTERS:
         raise ValueError(f"Invalid broadcast filter: {filter_code}")
+    payload: dict = {}
+    for key, val in (
+        ("age_min", age_min),
+        ("age_max", age_max),
+        ("height_min", height_min),
+        ("height_max", height_max),
+    ):
+        if val is not None:
+            payload[key] = int(val)
+    nq = (name_query or "").strip()
+    if nq:
+        payload["name_query"] = nq
     async with AsyncSessionLocal() as session:
         await upsert_user_in_session(session, user_id)
         await session.execute(
@@ -1022,17 +1043,28 @@ async def set_broadcast_pending(user_id: int, filter_code: str) -> None:
             .values(
                 broadcast_pending_filter=filter_code,
                 broadcast_pending_at=datetime.now(timezone.utc),
+                broadcast_pending_payload=payload or None,
             )
         )
         await session.commit()
 
 
-async def get_broadcast_pending(user_id: int) -> Optional[str]:
+async def get_broadcast_pending(user_id: int) -> Optional[dict]:
+    """Возвращает {filter, age_min?, age_max?, height_min?, height_max?, name_query?}
+    или None, если pending-рассылки нет."""
     async with AsyncSessionLocal() as session:
         res = await session.execute(
-            select(User.broadcast_pending_filter).where(User.id == user_id)
+            select(
+                User.broadcast_pending_filter,
+                User.broadcast_pending_payload,
+            ).where(User.id == user_id)
         )
-        return res.scalar_one_or_none()
+        row = res.first()
+    if row is None or row[0] is None:
+        return None
+    payload = dict(row[1] or {})
+    payload["filter"] = row[0]
+    return payload
 
 
 async def clear_broadcast_pending(user_id: int) -> None:
@@ -1040,32 +1072,90 @@ async def clear_broadcast_pending(user_id: int) -> None:
         await session.execute(
             update(User)
             .where(User.id == user_id)
-            .values(broadcast_pending_filter=None, broadcast_pending_at=None)
+            .values(
+                broadcast_pending_filter=None,
+                broadcast_pending_at=None,
+                broadcast_pending_payload=None,
+            )
         )
         await session.commit()
 
 
-async def list_broadcast_audience(filter_code: str) -> list[int]:
-    """Список user_id для рассылки. Дедуп уже встроен (DISTINCT)."""
+async def list_broadcast_audience(
+    filter_code: str,
+    *,
+    age_min: int | None = None,
+    age_max: int | None = None,
+    height_min: int | None = None,
+    height_max: int | None = None,
+    name_query: str | None = None,
+) -> list[int]:
+    """Список user_id для рассылки.
+
+    filter_code: scope аудитории (all/creative/event/general/admin).
+    Доп.фильтры (возраст/рост/ФИО) живут в per-category профилях. Если
+    заданы — для scope=all берём union по 4 профильным таблицам с enabled
+    подпиской. Без доп.фильтров и scope=all — все юзеры из users.
+    """
     if filter_code not in VALID_BROADCAST_FILTERS:
         raise ValueError(f"Invalid broadcast filter: {filter_code}")
-    async with AsyncSessionLocal() as session:
-        if filter_code == "all":
+    name_query = (name_query or "").strip() or None
+    has_demographic = any(
+        v is not None for v in (age_min, age_max, height_min, height_max, name_query)
+    )
+    if filter_code == "all" and not has_demographic:
+        async with AsyncSessionLocal() as session:
             res = await session.execute(select(User.id))
-        else:
-            res = await session.execute(
-                select(UserCategorySubscription.user_id)
-                .where(
-                    UserCategorySubscription.category == filter_code,
-                    UserCategorySubscription.enabled.is_(True),
+            return [int(uid) for uid in res.scalars().all()]
+
+    categories = (
+        ["creative", "event", "general", "admin"]
+        if filter_code == "all"
+        else [filter_code]
+    )
+    profile_classes: dict[str, type] = {
+        "creative": CreativeProfile,
+        "event": EventProfile,
+        "general": GeneralProfile,
+        "admin": AdminProfile,
+    }
+    user_ids: set[int] = set()
+    async with AsyncSessionLocal() as session:
+        for cat in categories:
+            profile_cls = profile_classes[cat]
+            has_height = hasattr(profile_cls, "height_cm")
+            # Если задан height-фильтр, а у этой категории нет роста — пропускаем
+            if (height_min is not None or height_max is not None) and not has_height:
+                continue
+            stmt = (
+                select(profile_cls.user_id)
+                .join(
+                    UserCategorySubscription,
+                    (UserCategorySubscription.user_id == profile_cls.user_id)
+                    & (UserCategorySubscription.category == cat)
+                    & (UserCategorySubscription.enabled.is_(True)),
                 )
-                .distinct()
             )
-        return [int(uid) for uid in res.scalars().all()]
+            if age_min is not None:
+                stmt = stmt.where(profile_cls.actual_age >= age_min)
+            if age_max is not None:
+                stmt = stmt.where(profile_cls.actual_age <= age_max)
+            if height_min is not None and has_height:
+                stmt = stmt.where(profile_cls.height_cm >= height_min)
+            if height_max is not None and has_height:
+                stmt = stmt.where(profile_cls.height_cm <= height_max)
+            if name_query is not None:
+                stmt = stmt.where(profile_cls.full_name.ilike(f"%{name_query}%"))
+            res = await session.execute(stmt)
+            user_ids.update(int(uid) for uid in res.scalars().all())
+    return sorted(user_ids)
 
 
-async def count_broadcast_audience(filter_code: str) -> int:
-    return len(await list_broadcast_audience(filter_code))
+async def count_broadcast_audience(
+    filter_code: str,
+    **kwargs,
+) -> int:
+    return len(await list_broadcast_audience(filter_code, **kwargs))
 
 
 async def get_extended_admin_stats() -> dict:
