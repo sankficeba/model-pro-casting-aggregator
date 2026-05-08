@@ -11,8 +11,11 @@ from __future__ import annotations
 import argparse
 import asyncio
 import sys
+from pathlib import Path
 
-from llm.factory import get_llm_provider
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from llm.factory import get_llm_provider  # noqa: E402
 
 
 SAMPLES: dict[str, str] = {
