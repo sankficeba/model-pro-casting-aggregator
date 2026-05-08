@@ -17,6 +17,8 @@ interface Props {
   onDone: () => void;
 }
 
+const TOTAL_REQUIRED = 7;
+
 function validate(data: Data): string[] {
   const missing: string[] = [];
   if (!data.full_name?.trim()) missing.push("ФИО");
@@ -46,12 +48,15 @@ export function GeneralForm({ onDone }: Props) {
 
   if (loading || !refs) return <div className="p-6 text-slate-400">Загрузка…</div>;
 
+  const progressPct = Math.round(((TOTAL_REQUIRED - validate(data).length) / TOTAL_REQUIRED) * 100);
+
   return (
     <CategoryFormShell
       title="Анкета — Разнорабочие"
       error={error}
       saving={saving}
       onSubmit={finish}
+      progressPct={progressPct}
     >
       <section className="space-y-3">
         <h3 className="text-sm uppercase tracking-wider text-slate-500">Основная информация</h3>
