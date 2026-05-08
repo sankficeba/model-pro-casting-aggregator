@@ -45,6 +45,18 @@ class Settings(BaseSettings):
     log_level: str = Field("INFO", alias="LOG_LEVEL")
     admin_ids_raw: str = Field("", alias="ADMIN_IDS")
 
+    # Платная подписка
+    subscription_trial_days: int = Field(7, alias="SUBSCRIPTION_TRIAL_DAYS")
+    subscription_period_days: int = Field(30, alias="SUBSCRIPTION_PERIOD_DAYS")
+    subscription_price_rub: int = Field(499, alias="SUBSCRIPTION_PRICE_RUB")
+    subscription_return_url: str = Field("", alias="SUBSCRIPTION_RETURN_URL")
+
+    # YooKassa
+    yookassa_shop_id: str = Field("", alias="YOOKASSA_SHOP_ID")
+    yookassa_secret_key: str = Field("", alias="YOOKASSA_SECRET_KEY")
+    # Доп. shared-secret в URL вебхука для отсева левых запросов до парсинга.
+    yookassa_webhook_token: str = Field("", alias="YOOKASSA_WEBHOOK_TOKEN")
+
     @property
     def tg_channels(self) -> list[str]:
         if not self.tg_channels_raw:

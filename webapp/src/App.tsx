@@ -1,7 +1,12 @@
 import { useEffect, useState } from "react";
 import { ChevronLeft } from "lucide-react";
 import { api } from "./api";
-import type { CategoryCode, MeResponse, Subscription } from "./types";
+import type {
+  CategoryCode,
+  MeResponse,
+  Subscription,
+  SubscriptionStatus,
+} from "./types";
 import {
   initTelegram,
   isInTelegram,
@@ -12,6 +17,8 @@ import { BlacklistScreen } from "./components/BlacklistScreen";
 import { CategorySurveyScreen } from "./components/CategorySurveyScreen";
 import { CategoryMenuScreen } from "./components/CategoryMenuScreen";
 import { DeliverySettingsScreen } from "./components/DeliverySettingsScreen";
+import { SubscriptionBanner } from "./components/SubscriptionBanner";
+import { SubscriptionScreen } from "./components/SubscriptionScreen";
 import { SuggestChannelScreen } from "./components/SuggestChannelScreen";
 import { SuggestionsProvider } from "./contexts/SuggestionsContext";
 import { CreativeForm } from "./forms/CreativeForm";
@@ -28,6 +35,7 @@ type Screen =
   | { kind: "blacklist" }
   | { kind: "suggestChannel" }
   | { kind: "delivery" }
+  | { kind: "subscription" }
   | { kind: "addCategory" }
   | { kind: "admin" };
 
@@ -35,6 +43,15 @@ export default function App() {
   const [screen, setScreen] = useState<Screen>({ kind: "loading" });
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [subStatus, setSubStatus] = useState<SubscriptionStatus | null>(null);
+
+  const fetchSubStatus = async () => {
+    try {
+      setSubStatus(await api.getSubscriptionStatus());
+    } catch {
+      // не валим экран если ручка ещё не задеплоена
+    }
+  };
 
   const fetchSubscriptions = async (): Promise<Subscription[]> => {
     const me: MeResponse = await api.getMe();
@@ -65,6 +82,7 @@ export default function App() {
   useEffect(() => {
     initTelegram();
     refreshMe();
+    fetchSubStatus();
   }, []);
 
   const renderScreen = () => {
@@ -139,6 +157,17 @@ export default function App() {
       return <DeliverySettingsScreen onBack={goToMenu} />;
     }
 
+    if (screen.kind === "subscription") {
+      return (
+        <SubscriptionScreen
+          onBack={async () => {
+            await fetchSubStatus();
+            setScreen({ kind: "menu" });
+          }}
+        />
+      );
+    }
+
     if (screen.kind === "form") {
       const FormComponent = {
         creative: CreativeForm,
@@ -166,10 +195,25 @@ export default function App() {
     return null;
   };
 
+  // Плашка подписки видна только на главных «оседлых» экранах:
+  // меню/чёрный список/предложение канала/доставка. На формах и опроснике
+  // прячем — там и так нижние бары, и она заслонит контент.
+  const showBanner =
+    screen.kind === "menu" ||
+    screen.kind === "blacklist" ||
+    screen.kind === "suggestChannel" ||
+    screen.kind === "delivery";
+
   return (
     <SuggestionsProvider>
       <BackgroundShapes />
-      {renderScreen()}
+      <div className={showBanner ? "pb-20" : ""}>{renderScreen()}</div>
+      {showBanner && (
+        <SubscriptionBanner
+          status={subStatus}
+          onClick={() => setScreen({ kind: "subscription" })}
+        />
+      )}
     </SuggestionsProvider>
   );
 }

@@ -13,3 +13,4 @@ alembic==1.13.3
 fastapi==0.115.5
 uvicorn[standard]==0.32.0
 python-multipart==0.0.17
+yookassa==3.5.0

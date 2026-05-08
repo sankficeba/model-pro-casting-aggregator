@@ -1,6 +1,7 @@
 """Pydantic-схемы для запросов/ответов FastAPI."""
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Literal, Optional
 
 from pydantic import BaseModel, EmailStr, Field, HttpUrl, field_validator
@@ -383,3 +384,21 @@ class DeliverySettingsUpdate(BaseModel):
 class DigestStartResponse(BaseModel):
     sent: bool
     remaining: int
+
+
+# ---------- subscription ----------
+
+
+class SubscriptionStatusResponse(BaseModel):
+    active_until: Optional[datetime] = None
+    days_left: int = 0
+    is_active: bool
+    trial_started_at: Optional[datetime] = None
+    plan_price_rub: int
+    plan_period_days: int
+    payments_configured: bool
+
+
+class SubscriptionCheckoutResponse(BaseModel):
+    confirmation_url: str
+    payment_id: str

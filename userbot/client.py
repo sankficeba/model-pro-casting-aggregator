@@ -258,6 +258,15 @@ class Userbot:
                 )
                 continue
 
+            # Подписка: если истекла, переключаемся в degraded mode «1 в день».
+            # Если уже отправляли в последние 24ч — пропускаем.
+            if not await repository.is_subscription_active(user_id):
+                if await repository.should_throttle_after_expiry(user_id):
+                    continue
+                # send-after-expiry разрешён, но всё равно проходит через
+                # обычный путь ниже; запишем timestamp, если send удастся.
+                await repository.record_after_expiry_send(user_id)
+
             # Если у юзера digest или сейчас ночное окно — кладём в очередь
             # вместо немедленной отправки. Дедуп через UNIQUE(user_id, text_hash)
             # как у обычных нотификаций.

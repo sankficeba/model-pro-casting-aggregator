@@ -1,0 +1,80 @@
+import { Crown, AlertTriangle } from "lucide-react";
+import type { SubscriptionStatus } from "../types";
+
+interface Props {
+  status: SubscriptionStatus | null;
+  onClick: () => void;
+}
+
+const formatDate = (iso: string | null): string => {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleDateString("ru-RU", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+};
+
+const pluralizeDays = (n: number): string => {
+  const lastTwo = n % 100;
+  if (lastTwo >= 11 && lastTwo <= 14) return "дней";
+  const last = n % 10;
+  if (last === 1) return "день";
+  if (last >= 2 && last <= 4) return "дня";
+  return "дней";
+};
+
+/** Sticky-плашка снизу с состоянием подписки. Тап = открыть экран
+ * подписки. Если status ещё грузится — не рендерим. */
+export function SubscriptionBanner({ status, onClick }: Props) {
+  if (!status) return null;
+  const expiringSoon = status.is_active && status.days_left <= 3;
+  const inactive = !status.is_active;
+  const accent = inactive
+    ? "border-red-500/50 bg-red-950/40"
+    : expiringSoon
+      ? "border-amber-500/50 bg-amber-950/30"
+      : "border-bg-card bg-bg-surface";
+  const icon = inactive || expiringSoon ? AlertTriangle : Crown;
+  const Icon = icon;
+  const iconColor = inactive
+    ? "text-red-300"
+    : expiringSoon
+      ? "text-amber-300"
+      : "text-accent";
+
+  return (
+    <button
+      onClick={onClick}
+      className={`fixed left-0 right-0 z-30 border-t px-4 py-2.5 flex items-center gap-3 text-left transition active:opacity-80 ${accent}`}
+      style={{
+        bottom: "calc(env(safe-area-inset-bottom, 0px))",
+      }}
+    >
+      <Icon className={`w-4 h-4 shrink-0 ${iconColor}`} />
+      <div className="flex-1 min-w-0">
+        {inactive ? (
+          <>
+            <div className="text-sm font-medium text-red-200">
+              Подписка не активна
+            </div>
+            <div className="text-[11px] text-slate-400 truncate">
+              Уведомления в режиме «1 в день» — продли, чтобы не пропускать
+              кастинги
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="text-sm font-medium">
+              Активна до {formatDate(status.active_until)}
+            </div>
+            <div className="text-[11px] text-slate-400">
+              Осталось {status.days_left} {pluralizeDays(status.days_left)}
+            </div>
+          </>
+        )}
+      </div>
+      <span className="text-xs text-slate-400">→</span>
+    </button>
+  );
+}

@@ -4,7 +4,7 @@ from __future__ import annotations
 import sys
 
 import httpx
-from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
 
@@ -25,12 +25,15 @@ from api.schemas import (
     GeneralProfileSchema,
     ProfileResponse,
     ProfileUpdate,
+    SubscriptionCheckoutResponse,
     SubscriptionPatchRequest,
+    SubscriptionStatusResponse,
     SubscriptionsCreateRequest,
     SuggestionsResponse,
 )
 from config import settings
 from db import repository as repo
+from payments import yookassa_client
 
 CATEGORY_TO_SCHEMA = {
     "creative": CreativeProfileSchema,
@@ -424,3 +427,116 @@ async def digest_start(
         await bot.session.close()
     remaining = await repo.count_pending(user.id)
     return DigestStartResponse(sent=sent, remaining=remaining)
+
+
+# ---------- Subscription / payments ----------
+
+
+@app.get("/api/subscription/status", response_model=SubscriptionStatusResponse)
+async def subscription_status(
+    user: TelegramUser = Depends(current_user),
+) -> SubscriptionStatusResponse:
+    s = await repo.get_subscription_status(user.id)
+    return SubscriptionStatusResponse(
+        active_until=s["active_until"],
+        days_left=s["days_left"],
+        is_active=s["is_active"],
+        trial_started_at=s["trial_started_at"],
+        plan_price_rub=settings.subscription_price_rub,
+        plan_period_days=settings.subscription_period_days,
+        payments_configured=yookassa_client.is_configured(),
+    )
+
+
+@app.post("/api/subscription/checkout", response_model=SubscriptionCheckoutResponse)
+async def subscription_checkout(
+    user: TelegramUser = Depends(current_user),
+) -> SubscriptionCheckoutResponse:
+    """Создать YooKassa-платёж и вернуть URL для редиректа на страницу оплаты."""
+    if not yookassa_client.is_configured():
+        raise HTTPException(
+            status_code=503,
+            detail="Платёжная система не настроена. Свяжись с администратором.",
+        )
+    import uuid
+
+    days = settings.subscription_period_days
+    amount_rub = settings.subscription_price_rub
+    idempotency_key = uuid.uuid4().hex
+    payment_id = await repo.insert_payment_pending(
+        user_id=user.id,
+        idempotency_key=idempotency_key,
+        amount_rub=amount_rub,
+        days=days,
+    )
+    return_url = settings.subscription_return_url or "https://t.me/"
+    try:
+        created = await yookassa_client.create_payment(
+            amount_rub=amount_rub,
+            days=days,
+            user_id=user.id,
+            idempotency_key=idempotency_key,
+            return_url=return_url,
+            description=f"Подписка на {days} дн.",
+        )
+    except Exception as e:  # noqa: BLE001
+        logger.exception("YooKassa create_payment failed: {}", e)
+        raise HTTPException(
+            status_code=502, detail="Не удалось создать платёж. Попробуй позже."
+        ) from e
+    await repo.attach_yk_payment_id(payment_id, created.payment_id)
+    return SubscriptionCheckoutResponse(
+        confirmation_url=created.confirmation_url,
+        payment_id=created.payment_id,
+    )
+
+
+@app.post("/api/yookassa/webhook")
+async def yookassa_webhook(request: Request) -> dict:
+    """Webhook от YooKassa: payment.succeeded → продлеваем подписку.
+    Защита: shared-secret в query (?token=...) + сверка payment_id с БД."""
+    expected = settings.yookassa_webhook_token
+    got = request.query_params.get("token", "")
+    if expected and got != expected:
+        raise HTTPException(status_code=403, detail="bad token")
+    body = await request.body()
+    parsed = yookassa_client.parse_webhook(body)
+    if parsed is None:
+        return {"ok": False, "reason": "parse_failed"}
+    if parsed.get("event") != "payment.succeeded":
+        return {"ok": True, "ignored": parsed.get("event")}
+    yk_id = parsed.get("payment_id")
+    if not yk_id:
+        return {"ok": False, "reason": "no_payment_id"}
+    payment = await repo.get_payment_by_yk_id(yk_id)
+    if payment is None:
+        # YK прислал событие на несуществующий платёж — игнор.
+        logger.warning("Webhook for unknown payment_id: {}", yk_id)
+        return {"ok": False, "reason": "unknown_payment"}
+    should_extend = await repo.mark_payment_status(yk_id, "succeeded")
+    if should_extend:
+        new_until = await repo.extend_subscription(payment.user_id, payment.days)
+        logger.info(
+            "Subscription extended user={} payment={} active_until={}",
+            payment.user_id, yk_id, new_until,
+        )
+        # Уведомим юзера в чате
+        text = (
+            "✅ <b>Подписка активна!</b>\n\n"
+            f"Действует до <b>{new_until.strftime('%d.%m.%Y')}</b>. "
+            "Спасибо!"
+        )
+        url = f"https://api.telegram.org/bot{settings.bot_token}/sendMessage"
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                await client.post(
+                    url,
+                    json={
+                        "chat_id": payment.user_id,
+                        "text": text,
+                        "parse_mode": "HTML",
+                    },
+                )
+        except httpx.HTTPError as e:
+            logger.warning("Subscription confirmation send failed: {}", e)
+    return {"ok": True}
