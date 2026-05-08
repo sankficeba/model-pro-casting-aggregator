@@ -7,10 +7,12 @@ import sys
 from aiogram import Bot
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from loguru import logger
 
 from bot.handlers import run_bot
 from config import settings
+from db import repository
 from db.session import dispose_engine
 from llm.factory import get_llm_provider
 from userbot.client import Userbot
@@ -19,6 +21,39 @@ from userbot.client import Userbot
 def _setup_logging() -> None:
     logger.remove()
     logger.add(sys.stderr, level=settings.log_level.upper())
+
+
+async def night_digest_loop(bot: Bot) -> None:
+    """Раз в минуту проверяет юзеров с night-mode которые «проснулись»
+    (текущий MSK-час == night_end_hour) и имеют pending. Шлёт им
+    приглашение «За ночь — N объявлений, посмотреть?» с кнопкой Далее."""
+    while True:
+        try:
+            await asyncio.sleep(60)
+            users = await repository.list_users_with_pending_in_morning()
+            for user_id, count in users:
+                text = (
+                    f"☀️ <b>Доброе утро!</b>\n\n"
+                    f"За ночь было опубликовано <b>{count}</b> подходящих объявлений. "
+                    f"Хочешь посмотреть?"
+                )
+                kb = InlineKeyboardMarkup(inline_keyboard=[[
+                    InlineKeyboardButton(text="➡ Далее", callback_data="digest:next")
+                ]])
+                try:
+                    await bot.send_message(
+                        user_id, text, parse_mode="HTML", reply_markup=kb
+                    )
+                    await repository.mark_night_digest_sent(user_id)
+                except Exception as e:  # noqa: BLE001
+                    logger.warning(
+                        "Morning digest send failed for {}: {}", user_id, e,
+                    )
+                await asyncio.sleep(0.05)
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:  # noqa: BLE001
+            logger.exception("night_digest_loop error: {}", e)
 
 
 async def main() -> None:
@@ -36,6 +71,7 @@ async def main() -> None:
         await asyncio.gather(
             userbot.start(),
             run_bot(bot, llm=llm),
+            night_digest_loop(bot),
         )
     finally:
         await bot.session.close()

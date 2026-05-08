@@ -144,6 +144,13 @@ export interface Subscription {
   completion_pct?: number;  // 0-100, опционально для backward-compat
 }
 
+export interface DeliverySettings {
+  delivery_mode: "instant" | "digest";
+  night_mode_enabled: boolean;
+  night_start_hour: number;  // 0-23 MSK
+  night_end_hour: number;
+}
+
 export const CATEGORY_LABELS: Record<CategoryCode, string> = {
   creative: "Творческие позиции",
   event: "Event-персонал",

@@ -6,18 +6,29 @@ import os
 
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import Command, CommandStart
-from aiogram.types import CallbackQuery, Message, ReplyKeyboardRemove
+from aiogram.types import (
+    CallbackQuery,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    Message,
+    ReplyKeyboardRemove,
+)
 from loguru import logger
+from sqlalchemy import select
 
 from api import profile_repo
 from bot.response import compose_response, compose_response_llm
 from config import settings
-from db import repository
+from db import matching, repository
+from db.models import Message as MessageRow
+from db.session import AsyncSessionLocal
 from llm.base import LLMProvider
+from userbot.client import Userbot, _vacancy_title
 
 HELP_TEXT_USER = (
     "<b>Команды:</b>\n"
     "/start — приветствие\n"
+    "/review — посмотреть накопленные объявления (digest)\n"
     "/help — помощь"
 )
 
@@ -56,6 +67,117 @@ def _help_for(user_id: int | None) -> str:
     return HELP_TEXT_ADMIN if _is_admin(user_id) else HELP_TEXT_USER
 
 
+async def _build_digest_message(
+    user_id: int,
+    message_id: int,
+    matched_vacancy_ids: list[int],
+) -> tuple[str, InlineKeyboardMarkup] | None:
+    """Загрузить message+vacancies и собрать digest-уведомление с кнопками
+    Отклик/Следующее. Возвращает None если canonical исчез."""
+    async with AsyncSessionLocal() as session:
+        msg_res = await session.execute(
+            select(MessageRow).where(MessageRow.id == message_id)
+        )
+        msg = msg_res.scalar_one_or_none()
+        if msg is None:
+            return None
+        canonical_id = msg.canonical_message_id or msg.id
+
+    loaded = await repository.get_canonical_with_vacancies(canonical_id)
+    if loaded is None:
+        return None
+    canon_msg, canon_vacancies = loaded
+    post, vac_extractions = matching._orm_to_extractions(canon_msg, canon_vacancies)
+
+    matched_idxs: list[int] = []
+    matched_set = set(matched_vacancy_ids or [])
+    for i, v in enumerate(canon_vacancies):
+        if v.id in matched_set:
+            matched_idxs.append(i)
+    if not matched_idxs:
+        # Fallback: все вакансии canonical (юзер заматчился раньше, теперь — общая карточка).
+        matched_idxs = list(range(len(canon_vacancies)))
+    if not matched_idxs:
+        return None
+
+    eff_cat = (
+        canon_vacancies[matched_idxs[0]].category if canon_vacancies else None
+    ) or canon_msg.category
+
+    # У _format_notification ожидает Telethon-like message: .id + .message
+    class _PseudoMsg:
+        id = canon_msg.tg_message_id
+        message = canon_msg.text
+
+    text = Userbot._format_notification(
+        post=post,
+        vacancies=vac_extractions,
+        matched_idxs=matched_idxs,
+        message=_PseudoMsg(),
+        chat_username=canon_msg.tg_chat_username,
+        effective_category=eff_cat,
+    )
+
+    pending_left = await repository.count_pending(user_id)
+    text += f"\n\n<i>Осталось нерассмотренных: {pending_left}</i>"
+
+    kb_buttons: list[list[InlineKeyboardButton]] = []
+    for i in matched_idxs:
+        v = canon_vacancies[i]
+        title = _vacancy_title(vac_extractions[i])
+        kb_buttons.append([
+            InlineKeyboardButton(
+                text=f"✍ Отклик: {title}"[:64],
+                callback_data=f"respond:{v.id}",
+            )
+        ])
+    if pending_left > 0:
+        kb_buttons.append([
+            InlineKeyboardButton(text="➡ Следующее", callback_data="digest:next")
+        ])
+    return text, InlineKeyboardMarkup(inline_keyboard=kb_buttons)
+
+
+async def _send_next_pending(bot: Bot, user_id: int) -> bool:
+    """Извлечь следующее pending и отправить юзеру. Возвращает True если
+    что-то отправлено, False если очередь пуста (или canonical исчез)."""
+    while True:
+        item = await repository.pop_next_pending(user_id)
+        if item is None:
+            return False
+        # Записываем в notifications (UNIQUE по user_id+text_hash может
+        # отбросить — но тогда мы и не должны слать).
+        log_ok = await repository.log_notification(
+            user_id=user_id,
+            message_id=item["message_id"],
+            text_hash=item["text_hash"],
+            success=True,
+            matched_vacancy_ids=item["matched_vacancy_ids"],
+        )
+        if not log_ok:
+            # Уже было — попробуем следующее
+            continue
+        built = await _build_digest_message(
+            user_id, item["message_id"], item["matched_vacancy_ids"]
+        )
+        if built is None:
+            continue
+        text, reply_markup = built
+        try:
+            await bot.send_message(
+                user_id, text,
+                parse_mode="HTML",
+                disable_web_page_preview=True,
+                reply_markup=reply_markup,
+            )
+        except Exception as e:  # noqa: BLE001
+            logger.warning("digest send failed for {}: {}", user_id, e)
+            await repository.update_notification_failed(
+                user_id=user_id, message_id=item["message_id"], error=str(e),
+            )
+        return True
+
+
 async def _restart_self(bot: Bot, message: Message, reason: str) -> None:
     """Отвечаем пользователю и перезапускаем процесс — docker compose поднимет
     нас обратно с обновлённым списком каналов из БД."""
@@ -88,6 +210,25 @@ def build_dispatcher(bot: Bot, llm: LLMProvider | None = None) -> Dispatcher:
     @dp.message(Command("help"))
     async def cmd_help(message: Message) -> None:
         await message.answer(_help_for(message.from_user.id), parse_mode="HTML")
+
+    @dp.message(Command("review"))
+    async def cmd_review(message: Message) -> None:
+        """Начать рассматривать накопленные объявления (digest mode)."""
+        sent = await _send_next_pending(bot, message.from_user.id)
+        if not sent:
+            await message.answer("Пока что активных объявлений нет.")
+
+    @dp.callback_query(F.data == "digest:next")
+    async def cb_digest_next(query: CallbackQuery) -> None:
+        if not query.from_user:
+            return
+        sent = await _send_next_pending(bot, query.from_user.id)
+        if not sent:
+            try:
+                await query.message.answer("Пока что активных объявлений нет.")  # type: ignore[union-attr]
+            except Exception:  # noqa: BLE001
+                pass
+        await query.answer()
 
     # ---------- Admin: channels ----------
 

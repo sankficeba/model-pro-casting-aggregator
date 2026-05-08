@@ -1,0 +1,178 @@
+import { useEffect, useState } from "react";
+import { ChevronLeft, Zap, Inbox, Moon } from "lucide-react";
+import { api } from "../api";
+import type { DeliverySettings } from "../types";
+
+interface Props {
+  onBack: () => void;
+}
+
+const DEFAULT: DeliverySettings = {
+  delivery_mode: "instant",
+  night_mode_enabled: false,
+  night_start_hour: 23,
+  night_end_hour: 9,
+};
+
+export function DeliverySettingsScreen({ onBack }: Props) {
+  const [settings, setSettings] = useState<DeliverySettings>(DEFAULT);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [savedToast, setSavedToast] = useState(false);
+
+  useEffect(() => {
+    api
+      .getDeliverySettings()
+      .then((s) => setSettings(s))
+      .catch((e) => setError(e instanceof Error ? e.message : String(e)))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const persist = async (next: DeliverySettings) => {
+    setSettings(next);
+    setSaving(true);
+    setError(null);
+    try {
+      const saved = await api.putDeliverySettings(next);
+      setSettings(saved);
+      setSavedToast(true);
+      setTimeout(() => setSavedToast(false), 1500);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) {
+    return <div className="p-6 text-slate-400">Загрузка…</div>;
+  }
+
+  return (
+    <div className="min-h-screen pb-5">
+      <div className="sticky top-0 z-20 bg-bg/90 backdrop-blur border-b border-bg-card">
+        <button
+          onClick={onBack}
+          className="flex items-center gap-1 px-4 py-3 text-slate-400 hover:text-white transition"
+        >
+          <ChevronLeft className="w-5 h-5" />
+          Назад
+        </button>
+      </div>
+
+      <div className="p-5 space-y-5">
+        <h1 className="text-2xl font-semibold">Доставка уведомлений</h1>
+
+        {/* Mode picker */}
+        <div className="space-y-3">
+          <h2 className="text-sm uppercase tracking-wider text-slate-500">Режим</h2>
+          <button
+            onClick={() => persist({ ...settings, delivery_mode: "instant" })}
+            className={`w-full p-4 rounded-card border text-left flex items-start gap-3 transition ${
+              settings.delivery_mode === "instant"
+                ? "border-accent bg-accent/10"
+                : "border-bg-card"
+            }`}
+          >
+            <Zap className="w-5 h-5 mt-0.5 text-accent shrink-0" />
+            <div className="flex-1">
+              <div className="font-medium">Сразу</div>
+              <div className="text-xs text-slate-400 mt-0.5">
+                Уведомления приходят сразу, как только появляется подходящий кастинг.
+              </div>
+            </div>
+          </button>
+          <button
+            onClick={() => persist({ ...settings, delivery_mode: "digest" })}
+            className={`w-full p-4 rounded-card border text-left flex items-start gap-3 transition ${
+              settings.delivery_mode === "digest"
+                ? "border-accent bg-accent/10"
+                : "border-bg-card"
+            }`}
+          >
+            <Inbox className="w-5 h-5 mt-0.5 text-accent shrink-0" />
+            <div className="flex-1">
+              <div className="font-medium">Накопить и просмотреть</div>
+              <div className="text-xs text-slate-400 mt-0.5">
+                Объявления копятся. В чате с ботом введи /review (или нажми «Далее»),
+                чтобы листать их одно за другим.
+              </div>
+            </div>
+          </button>
+        </div>
+
+        {/* Night mode */}
+        <div className="space-y-3">
+          <h2 className="text-sm uppercase tracking-wider text-slate-500">
+            <span className="inline-flex items-center gap-1.5">
+              <Moon className="w-4 h-4" />
+              Ночной режим
+            </span>
+          </h2>
+          <label className="flex items-center justify-between p-4 rounded-card border border-bg-card cursor-pointer">
+            <div className="flex-1">
+              <div className="font-medium">Не присылать уведомления ночью</div>
+              <div className="text-xs text-slate-400 mt-0.5">
+                В указанное время объявления копятся. Утром придёт одно сообщение
+                «За ночь — N кастингов» с кнопкой «Далее».
+              </div>
+            </div>
+            <input
+              type="checkbox"
+              checked={settings.night_mode_enabled}
+              onChange={(e) =>
+                persist({ ...settings, night_mode_enabled: e.target.checked })
+              }
+              className="w-6 h-6 accent-accent ml-3"
+            />
+          </label>
+          {settings.night_mode_enabled && (
+            <div className="grid grid-cols-2 gap-3 px-1">
+              <label className="block space-y-1">
+                <span className="text-xs text-slate-400">С (МСК)</span>
+                <select
+                  value={settings.night_start_hour}
+                  onChange={(e) =>
+                    persist({ ...settings, night_start_hour: Number(e.target.value) })
+                  }
+                  className="w-full bg-bg-card rounded-card px-3 py-2 outline-none focus:ring-1 ring-accent"
+                >
+                  {Array.from({ length: 24 }, (_, h) => (
+                    <option key={h} value={h}>{`${h.toString().padStart(2, "0")}:00`}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="block space-y-1">
+                <span className="text-xs text-slate-400">До (МСК)</span>
+                <select
+                  value={settings.night_end_hour}
+                  onChange={(e) =>
+                    persist({ ...settings, night_end_hour: Number(e.target.value) })
+                  }
+                  className="w-full bg-bg-card rounded-card px-3 py-2 outline-none focus:ring-1 ring-accent"
+                >
+                  {Array.from({ length: 24 }, (_, h) => (
+                    <option key={h} value={h}>{`${h.toString().padStart(2, "0")}:00`}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          )}
+        </div>
+
+        {error && (
+          <div className="rounded-card bg-red-950/40 border border-red-900 px-4 py-3 text-sm text-red-300">
+            {error}
+          </div>
+        )}
+        {savedToast && !error && (
+          <div className="text-xs text-emerald-400">Сохранено</div>
+        )}
+        {saving && !savedToast && (
+          <div className="text-xs text-slate-500">Сохраняем…</div>
+        )}
+      </div>
+    </div>
+  );
+}

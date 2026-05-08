@@ -1,4 +1,4 @@
-import { CheckCircle2, AlertCircle, Settings, ShieldCheck, Plus, Ban, Megaphone } from "lucide-react";
+import { CheckCircle2, AlertCircle, Settings, ShieldCheck, Plus, Ban, Megaphone, Bell } from "lucide-react";
 import type { CategoryCode, Subscription } from "../types";
 import { CATEGORY_LABELS } from "../types";
 
@@ -9,6 +9,7 @@ interface Props {
   onSettings: () => void;
   onBlacklist: () => void;
   onSuggestChannel: () => void;
+  onDelivery: () => void;
   onAdmin?: () => void;
   isAdmin?: boolean;
 }
@@ -20,6 +21,7 @@ export function CategoryMenuScreen({
   onSettings,
   onBlacklist,
   onSuggestChannel,
+  onDelivery,
   onAdmin,
   isAdmin,
 }: Props) {
@@ -97,6 +99,13 @@ export function CategoryMenuScreen({
       )}
 
       <div className="mt-4 grid grid-cols-1 gap-2">
+        <button
+          onClick={onDelivery}
+          className="w-full py-3 rounded-card border border-bg-card text-slate-300 hover:border-accent hover:text-accent transition flex items-center justify-center gap-2"
+        >
+          <Bell className="w-4 h-4" />
+          Доставка уведомлений
+        </button>
         <button
           onClick={onBlacklist}
           className="w-full py-3 rounded-card border border-bg-card text-slate-300 hover:border-accent hover:text-accent transition flex items-center justify-center gap-2"

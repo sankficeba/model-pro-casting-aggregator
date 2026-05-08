@@ -11,6 +11,7 @@ import { BackgroundShapes } from "./components/BackgroundShapes";
 import { BlacklistScreen } from "./components/BlacklistScreen";
 import { CategorySurveyScreen } from "./components/CategorySurveyScreen";
 import { CategoryMenuScreen } from "./components/CategoryMenuScreen";
+import { DeliverySettingsScreen } from "./components/DeliverySettingsScreen";
 import { SettingsScreen } from "./components/SettingsScreen";
 import { SuggestChannelScreen } from "./components/SuggestChannelScreen";
 import { SuggestionsProvider } from "./contexts/SuggestionsContext";
@@ -28,6 +29,7 @@ type Screen =
   | { kind: "settings" }
   | { kind: "blacklist" }
   | { kind: "suggestChannel" }
+  | { kind: "delivery" }
   | { kind: "addCategory" }
   | { kind: "admin" };
 
@@ -122,6 +124,7 @@ export default function App() {
           onAdmin={() => setScreen({ kind: "admin" })}
           onBlacklist={() => setScreen({ kind: "blacklist" })}
           onSuggestChannel={() => setScreen({ kind: "suggestChannel" })}
+          onDelivery={() => setScreen({ kind: "delivery" })}
         />
       );
     }
@@ -132,6 +135,10 @@ export default function App() {
 
     if (screen.kind === "suggestChannel") {
       return <SuggestChannelScreen onBack={goToMenu} />;
+    }
+
+    if (screen.kind === "delivery") {
+      return <DeliverySettingsScreen onBack={goToMenu} />;
     }
 
     if (screen.kind === "form") {

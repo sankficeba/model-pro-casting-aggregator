@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from loguru import logger
-from sqlalchemy import select, update
+from sqlalchemy import func as sa_func, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError
 
@@ -20,6 +20,7 @@ from db.models import (
     GeneralProfile,
     Message,
     Notification,
+    PendingNotification,
     User,
     UserCategorySubscription,
     Vacancy,
@@ -763,6 +764,195 @@ async def filter_users_by_blacklist(user_ids: list[int], text: str) -> list[int]
             if not blocked:
                 ok.append(uid)
         return ok
+
+
+_MSK_OFFSET = timedelta(hours=3)
+
+
+def _msk_hour_now() -> int:
+    """Текущий час в часовом поясе Europe/Moscow (UTC+3, без DST)."""
+    return (datetime.now(timezone.utc) + _MSK_OFFSET).hour
+
+
+def _is_night_window(hour: int, start: int, end: int) -> bool:
+    """Час `hour` (0-23) попадает в ночной диапазон [start, end)?
+    Если start <= end — обычный диапазон. Иначе wrap через полночь."""
+    if start == end:
+        return False  # пустой диапазон
+    if start < end:
+        return start <= hour < end
+    return hour >= start or hour < end
+
+
+# ---------- DELIVERY SETTINGS ----------
+
+
+async def get_delivery_settings(user_id: int) -> dict:
+    """Настройки доставки юзера. Если юзера нет — дефолты."""
+    async with AsyncSessionLocal() as session:
+        res = await session.execute(
+            select(
+                User.delivery_mode,
+                User.night_mode_enabled,
+                User.night_start_hour,
+                User.night_end_hour,
+            ).where(User.id == user_id)
+        )
+        row = res.first()
+        if row is None:
+            return {
+                "delivery_mode": "instant",
+                "night_mode_enabled": False,
+                "night_start_hour": 23,
+                "night_end_hour": 9,
+            }
+        return {
+            "delivery_mode": row[0],
+            "night_mode_enabled": row[1],
+            "night_start_hour": row[2],
+            "night_end_hour": row[3],
+        }
+
+
+async def set_delivery_settings(
+    user_id: int,
+    *,
+    delivery_mode: str,
+    night_mode_enabled: bool,
+    night_start_hour: int,
+    night_end_hour: int,
+) -> dict:
+    if delivery_mode not in ("instant", "digest"):
+        raise ValueError(f"Invalid delivery_mode: {delivery_mode}")
+    if not (0 <= night_start_hour <= 23 and 0 <= night_end_hour <= 23):
+        raise ValueError("hours must be 0..23")
+    async with AsyncSessionLocal() as session:
+        await upsert_user_in_session(session, user_id)
+        await session.execute(
+            update(User)
+            .where(User.id == user_id)
+            .values(
+                delivery_mode=delivery_mode,
+                night_mode_enabled=night_mode_enabled,
+                night_start_hour=night_start_hour,
+                night_end_hour=night_end_hour,
+            )
+        )
+        await session.commit()
+    return await get_delivery_settings(user_id)
+
+
+async def should_queue_for_user(user_id: int) -> bool:
+    """True — если для этого юзера сейчас уведомление надо положить в
+    очередь (digest или night-window). False — отправлять сразу."""
+    s = await get_delivery_settings(user_id)
+    if s["delivery_mode"] == "digest":
+        return True
+    if s["night_mode_enabled"] and _is_night_window(
+        _msk_hour_now(), s["night_start_hour"], s["night_end_hour"]
+    ):
+        return True
+    return False
+
+
+# ---------- PENDING QUEUE ----------
+
+
+async def enqueue_pending_notification(
+    *,
+    user_id: int,
+    message_id: int,
+    text_hash: str | None,
+    matched_vacancy_ids: list[int] | None,
+) -> bool:
+    """Положить в очередь. Возвращает True если row создан, False если
+    дубль (UNIQUE сработал)."""
+    async with AsyncSessionLocal() as session:
+        try:
+            session.add(
+                PendingNotification(
+                    user_id=user_id,
+                    message_id=message_id,
+                    text_hash=text_hash,
+                    matched_vacancy_ids=matched_vacancy_ids,
+                )
+            )
+            await session.commit()
+            return True
+        except IntegrityError:
+            await session.rollback()
+            return False
+
+
+async def pop_next_pending(user_id: int) -> Optional[dict]:
+    """Достать самое раннее pending для юзера и удалить. Возвращает dict
+    с message_id, text_hash, matched_vacancy_ids — или None если очередь пуста."""
+    async with AsyncSessionLocal() as session:
+        res = await session.execute(
+            select(PendingNotification)
+            .where(PendingNotification.user_id == user_id)
+            .order_by(PendingNotification.created_at.asc())
+            .limit(1)
+        )
+        row = res.scalar_one_or_none()
+        if row is None:
+            return None
+        result = {
+            "message_id": row.message_id,
+            "text_hash": row.text_hash,
+            "matched_vacancy_ids": list(row.matched_vacancy_ids or []),
+        }
+        await session.delete(row)
+        await session.commit()
+        return result
+
+
+async def count_pending(user_id: int) -> int:
+    async with AsyncSessionLocal() as session:
+        res = await session.execute(
+            select(sa_func.count())
+            .select_from(PendingNotification)
+            .where(PendingNotification.user_id == user_id)
+        )
+        return int(res.scalar() or 0)
+
+
+async def list_users_with_pending_in_morning() -> list[tuple[int, int]]:
+    """Найти юзеров: night_mode_enabled=TRUE, текущий MSK-час == night_end_hour,
+    есть pending, и night_digest_last_sent_at не сегодня. Возвращает [(user_id, count)]."""
+    msk_now = datetime.now(timezone.utc) + _MSK_OFFSET
+    msk_hour = msk_now.hour
+    msk_today_start_utc = (msk_now.replace(hour=0, minute=0, second=0, microsecond=0)) - _MSK_OFFSET
+    async with AsyncSessionLocal() as session:
+        res = await session.execute(
+            select(
+                User.id,
+                sa_func.count(PendingNotification.id),
+            )
+            .join(
+                PendingNotification,
+                PendingNotification.user_id == User.id,
+            )
+            .where(
+                User.night_mode_enabled.is_(True),
+                User.night_end_hour == msk_hour,
+                # last_sent_at NULL OR < сегодня MSK 00:00
+                (User.night_digest_last_sent_at.is_(None))
+                | (User.night_digest_last_sent_at < msk_today_start_utc),
+            )
+            .group_by(User.id)
+        )
+        return [(uid, cnt) for uid, cnt in res.all()]
+
+
+async def mark_night_digest_sent(user_id: int) -> None:
+    async with AsyncSessionLocal() as session:
+        await session.execute(
+            update(User)
+            .where(User.id == user_id)
+            .values(night_digest_last_sent_at=datetime.now(timezone.utc))
+        )
+        await session.commit()
 
 
 async def list_legacy_unmigrated_users() -> list[int]:
