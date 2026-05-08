@@ -247,6 +247,7 @@ export default function App() {
         <SuccessToast
           message={paymentToast}
           onDismiss={() => setPaymentToast(null)}
+          topOffsetPx={showBanner && subStatus ? 76 : 12}
         />
       )}
       {showBanner && (
