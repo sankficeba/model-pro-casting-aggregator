@@ -26,6 +26,19 @@ from models.schemas import PostExtraction, VacancyExtraction
 _REFS = all_refs()
 _PROJECT_LABELS = {it["code"]: it["label"] for it in _REFS["project_types"]}
 _ROLE_LABELS = {it["code"]: it["label"] for it in _REFS["role_types"]}
+_WORK_TYPE_LABELS = {
+    it["code"]: it["label"]
+    for ref_key in ("work_types_event", "work_types_general", "work_types_admin")
+    for it in _REFS[ref_key]
+}
+
+# Per-category эмодзи + русское название для шапки нотификации.
+_CATEGORY_HEADERS = {
+    "creative": ("🎬", "Творческие позиции"),
+    "event":    ("🎉", "Event-персонал"),
+    "general":  ("🛠", "Разнорабочие"),
+    "admin":    ("💻", "Администрирование"),
+}
 
 
 def _labels(codes: list[str], mapping: dict[str, str]) -> str:
@@ -133,16 +146,34 @@ class Userbot:
         matched_idxs: list[int],
         message,
         chat_username: str | None,
+        effective_category: str | None = None,
     ) -> str:
         """Карточка для пользователя. Перечисляет только подошедшие вакансии."""
         link = ""
         if chat_username:
             link = f"https://t.me/{chat_username}/{message.id}"
 
+        eff_cat = effective_category or post.category or "creative"
+        emoji, cat_label = _CATEGORY_HEADERS.get(
+            eff_cat, ("🎬", "Творческие позиции"),
+        )
+        # Для creative показываем project_types; для остальных — work_types
+        # из подошедших вакансий (всё равно они одной категории).
+        if eff_cat == "creative":
+            meta_left = f"Тип проекта: {_labels(list(post.project_types), _PROJECT_LABELS)}"
+        else:
+            shown_work_types: list[str] = []
+            seen: set[str] = set()
+            for idx in matched_idxs:
+                for code in vacancies[idx].work_types or []:
+                    if code not in seen:
+                        seen.add(code)
+                        shown_work_types.append(code)
+            meta_left = f"Должности: {_labels(shown_work_types, _WORK_TYPE_LABELS)}"
+
         lines: list[str] = [
-            "<b>🎬 Подходящий кастинг</b>",
-            f"Тип проекта: {_labels(post.project_types, _PROJECT_LABELS)} | "
-            f"Город: {post.city or '—'}",
+            f"<b>{emoji} Подходящая вакансия — {cat_label}</b>",
+            f"{meta_left} | Город: {post.city or '—'}",
             f"<b>Подходящие роли ({len(matched_idxs)}):</b>",
         ]
         for idx in matched_idxs:
@@ -226,10 +257,16 @@ class Userbot:
                 # Уже уведомили (по message_id ИЛИ по text_hash) — не дублируем.
                 continue
 
+            # Все hit_idxs одного юзера — из одной категории (загружаются
+            # одна *Profile-таблица в matching), берём категорию первой
+            # подошедшей вакансии.
+            first_matched = vacancies[hit_idxs[0]]
+            eff_cat = first_matched.category or post.category
             notification_text = self._format_notification(
                 post=post, vacancies=vacancies,
                 matched_idxs=hit_idxs,
                 message=message, chat_username=chat_username,
+                effective_category=eff_cat,
             )
 
             kb_buttons: list[list[InlineKeyboardButton]] = []
