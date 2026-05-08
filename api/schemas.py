@@ -126,6 +126,36 @@ _VALID_ADMIN_WORK_TYPES = _REF_CODES["work_types_admin"]
 _VALID_PHYSICAL_FITNESS = {"light", "medium", "heavy"}
 
 
+# Маппинг имени поля Pydantic → ключ справочника в all_codes() для случаев
+# когда они отличаются. Если field_name не указан — используется как есть.
+_FIELD_TO_REF_KEY = {
+    "hair_color": "hair_colors",
+    "hair_length": "hair_lengths",
+    "eye_color": "eye_colors",
+}
+
+
+def _check_codes_array(v: list[str], ref_key: str) -> list[str]:
+    """Все элементы должны быть из соответствующего справочника."""
+    if not v:
+        return v
+    valid = _REF_CODES.get(ref_key, set())
+    bad = [c for c in v if c not in valid]
+    if bad:
+        raise ValueError(f"Неизвестные коды для {ref_key}: {bad}")
+    return v
+
+
+def _check_single_code(v: Optional[str], ref_key: str) -> Optional[str]:
+    """Скалярный код должен быть в справочнике."""
+    if v is None or v == "":
+        return None
+    valid = _REF_CODES.get(ref_key, set())
+    if v not in valid:
+        raise ValueError(f"{ref_key}: код {v!r} не из справочника")
+    return v
+
+
 class _BaseProfileSchema(BaseModel):
     """Общие поля всех 4 категорий — все Optional на этапе draft."""
 
@@ -140,6 +170,11 @@ class _BaseProfileSchema(BaseModel):
     vk_url: Optional[str] = None
     telegram_user: Optional[str] = Field(default=None, max_length=64)
     email: Optional[EmailStr] = None
+
+    @field_validator("tax_status", mode="after")
+    @classmethod
+    def _check_tax_status(cls, v: Optional[str]) -> Optional[str]:
+        return _check_single_code(v, "tax_status")
 
 
 class CreativeProfileSchema(_BaseProfileSchema):
@@ -169,6 +204,28 @@ class CreativeProfileSchema(_BaseProfileSchema):
     video_url: Optional[str] = None
     professional_url: Optional[str] = None
 
+    @field_validator(
+        "project_types",
+        "role_types",
+        "ethnicity",
+        "body_type",
+        "marks",
+        "skills_sport",
+        "skills_dance",
+        "skills_vocal",
+        "skills_instruments",
+        mode="after",
+    )
+    @classmethod
+    def _check_arrays(cls, v: list[str], info) -> list[str]:
+        return _check_codes_array(v, info.field_name)
+
+    @field_validator("hair_color", "hair_length", "education", "eye_color", mode="after")
+    @classmethod
+    def _check_singles(cls, v: Optional[str], info) -> Optional[str]:
+        ref_key = _FIELD_TO_REF_KEY.get(info.field_name, info.field_name)
+        return _check_single_code(v, ref_key)
+
 
 class EventProfileSchema(_BaseProfileSchema):
     show_negotiable: bool = False
@@ -193,6 +250,17 @@ class EventProfileSchema(_BaseProfileSchema):
         if invalid:
             raise ValueError(f"Недопустимые work_types: {invalid}")
         return v
+
+    @field_validator("ethnicity", "body_type", mode="after")
+    @classmethod
+    def _check_arrays(cls, v: list[str], info) -> list[str]:
+        return _check_codes_array(v, info.field_name)
+
+    @field_validator("hair_color", "hair_length", mode="after")
+    @classmethod
+    def _check_singles(cls, v: Optional[str], info) -> Optional[str]:
+        ref_key = _FIELD_TO_REF_KEY.get(info.field_name, info.field_name)
+        return _check_single_code(v, ref_key)
 
 
 class GeneralProfileSchema(_BaseProfileSchema):
@@ -231,6 +299,11 @@ class AdminProfileSchema(_BaseProfileSchema):
         if invalid:
             raise ValueError(f"Недопустимые work_types: {invalid}")
         return v
+
+    @field_validator("education", mode="after")
+    @classmethod
+    def _check_education(cls, v: Optional[str]) -> Optional[str]:
+        return _check_single_code(v, "education")
 
 
 # ---------- subscriptions ----------

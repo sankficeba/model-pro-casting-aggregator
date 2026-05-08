@@ -19,7 +19,7 @@ def test_creative_profile_accepts_full_data():
         actual_age=25,
         play_age_min=20,
         play_age_max=30,
-        project_types=["advertising", "movie"],
+        project_types=["advertising", "kino_serial"],
         role_types=["main"],
         min_rate=5000,
         height_cm=180,
@@ -28,13 +28,71 @@ def test_creative_profile_accepts_full_data():
         hair_color="brown",
         hair_length="short",
         has_experience=True,
-        education="higher",
+        education="vuz",
         tax_status="self_employed",
         phone="+79991234567",
         telegram_user="ivan_p",
         email="ivan@example.com",
     )
     assert s.full_name == "Иван Петров"
+
+
+def test_creative_profile_rejects_invalid_project_type():
+    with pytest.raises(ValidationError):
+        CreativeProfileSchema(project_types=["advertising", "garbage_code"])
+
+
+def test_creative_profile_rejects_invalid_role_type():
+    with pytest.raises(ValidationError):
+        CreativeProfileSchema(role_types=["garbage"])
+
+
+def test_creative_profile_rejects_invalid_ethnicity():
+    with pytest.raises(ValidationError):
+        CreativeProfileSchema(ethnicity=["unknown_ethnicity"])
+
+
+def test_creative_profile_rejects_invalid_hair_color():
+    with pytest.raises(ValidationError):
+        CreativeProfileSchema(hair_color="purple")
+
+
+def test_creative_profile_rejects_invalid_education():
+    """education валидируется по справочнику."""
+    with pytest.raises(ValidationError):
+        CreativeProfileSchema(education="phd")
+
+
+def test_creative_profile_rejects_invalid_skills():
+    with pytest.raises(ValidationError):
+        CreativeProfileSchema(skills_dance=["disco_freestyle"])
+
+
+def test_event_profile_rejects_invalid_ethnicity():
+    with pytest.raises(ValidationError):
+        EventProfileSchema(ethnicity=["alien"])
+
+
+def test_event_profile_rejects_invalid_hair_color():
+    with pytest.raises(ValidationError):
+        EventProfileSchema(hair_color="rainbow")
+
+
+def test_admin_profile_rejects_invalid_education():
+    with pytest.raises(ValidationError):
+        AdminProfileSchema(education="bootcamp")
+
+
+def test_base_profile_rejects_invalid_tax_status():
+    """tax_status в _BaseProfileSchema валидируется во всех 4 категориях."""
+    with pytest.raises(ValidationError):
+        CreativeProfileSchema(tax_status="bitcoin_miner")
+    with pytest.raises(ValidationError):
+        EventProfileSchema(tax_status="bitcoin_miner")
+    with pytest.raises(ValidationError):
+        GeneralProfileSchema(tax_status="bitcoin_miner")
+    with pytest.raises(ValidationError):
+        AdminProfileSchema(tax_status="bitcoin_miner")
 
 
 def test_event_profile_work_types_validates():
