@@ -5,9 +5,14 @@
 interface TelegramWebApp {
   initData: string;
   initDataUnsafe: { user?: { id: number; username?: string } };
+  version?: string;
   ready: () => void;
   expand: () => void;
   close: () => void;
+  // Bot API 8.0+ (опц.). Полноэкранный режим — без полупрозрачного шита.
+  requestFullscreen?: () => void;
+  // Bot API 7.7+ (опц.). Запрещает свайп вниз закрывать форму, удобно при заполнении.
+  disableVerticalSwipes?: () => void;
   colorScheme: "light" | "dark";
   MainButton: {
     text: string;
@@ -35,10 +40,29 @@ declare global {
 
 export const tg = window.Telegram?.WebApp;
 
+/** Применить fullscreen / disable-swipe настройки. Идемпотентно — можно
+ * звать сколько угодно раз. */
+function applyTelegramChrome(): void {
+  if (!tg) return;
+  try { tg.expand(); } catch { /* noop */ }
+  // Bot API 8.0+: настоящий полный экран на мобильном (поверх системной шторки).
+  try { tg.requestFullscreen?.(); } catch { /* старый клиент */ }
+  // Bot API 7.7+: запрещает закрытие свайпом вниз во время заполнения формы.
+  try { tg.disableVerticalSwipes?.(); } catch { /* старый клиент */ }
+}
+
+// Eager init на загрузке модуля — Telegram script в index.html уже отработал
+// к моменту когда наш bundle грузится. Это раньше чем React.useEffect, что
+// исключает окно когда юзер может свайпнуть и свернуть приложение.
+if (tg) {
+  try { tg.ready(); } catch { /* noop */ }
+  applyTelegramChrome();
+}
+
 export function initTelegram(): void {
   if (!tg) return;
   tg.ready();
-  tg.expand();
+  applyTelegramChrome();
 }
 
 export function getInitData(): string {
