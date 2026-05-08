@@ -12,7 +12,6 @@ import { BlacklistScreen } from "./components/BlacklistScreen";
 import { CategorySurveyScreen } from "./components/CategorySurveyScreen";
 import { CategoryMenuScreen } from "./components/CategoryMenuScreen";
 import { DeliverySettingsScreen } from "./components/DeliverySettingsScreen";
-import { SettingsScreen } from "./components/SettingsScreen";
 import { SuggestChannelScreen } from "./components/SuggestChannelScreen";
 import { SuggestionsProvider } from "./contexts/SuggestionsContext";
 import { CreativeForm } from "./forms/CreativeForm";
@@ -26,7 +25,6 @@ type Screen =
   | { kind: "survey" }
   | { kind: "menu" }
   | { kind: "form"; category: CategoryCode }
-  | { kind: "settings" }
   | { kind: "blacklist" }
   | { kind: "suggestChannel" }
   | { kind: "delivery" }
@@ -120,11 +118,11 @@ export default function App() {
           isAdmin={isAdmin}
           onOpenForm={(c) => setScreen({ kind: "form", category: c })}
           onAddCategory={() => setScreen({ kind: "addCategory" })}
-          onSettings={() => setScreen({ kind: "settings" })}
           onAdmin={() => setScreen({ kind: "admin" })}
           onBlacklist={() => setScreen({ kind: "blacklist" })}
           onSuggestChannel={() => setScreen({ kind: "suggestChannel" })}
           onDelivery={() => setScreen({ kind: "delivery" })}
+          onChange={async () => { await fetchSubscriptions(); }}
         />
       );
     }
@@ -164,17 +162,6 @@ export default function App() {
       );
     }
 
-    if (screen.kind === "settings") {
-      return (
-        <SettingsScreen
-          subscriptions={subscriptions}
-          onChange={async () => { await fetchSubscriptions(); }}
-          onEditForm={(c) => setScreen({ kind: "form", category: c })}
-          onAddCategory={() => setScreen({ kind: "addCategory" })}
-          onBack={goToMenu}
-        />
-      );
-    }
 
     return null;
   };
