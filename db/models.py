@@ -44,6 +44,24 @@ class User(Base):
     profile: Mapped[Optional["ActorProfile"]] = relationship(
         back_populates="user", cascade="all, delete-orphan", uselist=False
     )
+    # Per-category profiles (mini-app categories feature). Каждая категория —
+    # 1:1 опциональная связь. Каскадное удаление повторяет ondelete=CASCADE
+    # на FK-стороне, нужно для ORM-операций session.delete(user).
+    creative_profile: Mapped[Optional["CreativeProfile"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan", uselist=False
+    )
+    event_profile: Mapped[Optional["EventProfile"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan", uselist=False
+    )
+    general_profile: Mapped[Optional["GeneralProfile"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan", uselist=False
+    )
+    admin_profile: Mapped[Optional["AdminProfile"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan", uselist=False
+    )
+    category_subscriptions: Mapped[list["UserCategorySubscription"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
 
 
 class ActorProfile(Base):
@@ -159,6 +177,8 @@ class UserCategorySubscription(Base):
         nullable=False,
     )
 
+    user: Mapped["User"] = relationship(back_populates="category_subscriptions")
+
     __table_args__ = (
         UniqueConstraint("user_id", "category", name="uq_user_category"),
     )
@@ -239,6 +259,8 @@ class CreativeProfile(Base):
         nullable=False,
     )
 
+    user: Mapped["User"] = relationship(back_populates="creative_profile")
+
 
 class EventProfile(Base):
     """Анкета для категории «Event-персонал» (хостес, промо-модели, аниматоры)."""
@@ -288,6 +310,8 @@ class EventProfile(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
 
+    user: Mapped["User"] = relationship(back_populates="event_profile")
+
 
 class GeneralProfile(Base):
     """Анкета для категории «Разнорабочие» (хелперы, клининг, грузчики)."""
@@ -324,6 +348,8 @@ class GeneralProfile(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
 
+    user: Mapped["User"] = relationship(back_populates="general_profile")
+
 
 class AdminProfile(Base):
     """Анкета для категории «Администрирование» (операторы регистрации, супервайзеры)."""
@@ -358,6 +384,8 @@ class AdminProfile(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
+
+    user: Mapped["User"] = relationship(back_populates="admin_profile")
 
 
 class Channel(Base):
