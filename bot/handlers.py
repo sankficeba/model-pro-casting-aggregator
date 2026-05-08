@@ -37,8 +37,50 @@ HELP_TEXT_ADMIN = HELP_TEXT_USER + (
     "/channels — список каналов\n"
     "/addchannel @username — добавить канал\n"
     "/removechannel @username — отключить канал\n"
-    "/broadcast_legacy &lt;текст&gt; — разовая рассылка юзерам со старой анкетой"
+    "/broadcast_legacy &lt;текст&gt; — разовая рассылка юзерам со старой анкетой\n"
+    "/cancel — отменить ожидаемую рассылку"
 )
+
+
+async def _process_admin_broadcast(
+    bot: Bot, message: Message, filter_code: str
+) -> None:
+    """Скопировать сообщение админа всем юзерам, попадающим под фильтр.
+    Используется copyMessage (Telegram Bot API) — он сохраняет текст,
+    форматирование, медиа, а также премиум-emoji entities."""
+    admin_id = message.from_user.id  # type: ignore[union-attr]
+    await repository.clear_broadcast_pending(admin_id)
+
+    user_ids = await repository.list_broadcast_audience(filter_code)
+    # Не слать админу самому себе.
+    user_ids = [uid for uid in user_ids if uid != admin_id]
+    if not user_ids:
+        await message.answer(
+            "В выбранной аудитории сейчас 0 пользователей. Рассылка отменена."
+        )
+        return
+
+    await message.answer(
+        f"⏳ Начинаю рассылку: {len(user_ids)} получателей."
+    )
+    sent = 0
+    failed = 0
+    for uid in user_ids:
+        try:
+            await bot.copy_message(
+                chat_id=uid,
+                from_chat_id=admin_id,
+                message_id=message.message_id,
+            )
+            sent += 1
+        except Exception as e:  # noqa: BLE001
+            logger.warning("broadcast: copy_message to {} failed: {}", uid, e)
+            failed += 1
+        await asyncio.sleep(0.04)
+    await message.answer(
+        f"✅ Готово.\nОтправлено: <b>{sent}</b> · Ошибок: <b>{failed}</b>",
+        parse_mode="HTML",
+    )
 
 GREETING = (
     "<b>Добро пожаловать в Model Promo Agency!</b> 👋\n\n"
@@ -294,6 +336,21 @@ def build_dispatcher(bot: Bot, llm: LLMProvider | None = None) -> Dispatcher:
             return
         await _restart_self(bot, message, "🗑 Канал отключён.")
 
+    @dp.message(Command("cancel"))
+    async def cmd_cancel(message: Message) -> None:
+        if not _is_admin(message.from_user.id):
+            await message.answer(
+                "Нечего отменять. " + _help_for(message.from_user.id),
+                parse_mode="HTML",
+            )
+            return
+        pending = await repository.get_broadcast_pending(message.from_user.id)
+        if pending is None:
+            await message.answer("Нет ожидающей рассылки.")
+            return
+        await repository.clear_broadcast_pending(message.from_user.id)
+        await message.answer("Рассылка отменена.")
+
     @dp.message(Command("broadcast_legacy"))
     async def cmd_broadcast_legacy(message: Message) -> None:
         """Разовая рассылка юзерам со старой actor_profile анкетой,
@@ -435,14 +492,24 @@ def build_dispatcher(bot: Bot, llm: LLMProvider | None = None) -> Dispatcher:
             logger.warning("Не удалось отправить отклик user={}: {}", user_id, e)
             await query.answer("Не получилось отправить отклик. Попробуй ещё раз.", show_alert=True)
 
-    # ---------- Fallback ----------
+    # ---------- Admin broadcast OR fallback ----------
 
-    @dp.message(F.text)
-    async def fallback(message: Message) -> None:
-        await message.answer(
-            "Не понял. " + _help_for(message.from_user.id),
-            parse_mode="HTML",
-        )
+    @dp.message()
+    async def admin_broadcast_or_fallback(message: Message) -> None:
+        """Если у админа есть pending broadcast — рассылаем его сообщение
+        (текст/фото/видео/гифку) всем по фильтру. Иначе на текстовое
+        сообщение шлём «Не понял», нетекстовые игнорируем."""
+        from_user = message.from_user
+        if from_user is not None and _is_admin(from_user.id):
+            pending = await repository.get_broadcast_pending(from_user.id)
+            if pending is not None:
+                await _process_admin_broadcast(bot, message, pending)
+                return
+        if message.text:
+            await message.answer(
+                "Не понял. " + _help_for(from_user.id if from_user else None),
+                parse_mode="HTML",
+            )
 
     return dp
 

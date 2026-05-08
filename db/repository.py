@@ -1008,6 +1008,103 @@ async def mark_daily_digest_sent(user_id: int) -> None:
         await session.commit()
 
 
+VALID_BROADCAST_FILTERS = {"all", "creative", "event", "general", "admin"}
+
+
+async def set_broadcast_pending(user_id: int, filter_code: str) -> None:
+    if filter_code not in VALID_BROADCAST_FILTERS:
+        raise ValueError(f"Invalid broadcast filter: {filter_code}")
+    async with AsyncSessionLocal() as session:
+        await upsert_user_in_session(session, user_id)
+        await session.execute(
+            update(User)
+            .where(User.id == user_id)
+            .values(
+                broadcast_pending_filter=filter_code,
+                broadcast_pending_at=datetime.now(timezone.utc),
+            )
+        )
+        await session.commit()
+
+
+async def get_broadcast_pending(user_id: int) -> Optional[str]:
+    async with AsyncSessionLocal() as session:
+        res = await session.execute(
+            select(User.broadcast_pending_filter).where(User.id == user_id)
+        )
+        return res.scalar_one_or_none()
+
+
+async def clear_broadcast_pending(user_id: int) -> None:
+    async with AsyncSessionLocal() as session:
+        await session.execute(
+            update(User)
+            .where(User.id == user_id)
+            .values(broadcast_pending_filter=None, broadcast_pending_at=None)
+        )
+        await session.commit()
+
+
+async def list_broadcast_audience(filter_code: str) -> list[int]:
+    """Список user_id для рассылки. Дедуп уже встроен (DISTINCT)."""
+    if filter_code not in VALID_BROADCAST_FILTERS:
+        raise ValueError(f"Invalid broadcast filter: {filter_code}")
+    async with AsyncSessionLocal() as session:
+        if filter_code == "all":
+            res = await session.execute(select(User.id))
+        else:
+            res = await session.execute(
+                select(UserCategorySubscription.user_id)
+                .where(
+                    UserCategorySubscription.category == filter_code,
+                    UserCategorySubscription.enabled.is_(True),
+                )
+                .distinct()
+            )
+        return [int(uid) for uid in res.scalars().all()]
+
+
+async def count_broadcast_audience(filter_code: str) -> int:
+    return len(await list_broadcast_audience(filter_code))
+
+
+async def get_extended_admin_stats() -> dict:
+    """Расширенная статистика для админки: считает количество юзеров,
+    тех у кого digest, и pending-очередь."""
+    async with AsyncSessionLocal() as session:
+        users_total = (
+            await session.execute(select(sa_func.count(User.id)))
+        ).scalar_one()
+        users_digest = (
+            await session.execute(
+                select(sa_func.count(User.id)).where(
+                    User.delivery_mode == "digest"
+                )
+            )
+        ).scalar_one()
+        pending_total = (
+            await session.execute(
+                select(sa_func.count(PendingNotification.id))
+            )
+        ).scalar_one()
+        # Активные подписки по категориям
+        subs_by_cat_res = await session.execute(
+            select(
+                UserCategorySubscription.category,
+                sa_func.count(UserCategorySubscription.id),
+            )
+            .where(UserCategorySubscription.enabled.is_(True))
+            .group_by(UserCategorySubscription.category)
+        )
+        subs_by_category = {row[0]: int(row[1]) for row in subs_by_cat_res.all()}
+    return {
+        "users_total": int(users_total),
+        "users_digest": int(users_digest),
+        "pending_notifications_total": int(pending_total),
+        "active_subscriptions_by_category": subs_by_category,
+    }
+
+
 async def list_legacy_unmigrated_users() -> list[int]:
     """Список user_id юзеров, заполнивших старую actor_profile анкету,
     но ещё не выбравших ни одну из новых категорий.

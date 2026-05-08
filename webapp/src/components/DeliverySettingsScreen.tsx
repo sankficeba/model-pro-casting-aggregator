@@ -15,6 +15,7 @@ const DEFAULT: DeliverySettings = {
   night_end_hour: 9,
   digest_daily_enabled: false,
   digest_daily_hour: 20,
+  pending_count: 0,
 };
 
 export function DeliverySettingsScreen({ onBack }: Props) {
@@ -24,14 +25,17 @@ export function DeliverySettingsScreen({ onBack }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [savedToast, setSavedToast] = useState(false);
   const [reviewing, setReviewing] = useState(false);
+  const [emptyQueue, setEmptyQueue] = useState(false);
 
   const startReview = async () => {
     setReviewing(true);
     setError(null);
+    setEmptyQueue(false);
     try {
       const res = await api.startDigestReview();
       if (!res.sent) {
-        setError("Пока что активных объявлений нет.");
+        setEmptyQueue(true);
+        setSettings((s) => ({ ...s, pending_count: 0 }));
         setReviewing(false);
         return;
       }
@@ -116,27 +120,38 @@ export function DeliverySettingsScreen({ onBack }: Props) {
             <div className="flex-1">
               <div className="font-medium">Накопить и просмотреть</div>
               <div className="text-xs text-slate-400 mt-0.5">
-                Объявления копятся. В чате с ботом введи /review (или нажми «Далее»),
-                чтобы листать их одно за другим.
+                Объявления копятся, ты листаешь их по одному в чате с ботом
+                кнопкой «Далее».
               </div>
             </div>
           </button>
           {settings.delivery_mode === "digest" && (
-            <button
-              onClick={startReview}
-              disabled={reviewing}
-              className="w-full p-4 rounded-card border border-accent/40 text-left flex items-start gap-3 transition hover:border-accent disabled:opacity-50"
-            >
-              <PlayCircle className="w-5 h-5 mt-0.5 text-accent shrink-0" />
-              <div className="flex-1">
-                <div className="font-medium">
-                  {reviewing ? "Открываем…" : "Пролистать накопленные объявления"}
+            <>
+              <button
+                onClick={startReview}
+                disabled={reviewing}
+                className="w-full p-4 rounded-card border border-accent/40 text-left flex items-center gap-3 transition hover:border-accent disabled:opacity-50"
+              >
+                <PlayCircle className="w-5 h-5 text-accent shrink-0" />
+                <div className="flex-1">
+                  <div className="font-medium">
+                    {reviewing
+                      ? "Открываем…"
+                      : `Пролистать накопленные объявления${
+                          settings.pending_count > 0 ? ` (${settings.pending_count})` : ""
+                        }`}
+                  </div>
+                  <div className="text-xs text-slate-400 mt-0.5">
+                    Mini App закроется, и в чате с ботом начнут приходить накопленные кастинги.
+                  </div>
                 </div>
-                <div className="text-xs text-slate-400 mt-0.5">
-                  Mini App закроется, и в чате с ботом начнут приходить накопленные кастинги.
+              </button>
+              {emptyQueue && (
+                <div className="text-xs text-slate-400 pl-1">
+                  Пока что активных объявлений нет.
                 </div>
-              </div>
-            </button>
+              )}
+            </>
           )}
         </div>
 

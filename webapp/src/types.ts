@@ -85,6 +85,22 @@ export interface AdminStats {
   messages_casting: number;
   notifications_total: number;
   notifications_success: number;
+  users_total: number;
+  users_digest: number;
+  pending_notifications_total: number;
+  active_subscriptions_by_category: Record<string, number>;
+}
+
+export type BroadcastFilter = "all" | "creative" | "event" | "general" | "admin";
+
+export interface BroadcastAudience {
+  filter: BroadcastFilter;
+  count: number;
+}
+
+export interface BroadcastStartResponse {
+  ok: boolean;
+  audience_count: number;
 }
 
 export interface AdminProfileRow {
@@ -151,6 +167,7 @@ export interface DeliverySettings {
   night_end_hour: number;
   digest_daily_enabled: boolean;
   digest_daily_hour: number;  // 0-23 MSK
+  pending_count: number;
 }
 
 export interface DigestStartResponse {
