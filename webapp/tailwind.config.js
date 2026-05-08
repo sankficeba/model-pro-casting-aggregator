@@ -23,6 +23,16 @@ export default {
         chip: "9999px",
         card: "14px",
       },
+      keyframes: {
+        "fade-in-out": {
+          "0%": { opacity: "0", transform: "translateY(-4px)" },
+          "12%, 75%": { opacity: "1", transform: "translateY(0)" },
+          "100%": { opacity: "0", transform: "translateY(-4px)" },
+        },
+      },
+      animation: {
+        "fade-in-out": "fade-in-out 3s ease-in-out forwards",
+      },
     },
   },
   plugins: [],

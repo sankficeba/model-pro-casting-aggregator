@@ -27,6 +27,12 @@ export function DeliverySettingsScreen({ onBack }: Props) {
   const [reviewing, setReviewing] = useState(false);
   const [emptyQueue, setEmptyQueue] = useState(false);
 
+  useEffect(() => {
+    if (!emptyQueue) return;
+    const handle = setTimeout(() => setEmptyQueue(false), 3000);
+    return () => clearTimeout(handle);
+  }, [emptyQueue]);
+
   const startReview = async () => {
     setReviewing(true);
     setError(null);
@@ -158,7 +164,10 @@ export function DeliverySettingsScreen({ onBack }: Props) {
                 </div>
               </button>
               {emptyQueue && (
-                <div className="text-xs text-slate-400 pl-1">
+                <div
+                  role="status"
+                  className="rounded-card border border-red-500/60 bg-red-950/30 text-red-200 text-sm px-3 py-2 animate-fade-in-out"
+                >
                   Пока что активных объявлений нет.
                 </div>
               )}
