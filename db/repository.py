@@ -209,6 +209,7 @@ async def insert_message_with_vacancies(
                 city=extracted.city,
                 summary=extracted.summary,
                 confidence=extracted.confidence,
+                category=extracted.category,
             )
             .on_conflict_do_nothing(index_elements=["tg_chat_id", "tg_message_id"])
             .returning(Message.id)
@@ -253,6 +254,8 @@ async def insert_message_with_vacancies(
                             hair_length=list(v.hair_length),
                             description=v.description,
                             role_label=v.role_label,
+                            category=v.category,
+                            work_types=list(v.work_types),
                         )
                         .returning(Vacancy.id)
                     )

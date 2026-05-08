@@ -452,7 +452,10 @@ class Message(Base):
     # Хвост от старой схемы — заполняется только в исторических строках,
     # новые записи их не используют. Оставлено для совместимости.
     age: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    category: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    legacy_category: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+
+    # Per-category matching: доминирующая категория поста, определённая LLM.
+    category: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
 
     received_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
@@ -508,6 +511,14 @@ class Vacancy(Base):
     )
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     role_label: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+
+    # Per-category matching: override для гибрид-постов (если категория этой
+    # вакансии отличается от доминирующей категории поста). NULL = inherit.
+    category: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
+    # Коды work_types для event/general/admin вакансий (для creative — пусто).
+    work_types: Mapped[list[str]] = mapped_column(
+        ARRAY(Text), default=list, server_default="{}", nullable=False
+    )
 
     message: Mapped["Message"] = relationship(back_populates="vacancies")
 

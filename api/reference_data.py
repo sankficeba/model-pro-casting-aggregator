@@ -166,6 +166,23 @@ SKILLS_INSTRUMENTS = _items([
     ("ukulele", "Укулеле"),
 ])
 
+WORK_TYPES_EVENT = _items([
+    ("hostess", "Хостес"),
+    ("promo_model", "Промо-модель"),
+    ("animator", "Аниматор"),
+])
+
+WORK_TYPES_GENERAL = _items([
+    ("helper", "Хелпер"),
+    ("cleaning", "Клининг"),
+    ("loader", "Грузчик"),
+])
+
+WORK_TYPES_ADMIN = _items([
+    ("registration_operator", "Оператор регистрации"),
+    ("supervisor", "Супервайзер"),
+])
+
 
 def all_refs() -> dict[str, list[RefItem]]:
     """Полный словарь справочников для отдачи фронту одним запросом."""
@@ -185,6 +202,9 @@ def all_refs() -> dict[str, list[RefItem]]:
         "skills_dance": SKILLS_DANCE,
         "skills_vocal": SKILLS_VOCAL,
         "skills_instruments": SKILLS_INSTRUMENTS,
+        "work_types_event": WORK_TYPES_EVENT,
+        "work_types_general": WORK_TYPES_GENERAL,
+        "work_types_admin": WORK_TYPES_ADMIN,
     }
 
 

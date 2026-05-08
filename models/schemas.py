@@ -5,11 +5,15 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
 
+CategoryCode = Literal["creative", "event", "general", "admin"]
+
 
 class VacancyExtraction(BaseModel):
     """Одна вакансия (роль) внутри поста."""
 
     role_types: list[str] = []
+    work_types: list[str] = []
+    category: Optional[CategoryCode] = None
     gender: Optional[Literal["male", "female"]] = None
     age_min: Optional[int] = Field(None, ge=0, le=120)
     age_max: Optional[int] = Field(None, ge=0, le=120)
@@ -27,12 +31,12 @@ class VacancyExtraction(BaseModel):
 class PostExtraction(BaseModel):
     """Структура, которую LLM извлекает из объявления о кастинге.
 
-    Поля поста (project_types, city, summary, is_casting, confidence) —
-    общие для всего объявления; vacancies — список ролей, у каждой свои
-    условия (gender / age / rate / role_types).
+    `category` — доминирующая категория поста (creative/event/general/admin),
+    `Vacancy.category` опционально перекрывает её для гибрид-постов.
     """
 
     is_casting: bool = False
+    category: Optional[CategoryCode] = None
     project_types: list[str] = []
     city: Optional[str] = None
     summary: Optional[str] = None
