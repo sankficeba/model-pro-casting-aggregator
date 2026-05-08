@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { ChevronLeft } from "lucide-react";
 import { api } from "./api";
 import type { CategoryCode, MeResponse, Subscription } from "./types";
 import {
@@ -131,9 +132,10 @@ export default function App() {
           <div className="sticky top-0 z-20 bg-bg/90 backdrop-blur border-b border-bg-card">
             <button
               onClick={goToMenu}
-              className="px-4 py-3 text-slate-400 hover:text-white"
+              className="flex items-center gap-1 px-4 py-3 text-slate-400 hover:text-white"
             >
-              ← Назад
+              <ChevronLeft className="w-5 h-5" />
+              Назад
             </button>
           </div>
           <FormComponent onDone={refreshMe} />
