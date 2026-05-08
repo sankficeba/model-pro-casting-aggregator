@@ -17,6 +17,7 @@ from sqlalchemy import (
     UniqueConstraint,
     func,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -79,6 +80,11 @@ class User(Base):
     )
     broadcast_pending_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
+    )
+    # Демографические доп.фильтры для рассылки: возраст/рост/ФИО.
+    # {"age_min":int,"age_max":int,"height_min":int,"height_max":int,"name_query":str}
+    broadcast_pending_payload: Mapped[Optional[dict]] = mapped_column(
+        JSONB, nullable=True
     )
 
     filters: Mapped[list["Filter"]] = relationship(

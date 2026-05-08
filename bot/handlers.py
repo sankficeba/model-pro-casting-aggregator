@@ -43,15 +43,23 @@ HELP_TEXT_ADMIN = HELP_TEXT_USER + (
 
 
 async def _process_admin_broadcast(
-    bot: Bot, message: Message, filter_code: str
+    bot: Bot, message: Message, pending: dict
 ) -> None:
     """Скопировать сообщение админа всем юзерам, попадающим под фильтр.
     Используется copyMessage (Telegram Bot API) — он сохраняет текст,
     форматирование, медиа, а также премиум-emoji entities."""
     admin_id = message.from_user.id  # type: ignore[union-attr]
+    filter_code = pending["filter"]
     await repository.clear_broadcast_pending(admin_id)
 
-    user_ids = await repository.list_broadcast_audience(filter_code)
+    user_ids = await repository.list_broadcast_audience(
+        filter_code,
+        age_min=pending.get("age_min"),
+        age_max=pending.get("age_max"),
+        height_min=pending.get("height_min"),
+        height_max=pending.get("height_max"),
+        name_query=pending.get("name_query"),
+    )
     # Не слать админу самому себе.
     user_ids = [uid for uid in user_ids if uid != admin_id]
     if not user_ids:
