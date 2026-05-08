@@ -24,8 +24,8 @@ const pluralizeDays = (n: number): string => {
   return "дней";
 };
 
-/** Sticky-плашка снизу с состоянием подписки. Тап = открыть экран
- * подписки. Если status ещё грузится — не рендерим. */
+/** Sticky-плашка сверху с состоянием подписки. Прилипает к верхнему
+ * краю прокручиваемого экрана. Тап = открыть экран подписки. */
 export function SubscriptionBanner({ status, onClick }: Props) {
   if (!status) return null;
   const expiringSoon = status.is_active && status.days_left <= 3;
@@ -46,10 +46,7 @@ export function SubscriptionBanner({ status, onClick }: Props) {
   return (
     <button
       onClick={onClick}
-      className={`fixed left-0 right-0 z-30 border-b px-4 py-2.5 flex items-center gap-3 text-left transition active:opacity-80 ${accent}`}
-      style={{
-        top: "var(--tg-safe-top, 0px)",
-      }}
+      className={`sticky top-0 left-0 right-0 w-full z-30 border-b px-4 py-2.5 flex items-center gap-3 text-left transition active:opacity-80 backdrop-blur ${accent}`}
     >
       <Icon className={`w-4 h-4 shrink-0 ${iconColor}`} />
       <div className="flex-1 min-w-0">
