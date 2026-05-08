@@ -46,9 +46,9 @@ export function SubscriptionBanner({ status, onClick }: Props) {
   return (
     <button
       onClick={onClick}
-      className={`fixed left-0 right-0 z-30 border-t px-4 py-2.5 flex items-center gap-3 text-left transition active:opacity-80 ${accent}`}
+      className={`fixed left-0 right-0 z-30 border-b px-4 py-2.5 flex items-center gap-3 text-left transition active:opacity-80 ${accent}`}
       style={{
-        bottom: "calc(env(safe-area-inset-bottom, 0px))",
+        top: "var(--tg-safe-top, 0px)",
       }}
     >
       <Icon className={`w-4 h-4 shrink-0 ${iconColor}`} />

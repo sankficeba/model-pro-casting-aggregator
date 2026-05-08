@@ -207,7 +207,7 @@ export default function App() {
   return (
     <SuggestionsProvider>
       <BackgroundShapes />
-      <div className={showBanner ? "pb-20" : ""}>{renderScreen()}</div>
+      <div className={showBanner ? "pt-14" : ""}>{renderScreen()}</div>
       {showBanner && (
         <SubscriptionBanner
           status={subStatus}
