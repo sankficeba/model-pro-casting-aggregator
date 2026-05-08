@@ -149,6 +149,7 @@ def _orm_to_extractions(
     """
     post = PostExtraction(
         is_casting=message.is_casting,
+        category=message.category,
         project_types=list(message.project_types),
         city=message.city,
         summary=message.summary,
@@ -158,6 +159,8 @@ def _orm_to_extractions(
     vac_extractions = [
         VacancyExtraction(
             role_types=list(v.role_types),
+            work_types=list(v.work_types or []),
+            category=v.category,
             gender=v.gender,
             age_min=v.age_min,
             age_max=v.age_max,
