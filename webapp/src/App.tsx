@@ -30,22 +30,30 @@ export default function App() {
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [isAdmin, setIsAdmin] = useState(false);
 
+  const fetchSubscriptions = async (): Promise<Subscription[]> => {
+    const me: MeResponse = await api.getMe();
+    setSubscriptions(me.subscriptions ?? []);
+    setIsAdmin(me.is_admin);
+    return me.subscriptions ?? [];
+  };
+
   const refreshMe = async () => {
     try {
-      const me: MeResponse = await api.getMe();
-      setSubscriptions(me.subscriptions ?? []);
-      setIsAdmin(me.is_admin);
-      if ((me.subscriptions ?? []).length === 0) {
-        setScreen({ kind: "survey" });
-      } else {
-        setScreen({ kind: "menu" });
-      }
+      const subs = await fetchSubscriptions();
+      setScreen(subs.length === 0 ? { kind: "survey" } : { kind: "menu" });
     } catch (e) {
       setScreen({
         kind: "error",
         msg: e instanceof Error ? e.message : String(e),
       });
     }
+  };
+
+  /** Возврат в меню с обновлением подписок (но без сброса в опросник).
+   * Используется при «← Назад» с формы — чтобы прогресс-бары обновились. */
+  const goToMenu = async () => {
+    fetchSubscriptions().catch(() => {});  // обновим в фоне, ошибки игнорим
+    setScreen({ kind: "menu" });
   };
 
   useEffect(() => {
@@ -121,7 +129,7 @@ export default function App() {
         <div>
           <div className="sticky top-0 z-20 bg-bg/90 backdrop-blur border-b border-bg-card">
             <button
-              onClick={() => setScreen({ kind: "menu" })}
+              onClick={goToMenu}
               className="px-4 py-3 text-slate-400 hover:text-white"
             >
               ← Назад
@@ -136,10 +144,10 @@ export default function App() {
       return (
         <SettingsScreen
           subscriptions={subscriptions}
-          onChange={refreshMe}
+          onChange={async () => { await fetchSubscriptions(); }}
           onEditForm={(c) => setScreen({ kind: "form", category: c })}
           onAddCategory={() => setScreen({ kind: "addCategory" })}
-          onBack={() => setScreen({ kind: "menu" })}
+          onBack={goToMenu}
         />
       );
     }
