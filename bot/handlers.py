@@ -191,6 +191,61 @@ def build_dispatcher(bot: Bot, llm: LLMProvider | None = None) -> Dispatcher:
             parse_mode="HTML",
         )
 
+    # ---------- Inline-кнопки «Добавить/Не добавлять» под предложением канала ----------
+
+    @dp.callback_query(F.data.startswith("csg:"))
+    async def cb_channel_suggestion(query: CallbackQuery) -> None:
+        """callback_data: 'csg:add:<ref>' или 'csg:skip:<ref>'.
+        Только admin может нажимать."""
+        if not _is_admin(query.from_user.id if query.from_user else None):
+            await query.answer("Только для админов.", show_alert=True)
+            return
+        parts = (query.data or "").split(":", 2)
+        if len(parts) < 3:
+            await query.answer("Битая кнопка.", show_alert=True)
+            return
+        action, ref = parts[1], parts[2]
+        # Восстанавливаем полный ref для repository.add_channel
+        full_ref = f"https://t.me/{ref}" if not ref.startswith("c/") else f"https://t.me/{ref}"
+        message = query.message  # type: ignore[union-attr]
+        if action == "add":
+            ch = await repository.add_channel(full_ref, added_by=query.from_user.id)
+            if ch is None:
+                await query.answer("Канал уже в активном списке или ссылка не распознана.", show_alert=True)
+                if message:
+                    try:
+                        await message.edit_reply_markup(reply_markup=None)
+                    except Exception:  # noqa: BLE001
+                        pass
+                return
+            ch_label = (
+                f"@{ch.username}" if ch.username else f"приватный (id {ch.tg_chat_id})"
+            )
+            if message:
+                try:
+                    await message.edit_text(
+                        (message.html_text or "") + f"\n\n✅ <b>Добавлен:</b> {ch_label}",
+                        parse_mode="HTML",
+                        disable_web_page_preview=True,
+                    )
+                except Exception:  # noqa: BLE001
+                    pass
+            await query.answer(f"Добавлено: {ch_label}")
+            await _restart_self(bot, message, f"✅ Канал {ch_label} добавлен (через предложение).")  # type: ignore[arg-type]
+        elif action == "skip":
+            if message:
+                try:
+                    await message.edit_text(
+                        (message.html_text or "") + "\n\n❌ <b>Отклонено</b>",
+                        parse_mode="HTML",
+                        disable_web_page_preview=True,
+                    )
+                except Exception:  # noqa: BLE001
+                    pass
+            await query.answer("Отклонено.")
+        else:
+            await query.answer("Неизвестное действие.", show_alert=True)
+
     # ---------- Inline-кнопка «Сгенерировать отклик» под уведомлением ----------
 
     @dp.callback_query(F.data.startswith("respond:"))

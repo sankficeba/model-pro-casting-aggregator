@@ -12,6 +12,7 @@ import { BlacklistScreen } from "./components/BlacklistScreen";
 import { CategorySurveyScreen } from "./components/CategorySurveyScreen";
 import { CategoryMenuScreen } from "./components/CategoryMenuScreen";
 import { SettingsScreen } from "./components/SettingsScreen";
+import { SuggestChannelScreen } from "./components/SuggestChannelScreen";
 import { SuggestionsProvider } from "./contexts/SuggestionsContext";
 import { CreativeForm } from "./forms/CreativeForm";
 import { EventForm } from "./forms/EventForm";
@@ -26,6 +27,7 @@ type Screen =
   | { kind: "form"; category: CategoryCode }
   | { kind: "settings" }
   | { kind: "blacklist" }
+  | { kind: "suggestChannel" }
   | { kind: "addCategory" }
   | { kind: "admin" };
 
@@ -119,12 +121,17 @@ export default function App() {
           onSettings={() => setScreen({ kind: "settings" })}
           onAdmin={() => setScreen({ kind: "admin" })}
           onBlacklist={() => setScreen({ kind: "blacklist" })}
+          onSuggestChannel={() => setScreen({ kind: "suggestChannel" })}
         />
       );
     }
 
     if (screen.kind === "blacklist") {
       return <BlacklistScreen onBack={goToMenu} />;
+    }
+
+    if (screen.kind === "suggestChannel") {
+      return <SuggestChannelScreen onBack={goToMenu} />;
     }
 
     if (screen.kind === "form") {
