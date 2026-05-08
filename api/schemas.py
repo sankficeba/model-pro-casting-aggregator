@@ -315,6 +315,7 @@ class SubscriptionSchema(BaseModel):
     category: CategoryCode
     enabled: bool
     profile_completed: bool
+    completion_pct: int = Field(0, ge=0, le=100)
 
 
 class SubscriptionsCreateRequest(BaseModel):
