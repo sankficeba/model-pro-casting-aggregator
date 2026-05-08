@@ -141,6 +141,7 @@ export interface Subscription {
   category: CategoryCode;
   enabled: boolean;
   profile_completed: boolean;
+  completion_pct?: number;  // 0-100, опционально для backward-compat
 }
 
 export const CATEGORY_LABELS: Record<CategoryCode, string> = {

@@ -544,9 +544,54 @@ _SUGGESTION_FIELDS = {
     "telegram_user", "email", "portfolio_url", "video_url",
 }
 
+# Required-поля per category для расчёта completion_pct в меню Mini App.
+# Должно совпадать с frontend-validate() в каждой форме (webapp/src/forms/*).
+_REQUIRED_FIELDS = {
+    "creative": [
+        "full_name", "gender", "city", "actual_age",
+        "project_types", "role_types",
+        "height_cm", "ethnicity", "body_type", "hair_color", "hair_length",
+        "phone", "email",
+    ],
+    "event": [
+        "full_name", "gender", "city", "actual_age",
+        "work_types", "phone", "email",
+    ],
+    "general": [
+        "full_name", "gender", "city", "actual_age",
+        "work_types", "phone", "email",
+    ],
+    "admin": [
+        "full_name", "gender", "city", "actual_age",
+        "work_types", "phone", "email",
+    ],
+}
+
+
+def _is_filled(value) -> bool:
+    """True если значение «заполнено» — не None, не пустая строка, не пустой список."""
+    if value is None:
+        return False
+    if isinstance(value, str) and not value.strip():
+        return False
+    if isinstance(value, list) and not value:
+        return False
+    return True
+
+
+def _completion_pct(profile, category: str) -> int:
+    """Процент заполненных required-полей профиля категории. 0 если профиль не создан."""
+    if profile is None:
+        return 0
+    fields = _REQUIRED_FIELDS.get(category, [])
+    if not fields:
+        return 0
+    filled = sum(1 for f in fields if _is_filled(getattr(profile, f, None)))
+    return int(round(filled * 100 / len(fields)))
+
 
 async def get_subscriptions(user_id: int) -> list[dict]:
-    """Список подписок юзера + флаг profile_completed для каждой."""
+    """Список подписок юзера + флаг profile_completed + completion_pct для каждой."""
     async with AsyncSessionLocal() as session:
         subs_res = await session.execute(
             select(UserCategorySubscription).where(UserCategorySubscription.user_id == user_id)
@@ -558,13 +603,14 @@ async def get_subscriptions(user_id: int) -> list[dict]:
         for sub in subs:
             model = CATEGORY_TO_MODEL[sub.category]
             prof_res = await session.execute(
-                select(model.completed_at).where(model.user_id == user_id)
+                select(model).where(model.user_id == user_id)
             )
-            completed_at = prof_res.scalar_one_or_none()
+            profile = prof_res.scalar_one_or_none()
             result.append({
                 "category": sub.category,
                 "enabled": sub.enabled,
-                "profile_completed": completed_at is not None,
+                "profile_completed": profile is not None and profile.completed_at is not None,
+                "completion_pct": _completion_pct(profile, sub.category),
             })
         return result
 
