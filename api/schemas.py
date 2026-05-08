@@ -119,9 +119,10 @@ class ProfileUpdate(ProfileBase):
 # Имена импортов BaseModel/EmailStr/Field/field_validator/Literal/Optional
 # уже подняты выше — не дублируем.
 
-_VALID_EVENT_WORK_TYPES = {"hostess", "promo_model", "animator"}
-_VALID_GENERAL_WORK_TYPES = {"helper", "cleaning", "loader"}
-_VALID_ADMIN_WORK_TYPES = {"registration_operator", "supervisor"}
+_REF_CODES = all_codes()
+_VALID_EVENT_WORK_TYPES = _REF_CODES["work_types_event"]
+_VALID_GENERAL_WORK_TYPES = _REF_CODES["work_types_general"]
+_VALID_ADMIN_WORK_TYPES = _REF_CODES["work_types_admin"]
 _VALID_PHYSICAL_FITNESS = {"light", "medium", "heavy"}
 
 

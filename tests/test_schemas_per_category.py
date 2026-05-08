@@ -8,6 +8,7 @@ from api.schemas import (
     EventProfileSchema,
     GeneralProfileSchema,
 )
+from models.schemas import PostExtraction, VacancyExtraction
 
 
 def test_creative_profile_accepts_full_data():
@@ -71,3 +72,36 @@ def test_all_optional_fields_can_be_omitted():
     EventProfileSchema()
     GeneralProfileSchema()
     AdminProfileSchema()
+
+
+def test_post_extraction_accepts_category():
+    p = PostExtraction(is_casting=True, category="event", confidence=0.8)
+    assert p.category == "event"
+
+
+def test_post_extraction_rejects_invalid_category():
+    import pytest
+    from pydantic import ValidationError
+    with pytest.raises(ValidationError):
+        PostExtraction(is_casting=True, category="invalid")
+
+
+def test_post_extraction_category_optional():
+    p = PostExtraction(is_casting=False)
+    assert p.category is None
+
+
+def test_vacancy_extraction_accepts_work_types_and_category():
+    v = VacancyExtraction(
+        work_types=["hostess", "animator"],
+        category="event",
+        gender="female",
+    )
+    assert v.work_types == ["hostess", "animator"]
+    assert v.category == "event"
+
+
+def test_vacancy_extraction_defaults_empty_work_types():
+    v = VacancyExtraction()
+    assert v.work_types == []
+    assert v.category is None
