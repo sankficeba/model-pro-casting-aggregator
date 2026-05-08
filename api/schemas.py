@@ -368,6 +368,7 @@ class DeliverySettingsResponse(BaseModel):
     night_end_hour: int = Field(..., ge=0, le=23)
     digest_daily_enabled: bool
     digest_daily_hour: int = Field(..., ge=0, le=23)
+    pending_count: int = 0
 
 
 class DeliverySettingsUpdate(BaseModel):

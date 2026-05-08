@@ -379,7 +379,8 @@ async def channel_suggestion(
 @app.get("/api/delivery-settings", response_model=DeliverySettingsResponse)
 async def get_delivery(user: TelegramUser = Depends(current_user)) -> DeliverySettingsResponse:
     s = await repo.get_delivery_settings(user.id)
-    return DeliverySettingsResponse(**s)
+    pending_count = await repo.count_pending(user.id)
+    return DeliverySettingsResponse(**s, pending_count=pending_count)
 
 
 @app.put("/api/delivery-settings", response_model=DeliverySettingsResponse)
@@ -396,7 +397,8 @@ async def put_delivery(
         digest_daily_enabled=body.digest_daily_enabled,
         digest_daily_hour=body.digest_daily_hour,
     )
-    return DeliverySettingsResponse(**saved)
+    pending_count = await repo.count_pending(user.id)
+    return DeliverySettingsResponse(**saved, pending_count=pending_count)
 
 
 @app.post("/api/digest/start", response_model=DigestStartResponse)

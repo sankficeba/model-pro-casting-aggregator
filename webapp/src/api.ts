@@ -3,6 +3,9 @@ import type {
   AdminMessageRow,
   AdminProfileRow,
   AdminStats,
+  BroadcastAudience,
+  BroadcastFilter,
+  BroadcastStartResponse,
   CategoryCode,
   DeliverySettings,
   DigestStartResponse,
@@ -212,4 +215,11 @@ export const api = {
     request<AdminMessageRow[]>(
       `/admin/messages?limit=${limit}&offset=${offset}&casting_only=${castingOnly}`,
     ),
+  adminBroadcastAudience: (filter: BroadcastFilter) =>
+    request<BroadcastAudience>(`/admin/broadcast/audience?filter=${filter}`),
+  adminBroadcastStart: (filter: BroadcastFilter) =>
+    request<BroadcastStartResponse>("/admin/broadcast/start", {
+      method: "POST",
+      body: JSON.stringify({ filter }),
+    }),
 };

@@ -72,6 +72,14 @@ class User(Base):
     digest_daily_last_sent_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    # Admin-only: ожидаем сообщение для широковещательной рассылки.
+    # filter ∈ {"all","creative","event","general","admin"}.
+    broadcast_pending_filter: Mapped[Optional[str]] = mapped_column(
+        String(16), nullable=True
+    )
+    broadcast_pending_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     filters: Mapped[list["Filter"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"

@@ -6,15 +6,19 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional
+from typing import Literal, Optional
 
-from fastapi import APIRouter, Depends, Query
+import httpx
+from fastapi import APIRouter, Depends, HTTPException, Query
+from loguru import logger
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
 from api.auth import TelegramUser, admin_user
-from db.models import ActorProfile, Message, Notification, Vacancy
+from config import settings
+from db import repository as repo
+from db.models import ActorProfile, Message, Notification
 from db.session import AsyncSessionLocal
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
@@ -75,6 +79,27 @@ class AdminStats(BaseModel):
     messages_casting: int
     notifications_total: int
     notifications_success: int
+    users_total: int
+    users_digest: int
+    pending_notifications_total: int
+    active_subscriptions_by_category: dict[str, int]
+
+
+BroadcastFilter = Literal["all", "creative", "event", "general", "admin"]
+
+
+class BroadcastAudienceResponse(BaseModel):
+    filter: BroadcastFilter
+    count: int
+
+
+class BroadcastStartRequest(BaseModel):
+    filter: BroadcastFilter
+
+
+class BroadcastStartResponse(BaseModel):
+    ok: bool
+    audience_count: int
 
 
 # ---------- Endpoints ----------
@@ -98,7 +123,7 @@ async def stats(_: TelegramUser = Depends(admin_user)) -> AdminStats:
                 select(func.count(Notification.id)).where(Notification.success.is_(True))
             )
         ).scalar_one()
-
+    extra = await repo.get_extended_admin_stats()
     return AdminStats(
         profiles_total=profiles_total,
         profiles_completed=profiles_completed,
@@ -106,7 +131,72 @@ async def stats(_: TelegramUser = Depends(admin_user)) -> AdminStats:
         messages_casting=messages_casting,
         notifications_total=notifications_total,
         notifications_success=notifications_success,
+        users_total=extra["users_total"],
+        users_digest=extra["users_digest"],
+        pending_notifications_total=extra["pending_notifications_total"],
+        active_subscriptions_by_category=extra["active_subscriptions_by_category"],
     )
+
+
+@router.get("/broadcast/audience", response_model=BroadcastAudienceResponse)
+async def broadcast_audience(
+    filter: BroadcastFilter = Query("all"),
+    _: TelegramUser = Depends(admin_user),
+) -> BroadcastAudienceResponse:
+    count = await repo.count_broadcast_audience(filter)
+    return BroadcastAudienceResponse(filter=filter, count=count)
+
+
+@router.post("/broadcast/start", response_model=BroadcastStartResponse)
+async def broadcast_start(
+    body: BroadcastStartRequest,
+    user: TelegramUser = Depends(admin_user),
+) -> BroadcastStartResponse:
+    """Поставить у админа pending-state и попросить его прислать в чат
+    сообщение для рассылки. Mini App после этого закрывается."""
+    audience = await repo.count_broadcast_audience(body.filter)
+    if audience == 0:
+        raise HTTPException(
+            status_code=400,
+            detail="В выбранной аудитории сейчас 0 пользователей.",
+        )
+    await repo.set_broadcast_pending(user.id, body.filter)
+
+    label = {
+        "all": "всем пользователям",
+        "creative": "юзерам с подпиской «Творческие позиции»",
+        "event": "юзерам с подпиской «Event-персонал»",
+        "general": "юзерам с подпиской «Разнорабочие»",
+        "admin": "юзерам с подпиской «Администрирование»",
+    }[body.filter]
+
+    text = (
+        "📢 <b>Готово к рассылке</b>\n\n"
+        f"Сейчас отправь следующим сообщением то, что хочешь разослать "
+        f"<b>{label}</b> ({audience} чел.). Можно текст, фото, видео, "
+        f"гифку — всё с форматированием и премиум-эмодзи.\n\n"
+        "Отмена: /cancel"
+    )
+    url = f"https://api.telegram.org/bot{settings.bot_token}/sendMessage"
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            r = await client.post(
+                url,
+                json={
+                    "chat_id": user.id,
+                    "text": text,
+                    "parse_mode": "HTML",
+                },
+            )
+            if r.status_code != 200:
+                logger.warning(
+                    "broadcast_start: prompt sendMessage failed: {} {}",
+                    r.status_code, r.text,
+                )
+    except httpx.HTTPError as e:
+        logger.warning("broadcast_start: prompt sendMessage error: {}", e)
+
+    return BroadcastStartResponse(ok=True, audience_count=audience)
 
 
 @router.get("/profiles", response_model=list[AdminProfile])

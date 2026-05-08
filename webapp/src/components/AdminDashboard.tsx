@@ -1,54 +1,80 @@
-/* Простой read-only админ-дашборд:
- * - Статистика
- * - Список последних анкет
- * - Лента сообщений (с галочкой «только кастинги»)
- */
+/* Админ-дашборд:
+ *  - сверху подборка ключевых чисел;
+ *  - блок «Рассылка» с фильтром по аудитории и кнопкой «Подготовить»;
+ *  - вкладки «Анкеты» / «Сообщения» для деталей. */
 import { useEffect, useState } from "react";
+import {
+  ChevronLeft,
+  Megaphone,
+  Send,
+  Users,
+  CheckCircle2,
+  Inbox,
+  MessagesSquare,
+  Sparkles,
+  ListChecks,
+} from "lucide-react";
 import { api } from "../api";
-import type { AdminMessageRow, AdminProfileRow, AdminStats } from "../types";
+import { tg } from "../telegram";
+import type {
+  AdminMessageRow,
+  AdminProfileRow,
+  AdminStats,
+  BroadcastFilter,
+} from "../types";
 
-type Tab = "stats" | "profiles" | "messages";
+type Tab = "profiles" | "messages";
+
+const FILTER_OPTIONS: { code: BroadcastFilter; label: string; hint: string }[] = [
+  { code: "all", label: "Все пользователи", hint: "Все, кто открывал бота" },
+  { code: "creative", label: "Творческие позиции", hint: "Актёры, модели" },
+  { code: "event", label: "Event-персонал", hint: "Хостес, промо, аниматоры" },
+  { code: "general", label: "Разнорабочие", hint: "Хелперы, клининг, грузчики" },
+  { code: "admin", label: "Администрирование", hint: "Операторы, супервайзеры" },
+];
 
 export function AdminDashboard({ onBack }: { onBack: () => void }) {
-  const [tab, setTab] = useState<Tab>("stats");
+  const [tab, setTab] = useState<Tab>("profiles");
 
   return (
     <div className="min-h-screen flex flex-col">
-      <div className="px-5 pt-5 pb-3 sticky top-0 bg-bg z-10 border-b border-bg-card">
+      <div className="px-5 pt-5 pb-3 sticky top-0 bg-bg/95 backdrop-blur z-10 border-b border-bg-card">
         <div className="flex items-center gap-3">
           <button
             onClick={onBack}
             className="text-slate-400 hover:text-white transition"
-            aria-label="Выйти"
+            aria-label="Назад"
           >
-            ←
+            <ChevronLeft className="w-5 h-5" />
           </button>
           <h1 className="text-lg font-semibold flex-1">Админка</h1>
         </div>
-        <div className="flex gap-2 mt-3">
-          {(["stats", "profiles", "messages"] as const).map((t) => (
-            <button
-              key={t}
-              onClick={() => setTab(t)}
-              className={
-                "px-3 py-1.5 rounded-chip text-sm border transition " +
-                (tab === t
-                  ? "bg-bg-card border-accent text-accent"
-                  : "bg-bg-card border-bg-card text-slate-400")
-              }
-            >
-              {t === "stats" && "Статистика"}
-              {t === "profiles" && "Анкеты"}
-              {t === "messages" && "Сообщения"}
-            </button>
-          ))}
-        </div>
       </div>
 
-      <main className="flex-1 px-5 py-4 space-y-4">
-        {tab === "stats" && <StatsTab />}
-        {tab === "profiles" && <ProfilesTab />}
-        {tab === "messages" && <MessagesTab />}
+      <main className="flex-1 px-5 py-4 space-y-5">
+        <StatsBlock />
+        <BroadcastBlock />
+
+        <div>
+          <div className="flex gap-2 mb-3">
+            {(["profiles", "messages"] as const).map((t) => (
+              <button
+                key={t}
+                onClick={() => setTab(t)}
+                className={
+                  "px-3 py-1.5 rounded-chip text-sm border transition " +
+                  (tab === t
+                    ? "bg-bg-card border-accent text-accent"
+                    : "bg-bg-card border-bg-card text-slate-400")
+                }
+              >
+                {t === "profiles" ? "Анкеты" : "Сообщения"}
+              </button>
+            ))}
+          </div>
+          {tab === "profiles" && <ProfilesTab />}
+          {tab === "messages" && <MessagesTab />}
+        </div>
       </main>
     </div>
   );
@@ -56,7 +82,32 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
 
 // ===== Stats =====
 
-function StatsTab() {
+function StatCard({
+  icon,
+  label,
+  value,
+  hint,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: number | string;
+  hint?: string;
+}) {
+  return (
+    <div className="rounded-card bg-bg-surface px-4 py-3">
+      <div className="flex items-center gap-1.5 text-xs text-slate-400">
+        {icon}
+        <span>{label}</span>
+      </div>
+      <div className="text-2xl font-semibold tabular-nums mt-1">{value}</div>
+      {hint && (
+        <div className="text-[11px] text-slate-500 mt-0.5">{hint}</div>
+      )}
+    </div>
+  );
+}
+
+function StatsBlock() {
   const [data, setData] = useState<AdminStats | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -67,24 +118,145 @@ function StatsTab() {
   if (error) return <div className="text-red-400 text-sm">{error}</div>;
   if (!data) return <div className="text-slate-500 text-sm">Загрузка…</div>;
 
-  const items: [string, number][] = [
-    ["Всего анкет", data.profiles_total],
-    ["Завершённых", data.profiles_completed],
-    ["Сообщений в канале", data.messages_total],
-    ["Из них кастинги", data.messages_casting],
-    ["Уведомлений отправлено", data.notifications_total],
-    ["…успешных", data.notifications_success],
-  ];
+  const subs = data.active_subscriptions_by_category;
+  const subsHint = (["creative", "event", "general", "admin"] as const)
+    .map((c) => `${c[0].toUpperCase()}${subs[c] ?? 0}`)
+    .join(" · ");
 
   return (
     <div className="grid grid-cols-2 gap-3">
-      {items.map(([label, val]) => (
-        <div key={label} className="rounded-card bg-bg-surface px-4 py-3">
-          <div className="text-xs text-slate-400">{label}</div>
-          <div className="text-2xl font-semibold tabular-nums mt-1">{val}</div>
-        </div>
-      ))}
+      <StatCard
+        icon={<Users className="w-3.5 h-3.5" />}
+        label="Пользователей"
+        value={data.users_total}
+      />
+      <StatCard
+        icon={<CheckCircle2 className="w-3.5 h-3.5" />}
+        label="Завершили анкету"
+        value={data.profiles_completed}
+        hint={`из ${data.profiles_total} начатых`}
+      />
+      <StatCard
+        icon={<MessagesSquare className="w-3.5 h-3.5" />}
+        label="Сообщений из каналов"
+        value={data.messages_total}
+        hint={`из них кастингов: ${data.messages_casting}`}
+      />
+      <StatCard
+        icon={<Send className="w-3.5 h-3.5" />}
+        label="Уведомлений ушло"
+        value={data.notifications_success}
+        hint={`всего попыток: ${data.notifications_total}`}
+      />
+      <StatCard
+        icon={<Inbox className="w-3.5 h-3.5" />}
+        label="В очереди (digest)"
+        value={data.pending_notifications_total}
+        hint={`в digest-режиме: ${data.users_digest}`}
+      />
+      <StatCard
+        icon={<ListChecks className="w-3.5 h-3.5" />}
+        label="Активные подписки"
+        value={Object.values(subs).reduce((a, b) => a + b, 0)}
+        hint={subsHint}
+      />
     </div>
+  );
+}
+
+// ===== Broadcast =====
+
+function BroadcastBlock() {
+  const [filter, setFilter] = useState<BroadcastFilter>("all");
+  const [audience, setAudience] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    setAudience(null);
+    setError(null);
+    api
+      .adminBroadcastAudience(filter)
+      .then((r) => setAudience(r.count))
+      .catch((e) => setError(String(e)));
+  }, [filter]);
+
+  const submit = async () => {
+    if (audience === null || audience === 0 || submitting) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      await api.adminBroadcastStart(filter);
+      tg?.close();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <section className="space-y-3">
+      <h2 className="text-sm uppercase tracking-wider text-slate-500 inline-flex items-center gap-1.5">
+        <Megaphone className="w-4 h-4" />
+        Рассылка
+      </h2>
+      <div className="text-xs text-slate-400 -mt-1">
+        Выбери аудиторию — Mini App закроется и в чате с ботом нужно будет
+        прислать сообщение для рассылки. Можно текст, фото, видео, гифку
+        с премиум-эмодзи.
+      </div>
+
+      <div className="space-y-2">
+        {FILTER_OPTIONS.map((opt) => (
+          <label
+            key={opt.code}
+            className={`block rounded-card border p-3 cursor-pointer transition ${
+              filter === opt.code
+                ? "border-accent bg-accent/10"
+                : "border-bg-card"
+            }`}
+          >
+            <div className="flex items-center gap-3">
+              <input
+                type="radio"
+                name="broadcast-filter"
+                checked={filter === opt.code}
+                onChange={() => setFilter(opt.code)}
+                className="accent-accent"
+              />
+              <div className="flex-1 min-w-0">
+                <div className="font-medium text-sm">{opt.label}</div>
+                <div className="text-xs text-slate-400 mt-0.5">{opt.hint}</div>
+              </div>
+              <div className="text-xs text-slate-300 tabular-nums">
+                {filter === opt.code && audience !== null
+                  ? `${audience} чел.`
+                  : ""}
+              </div>
+            </div>
+          </label>
+        ))}
+      </div>
+
+      {error && (
+        <div className="rounded-card bg-red-950/40 border border-red-900 px-3 py-2 text-sm text-red-300">
+          {error}
+        </div>
+      )}
+
+      <button
+        onClick={submit}
+        disabled={submitting || audience === null || audience === 0}
+        className="w-full rounded-card bg-accent text-bg font-medium py-3 transition disabled:opacity-50 hover:opacity-90 inline-flex items-center justify-center gap-2"
+      >
+        <Sparkles className="w-4 h-4" />
+        {submitting
+          ? "Открываем чат с ботом…"
+          : audience === 0
+            ? "Аудитория пуста"
+            : `Подготовить рассылку${audience !== null ? ` (${audience})` : ""}`}
+      </button>
+    </section>
   );
 }
 
@@ -205,74 +377,6 @@ function MessagesTab() {
               <div className="mt-2 text-slate-200 break-words">
                 {m.summary || m.text.slice(0, 200)}
               </div>
-              {(m.project_types.length > 0 || m.city) && (
-                <div className="text-slate-400 text-xs mt-1.5 space-x-2 break-words">
-                  {m.city && <span>· {m.city}</span>}
-                  {m.project_types.length > 0 && (
-                    <span>· проекты: {m.project_types.join(",")}</span>
-                  )}
-                </div>
-              )}
-              {m.vacancies.length > 0 && (
-                <div className="mt-2 space-y-1">
-                  <div className="text-xs text-slate-500">
-                    Вакансии ({m.vacancies.length}):
-                  </div>
-                  <ul className="space-y-1">
-                    {m.vacancies.map((v) => (
-                      <li
-                        key={v.id}
-                        className="text-xs text-slate-300 bg-bg-card rounded px-2 py-1"
-                      >
-                        <span className="font-medium">
-                          {v.role_label ?? v.role_types[0] ?? "Роль"}
-                        </span>
-                        {v.gender && <> · {v.gender === "male" ? "м" : "ж"}</>}
-                        {v.age_min != null && (
-                          <>
-                            {" "}
-                            · {v.age_min}
-                            {v.age_max !== v.age_min ? `–${v.age_max}` : ""} лет
-                          </>
-                        )}
-                        {v.rate != null && (
-                          <> · {v.rate.toLocaleString("ru-RU")} ₽</>
-                        )}
-                        {v.height_min != null && (
-                          <>
-                            {" "}
-                            · рост {v.height_min}
-                            {v.height_max !== v.height_min && v.height_max != null
-                              ? `–${v.height_max}`
-                              : ""}
-                            {" "}см
-                          </>
-                        )}
-                        {v.ethnicity.length > 0 && (
-                          <> · {v.ethnicity.join(",")}</>
-                        )}
-                        {v.body_type.length > 0 && (
-                          <> · {v.body_type.join(",")}</>
-                        )}
-                        {v.hair_color.length > 0 && (
-                          <> · волосы: {v.hair_color.join(",")}</>
-                        )}
-                        {v.hair_length.length > 0 && (
-                          <> · длина: {v.hair_length.join(",")}</>
-                        )}
-                        {v.role_types.length > 0 && (
-                          <> · {v.role_types.join(",")}</>
-                        )}
-                        {v.description && (
-                          <div className="text-slate-400 mt-0.5 break-words">
-                            {v.description}
-                          </div>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
             </li>
           ))}
         </ul>
