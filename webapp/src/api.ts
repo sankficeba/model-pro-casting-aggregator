@@ -5,6 +5,7 @@ import type {
   AdminStats,
   CategoryCode,
   DeliverySettings,
+  DigestStartResponse,
   MeResponse,
   Profile,
   Refs,
@@ -196,6 +197,11 @@ export const api = {
     request<DeliverySettings>("/delivery-settings", {
       method: "PUT",
       body: JSON.stringify(settings),
+    }),
+  startDigestReview: () =>
+    request<DigestStartResponse>("/digest/start", {
+      method: "POST",
+      body: "{}",
     }),
 
   // Admin

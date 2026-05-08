@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { ChevronLeft, Zap, Inbox, Moon } from "lucide-react";
+import { ChevronLeft, Zap, Inbox, Moon, Sun, PlayCircle } from "lucide-react";
 import { api } from "../api";
+import { tg } from "../telegram";
 import type { DeliverySettings } from "../types";
 
 interface Props {
@@ -12,6 +13,8 @@ const DEFAULT: DeliverySettings = {
   night_mode_enabled: false,
   night_start_hour: 23,
   night_end_hour: 9,
+  digest_daily_enabled: false,
+  digest_daily_hour: 20,
 };
 
 export function DeliverySettingsScreen({ onBack }: Props) {
@@ -20,6 +23,24 @@ export function DeliverySettingsScreen({ onBack }: Props) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [savedToast, setSavedToast] = useState(false);
+  const [reviewing, setReviewing] = useState(false);
+
+  const startReview = async () => {
+    setReviewing(true);
+    setError(null);
+    try {
+      const res = await api.startDigestReview();
+      if (!res.sent) {
+        setError("Пока что активных объявлений нет.");
+        setReviewing(false);
+        return;
+      }
+      tg?.close();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+      setReviewing(false);
+    }
+  };
 
   useEffect(() => {
     api
@@ -100,7 +121,73 @@ export function DeliverySettingsScreen({ onBack }: Props) {
               </div>
             </div>
           </button>
+          {settings.delivery_mode === "digest" && (
+            <button
+              onClick={startReview}
+              disabled={reviewing}
+              className="w-full p-4 rounded-card border border-accent/40 text-left flex items-start gap-3 transition hover:border-accent disabled:opacity-50"
+            >
+              <PlayCircle className="w-5 h-5 mt-0.5 text-accent shrink-0" />
+              <div className="flex-1">
+                <div className="font-medium">
+                  {reviewing ? "Открываем…" : "Пролистать накопленные объявления"}
+                </div>
+                <div className="text-xs text-slate-400 mt-0.5">
+                  Mini App закроется, и в чате с ботом начнут приходить накопленные кастинги.
+                </div>
+              </div>
+            </button>
+          )}
         </div>
+
+        {/* Daily digest scheduled push */}
+        {settings.delivery_mode === "digest" && (
+          <div className="space-y-3">
+            <h2 className="text-sm uppercase tracking-wider text-slate-500">
+              <span className="inline-flex items-center gap-1.5">
+                <Sun className="w-4 h-4" />
+                Ежедневное напоминание
+              </span>
+            </h2>
+            <label className="flex items-center justify-between p-4 rounded-card border border-bg-card cursor-pointer">
+              <div className="flex-1">
+                <div className="font-medium">Присылать сводку в указанное время</div>
+                <div className="text-xs text-slate-400 mt-0.5">
+                  Каждый день в выбранный час придёт «За сегодня — N кастингов, посмотреть?».
+                </div>
+              </div>
+              <input
+                type="checkbox"
+                checked={settings.digest_daily_enabled}
+                onChange={(e) =>
+                  persist({ ...settings, digest_daily_enabled: e.target.checked })
+                }
+                className="w-6 h-6 accent-accent ml-3"
+              />
+            </label>
+            {settings.digest_daily_enabled && (
+              <div className="px-1">
+                <label className="block space-y-1">
+                  <span className="text-xs text-slate-400">Время (МСК)</span>
+                  <select
+                    value={settings.digest_daily_hour}
+                    onChange={(e) =>
+                      persist({
+                        ...settings,
+                        digest_daily_hour: Number(e.target.value),
+                      })
+                    }
+                    className="w-full bg-bg-card rounded-card px-3 py-2 outline-none focus:ring-1 ring-accent"
+                  >
+                    {Array.from({ length: 24 }, (_, h) => (
+                      <option key={h} value={h}>{`${h.toString().padStart(2, "0")}:00`}</option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Night mode */}
         <div className="space-y-3">
