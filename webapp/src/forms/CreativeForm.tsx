@@ -1,112 +1,49 @@
-import { useEffect, useState, useRef } from "react";
-import { api } from "../api";
-import type { Refs } from "../types";
 import { TextFieldWithAutocomplete } from "../fields/TextFieldWithAutocomplete";
 import { NumberFieldWithAutocomplete } from "../fields/NumberFieldWithAutocomplete";
 import { SelectField } from "../fields/SelectField";
 import { MultiSelectField } from "../fields/MultiSelectField";
 import { CITIES } from "../cities";
-import { useSuggestionsRefresh } from "../contexts/SuggestionsContext";
 import { validateTelegramUser } from "../fields/telegramValidation";
+import { useCategoryFormState, type Data } from "../hooks/useCategoryFormState";
+import { CategoryFormShell } from "../components/CategoryFormShell";
 
 interface Props {
   onDone: () => void;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type Data = Record<string, any>;
+function validate(data: Data): string[] {
+  const missing: string[] = [];
+  if (!data.full_name?.trim()) missing.push("ФИО");
+  if (!data.gender) missing.push("Пол");
+  if (!data.city?.trim()) missing.push("Город");
+  if (data.actual_age == null) missing.push("Возраст");
+  if (!data.project_types || data.project_types.length === 0) missing.push("Типы проектов");
+  if (!data.role_types || data.role_types.length === 0) missing.push("Типы ролей");
+  if (data.height_cm == null) missing.push("Рост, см");
+  if (!data.ethnicity || data.ethnicity.length === 0) missing.push("Этнотип");
+  if (!data.body_type || data.body_type.length === 0) missing.push("Телосложение");
+  if (!data.hair_color) missing.push("Цвет волос");
+  if (!data.hair_length) missing.push("Длина волос");
+  if (!data.phone?.trim()) missing.push("Телефон");
+  if (!data.email?.trim()) missing.push("Email");
+  if (
+    data.telegram_user &&
+    data.telegram_user.trim() &&
+    validateTelegramUser(data.telegram_user.trim()) !== null
+  ) {
+    missing.push("Telegram (исправь формат)");
+  }
+  return missing;
+}
 
 export function CreativeForm({ onDone }: Props) {
-  const [data, setData] = useState<Data>({});
-  const [refs, setRefs] = useState<Refs | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const refreshSuggestions = useSuggestionsRefresh();
+  const { data, refs, loading, error, saving, update, finish } = useCategoryFormState({
+    category: "creative",
+    validate,
+    onDone,
+  });
 
-  useEffect(() => {
-    refreshSuggestions();
-  }, [refreshSuggestions]);
-
-  useEffect(() => {
-    Promise.all([api.getCategoryProfile("creative"), api.getRefs()])
-      .then(([p, r]) => {
-        setData(p as Data);
-        setRefs(r);
-      })
-      .catch((e) => setError(e instanceof Error ? e.message : String(e)))
-      .finally(() => setLoading(false));
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-    };
-  }, []);
-
-  const update = (patch: Data) => {
-    setData((prev) => {
-      const next = { ...prev, ...patch };
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-      debounceRef.current = setTimeout(() => {
-        api.putCategoryProfile("creative", next).catch(() => {});
-      }, 400);
-      return next;
-    });
-  };
-
-  const validate = (): string[] => {
-    const missing: string[] = [];
-    if (!data.full_name?.trim()) missing.push("ФИО");
-    if (!data.gender) missing.push("Пол");
-    if (!data.city?.trim()) missing.push("Город");
-    if (data.actual_age == null) missing.push("Возраст");
-    if (!data.project_types || data.project_types.length === 0)
-      missing.push("Типы проектов");
-    if (!data.role_types || data.role_types.length === 0)
-      missing.push("Типы ролей");
-    if (data.height_cm == null) missing.push("Рост, см");
-    if (!data.ethnicity || data.ethnicity.length === 0)
-      missing.push("Этнотип");
-    if (!data.body_type || data.body_type.length === 0)
-      missing.push("Телосложение");
-    if (!data.hair_color) missing.push("Цвет волос");
-    if (!data.hair_length) missing.push("Длина волос");
-    if (!data.phone?.trim()) missing.push("Телефон");
-    if (!data.email?.trim()) missing.push("Email");
-    if (
-      data.telegram_user &&
-      data.telegram_user.trim() &&
-      validateTelegramUser(data.telegram_user.trim()) !== null
-    ) {
-      missing.push("Telegram (исправь формат)");
-    }
-    return missing;
-  };
-
-  const finish = async () => {
-    const missing = validate();
-    if (missing.length > 0) {
-      setError("Заполни обязательные поля: " + missing.join(", "));
-      return;
-    }
-    setSaving(true);
-    setError(null);
-    try {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-      await api.putCategoryProfile("creative", data);
-      await api.completeCategoryProfile("creative");
-      onDone();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  if (loading || !refs)
-    return <div className="p-6 text-slate-400">Загрузка…</div>;
+  if (loading || !refs) return <div className="p-6 text-slate-400">Загрузка…</div>;
 
   const expValue =
     data.has_experience === true
@@ -115,18 +52,17 @@ export function CreativeForm({ onDone }: Props) {
         ? "no"
         : null;
   const expChange = (v: string | null) =>
-    update({
-      has_experience: v === "yes" ? true : v === "no" ? false : null,
-    });
+    update({ has_experience: v === "yes" ? true : v === "no" ? false : null });
 
   return (
-    <div className="min-h-screen p-5 pb-32 space-y-6">
-      <h2 className="text-xl font-semibold">Анкета — Творческие позиции</h2>
-
+    <CategoryFormShell
+      title="Анкета — Творческие позиции"
+      error={error}
+      saving={saving}
+      onSubmit={finish}
+    >
       <section className="space-y-3">
-        <h3 className="text-sm uppercase tracking-wider text-slate-500">
-          Основная информация
-        </h3>
+        <h3 className="text-sm uppercase tracking-wider text-slate-500">Основная информация</h3>
         <TextFieldWithAutocomplete
           field="full_name"
           label="ФИО"
@@ -186,27 +122,19 @@ export function CreativeForm({ onDone }: Props) {
       </section>
 
       <section className="space-y-3">
-        <h3 className="text-sm uppercase tracking-wider text-slate-500">
-          Кастинги
-        </h3>
+        <h3 className="text-sm uppercase tracking-wider text-slate-500">Кастинги</h3>
         <MultiSelectField
           label="Типы проектов"
           value={data.project_types ?? []}
           onChange={(v) => update({ project_types: v })}
-          options={refs.project_types.map((p) => ({
-            value: p.code,
-            label: p.label,
-          }))}
+          options={refs.project_types.map((p) => ({ value: p.code, label: p.label }))}
           required
         />
         <MultiSelectField
           label="Типы ролей"
           value={data.role_types ?? []}
           onChange={(v) => update({ role_types: v })}
-          options={refs.role_types.map((r) => ({
-            value: r.code,
-            label: r.label,
-          }))}
+          options={refs.role_types.map((r) => ({ value: r.code, label: r.label }))}
           required
         />
         <NumberFieldWithAutocomplete
@@ -246,9 +174,7 @@ export function CreativeForm({ onDone }: Props) {
       </section>
 
       <section className="space-y-3">
-        <h3 className="text-sm uppercase tracking-wider text-slate-500">
-          Параметры
-        </h3>
+        <h3 className="text-sm uppercase tracking-wider text-slate-500">Параметры</h3>
         <NumberFieldWithAutocomplete
           field="height_cm"
           label="Рост, см"
@@ -278,50 +204,35 @@ export function CreativeForm({ onDone }: Props) {
           label="Этнотип"
           value={data.ethnicity ?? []}
           onChange={(v) => update({ ethnicity: v })}
-          options={refs.ethnicity.map((e) => ({
-            value: e.code,
-            label: e.label,
-          }))}
+          options={refs.ethnicity.map((e) => ({ value: e.code, label: e.label }))}
           required
         />
         <MultiSelectField
           label="Телосложение"
           value={data.body_type ?? []}
           onChange={(v) => update({ body_type: v })}
-          options={refs.body_type.map((b) => ({
-            value: b.code,
-            label: b.label,
-          }))}
+          options={refs.body_type.map((b) => ({ value: b.code, label: b.label }))}
           required
         />
         <SelectField
           label="Цвет волос"
           value={data.hair_color ?? null}
           onChange={(v) => update({ hair_color: v })}
-          options={refs.hair_colors.map((h) => ({
-            value: h.code,
-            label: h.label,
-          }))}
+          options={refs.hair_colors.map((h) => ({ value: h.code, label: h.label }))}
           required
         />
         <SelectField
           label="Длина волос"
           value={data.hair_length ?? null}
           onChange={(v) => update({ hair_length: v })}
-          options={refs.hair_lengths.map((h) => ({
-            value: h.code,
-            label: h.label,
-          }))}
+          options={refs.hair_lengths.map((h) => ({ value: h.code, label: h.label }))}
           required
         />
         <SelectField
           label="Цвет глаз"
           value={data.eye_color ?? null}
           onChange={(v) => update({ eye_color: v })}
-          options={refs.eye_colors.map((e) => ({
-            value: e.code,
-            label: e.label,
-          }))}
+          options={refs.eye_colors.map((e) => ({ value: e.code, label: e.label }))}
         />
         <MultiSelectField
           label="Особые приметы"
@@ -332,78 +243,53 @@ export function CreativeForm({ onDone }: Props) {
       </section>
 
       <section className="space-y-3">
-        <h3 className="text-sm uppercase tracking-wider text-slate-500">
-          Профессиональное
-        </h3>
+        <h3 className="text-sm uppercase tracking-wider text-slate-500">Профессиональное</h3>
         <SelectField
           label="Опыт"
           value={expValue}
           onChange={expChange}
-          options={[
-            { value: "yes", label: "Есть" },
-            { value: "no", label: "Нет" },
-          ]}
+          options={[{ value: "yes", label: "Есть" }, { value: "no", label: "Нет" }]}
         />
         <SelectField
           label="Образование"
           value={data.education ?? null}
           onChange={(v) => update({ education: v })}
-          options={refs.education.map((e) => ({
-            value: e.code,
-            label: e.label,
-          }))}
+          options={refs.education.map((e) => ({ value: e.code, label: e.label }))}
         />
         <SelectField
           label="Налоговый статус"
           value={data.tax_status ?? null}
           onChange={(v) => update({ tax_status: v })}
-          options={refs.tax_status.map((t) => ({
-            value: t.code,
-            label: t.label,
-          }))}
+          options={refs.tax_status.map((t) => ({ value: t.code, label: t.label }))}
         />
         <MultiSelectField
           label="Спорт"
           value={data.skills_sport ?? []}
           onChange={(v) => update({ skills_sport: v })}
-          options={refs.skills_sport.map((s) => ({
-            value: s.code,
-            label: s.label,
-          }))}
+          options={refs.skills_sport.map((s) => ({ value: s.code, label: s.label }))}
         />
         <MultiSelectField
           label="Танцы"
           value={data.skills_dance ?? []}
           onChange={(v) => update({ skills_dance: v })}
-          options={refs.skills_dance.map((s) => ({
-            value: s.code,
-            label: s.label,
-          }))}
+          options={refs.skills_dance.map((s) => ({ value: s.code, label: s.label }))}
         />
         <MultiSelectField
           label="Вокал"
           value={data.skills_vocal ?? []}
           onChange={(v) => update({ skills_vocal: v })}
-          options={refs.skills_vocal.map((s) => ({
-            value: s.code,
-            label: s.label,
-          }))}
+          options={refs.skills_vocal.map((s) => ({ value: s.code, label: s.label }))}
         />
         <MultiSelectField
           label="Инструменты"
           value={data.skills_instruments ?? []}
           onChange={(v) => update({ skills_instruments: v })}
-          options={refs.skills_instruments.map((s) => ({
-            value: s.code,
-            label: s.label,
-          }))}
+          options={refs.skills_instruments.map((s) => ({ value: s.code, label: s.label }))}
         />
       </section>
 
       <section className="space-y-3">
-        <h3 className="text-sm uppercase tracking-wider text-slate-500">
-          Материалы и контакты
-        </h3>
+        <h3 className="text-sm uppercase tracking-wider text-slate-500">Материалы и контакты</h3>
         <TextFieldWithAutocomplete
           field="portfolio_url"
           label="Портфолио"
@@ -457,20 +343,6 @@ export function CreativeForm({ onDone }: Props) {
           required
         />
       </section>
-
-      {error && (
-        <div className="rounded-card bg-red-950/40 border border-red-900 px-4 py-3 text-sm text-red-300">
-          {error}
-        </div>
-      )}
-
-      <button
-        onClick={finish}
-        disabled={saving}
-        className="w-full py-3 rounded-card bg-accent text-white font-medium disabled:opacity-50"
-      >
-        {saving ? "Сохраняем…" : "Сохранить анкету"}
-      </button>
-    </div>
+    </CategoryFormShell>
   );
 }
