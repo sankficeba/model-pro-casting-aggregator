@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { CheckCircle2, AlertCircle, ShieldCheck, Plus, Ban, Megaphone, Bell, BellOff } from "lucide-react";
+import { CheckCircle2, AlertCircle, ShieldCheck, Plus, Ban, Megaphone, Bell, BellOff, Bookmark } from "lucide-react";
 import { api } from "../api";
 import type { CategoryCode, Subscription } from "../types";
 import { CATEGORY_LABELS } from "../types";
@@ -11,6 +11,7 @@ interface Props {
   onBlacklist: () => void;
   onSuggestChannel: () => void;
   onDelivery: () => void;
+  onFavorites: () => void;
   onAdmin?: () => void;
   isAdmin?: boolean;
   onChange?: () => Promise<void> | void;
@@ -23,6 +24,7 @@ export function CategoryMenuScreen({
   onBlacklist,
   onSuggestChannel,
   onDelivery,
+  onFavorites,
   onAdmin,
   isAdmin,
   onChange,
@@ -121,6 +123,13 @@ export function CategoryMenuScreen({
       )}
 
       <div className="mt-4 grid grid-cols-1 gap-2">
+        <button
+          onClick={onFavorites}
+          className="w-full py-3 rounded-card border border-bg-card text-slate-300 hover:border-accent hover:text-accent transition flex items-center justify-center gap-2"
+        >
+          <Bookmark className="w-4 h-4" />
+          Избранные вакансии
+        </button>
         <button
           onClick={onDelivery}
           className="w-full py-3 rounded-card border border-bg-card text-slate-300 hover:border-accent hover:text-accent transition flex items-center justify-center gap-2"

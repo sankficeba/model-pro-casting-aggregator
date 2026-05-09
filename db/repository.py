@@ -16,6 +16,7 @@ from db.models import (
     Channel,
     CreativeProfile,
     EventProfile,
+    Favorite,
     Filter,
     GeneralProfile,
     Message,
@@ -467,6 +468,58 @@ async def add_channel(ref: str, added_by: int) -> Optional[Channel]:
         return ch
 
 
+async def set_channel_invite_link(ref: str, link: str | None) -> bool:
+    """Записать invite_link на канал (для приватных каналов, чтобы кнопка
+    «Подробнее» под уведомлением могла открывать его). True если запись
+    обновлена."""
+    username, tg_chat_id = _parse_channel_ref(ref)
+    if username is None and tg_chat_id is None:
+        return False
+    async with AsyncSessionLocal() as session:
+        if username is not None:
+            stmt = select(Channel).where(Channel.username == username)
+        else:
+            stmt = select(Channel).where(Channel.tg_chat_id == tg_chat_id)
+        row = (await session.execute(stmt)).scalar_one_or_none()
+        if row is None:
+            return False
+        row.invite_link = (link or None)
+        await session.commit()
+        return True
+
+
+async def get_channel_link_for_message(message_id: int) -> tuple[str | None, str | None]:
+    """Для message_id вернуть (link, channel_label).
+    Логика:
+    - если у Channel есть username → t.me/{username} (link на сам канал)
+    - иначе если у Channel есть invite_link → он
+    - иначе → (None, label) — фронт отрисует «ссылка не указана».
+    label всегда заполнен (для алерта).
+    """
+    async with AsyncSessionLocal() as session:
+        msg = (await session.execute(
+            select(Message).where(Message.id == message_id)
+        )).scalar_one_or_none()
+        if msg is None:
+            return None, None
+        # У Message есть tg_chat_username → можно собрать ссылку прямо на пост
+        if msg.tg_chat_username:
+            link = f"https://t.me/{msg.tg_chat_username}/{msg.tg_message_id}"
+            return link, f"@{msg.tg_chat_username}"
+        # Иначе — поднимаем Channel по tg_chat_id
+        if msg.tg_chat_id is not None:
+            ch = (await session.execute(
+                select(Channel).where(Channel.tg_chat_id == msg.tg_chat_id)
+            )).scalar_one_or_none()
+            if ch is not None:
+                if ch.username:
+                    return f"https://t.me/{ch.username}", f"@{ch.username}"
+                if ch.invite_link:
+                    return ch.invite_link, f"приватный канал #{ch.id}"
+                return None, f"приватный канал #{ch.id}"
+        return None, "источник"
+
+
 async def remove_channel(ref: str) -> bool:
     """Деактивировать канал. True если действительно был активен."""
     username, tg_chat_id = _parse_channel_ref(ref)
@@ -511,6 +564,105 @@ async def seed_channels_if_empty(usernames: list[str], added_by: int = 0) -> int
 
 
 # ---------- NOTIFICATIONS (продолжение) ----------
+
+
+async def get_matched_vacancy_ids(user_id: int, message_id: int) -> list[int]:
+    """Восстановить список matched_vacancy_ids для пары (user_id, message_id):
+    сначала пробуем последнюю Notification, потом PendingNotification.
+    Если ничего нет — возвращаем []."""
+    async with AsyncSessionLocal() as session:
+        n = (await session.execute(
+            select(Notification.matched_vacancy_ids)
+            .where(
+                Notification.user_id == user_id,
+                Notification.message_id == message_id,
+            )
+        )).scalar_one_or_none()
+        if n:
+            return list(n)
+        p = (await session.execute(
+            select(PendingNotification.matched_vacancy_ids)
+            .where(
+                PendingNotification.user_id == user_id,
+                PendingNotification.message_id == message_id,
+            )
+        )).scalar_one_or_none()
+        if p:
+            return list(p)
+        return []
+
+
+# ---------- FAVORITES ----------
+
+
+async def add_favorite(
+    user_id: int, message_id: int, matched_vacancy_ids: list[int],
+) -> bool:
+    """Добавить вакансию в избранное. True — реально вставлено,
+    False — уже было (UNIQUE на (user_id, message_id))."""
+    async with AsyncSessionLocal() as session:
+        await upsert_user_in_session(session, user_id)
+        try:
+            session.add(Favorite(
+                user_id=user_id,
+                message_id=message_id,
+                matched_vacancy_ids=list(matched_vacancy_ids or []),
+            ))
+            await session.commit()
+            return True
+        except IntegrityError:
+            await session.rollback()
+            return False
+
+
+async def remove_favorite(user_id: int, message_id: int) -> bool:
+    """Удалить из избранного. True если что-то реально удалено."""
+    async with AsyncSessionLocal() as session:
+        row = (await session.execute(
+            select(Favorite).where(
+                Favorite.user_id == user_id,
+                Favorite.message_id == message_id,
+            )
+        )).scalar_one_or_none()
+        if row is None:
+            return False
+        await session.delete(row)
+        await session.commit()
+        return True
+
+
+async def is_favorited(user_id: int, message_id: int) -> bool:
+    async with AsyncSessionLocal() as session:
+        res = await session.execute(
+            select(Favorite.id).where(
+                Favorite.user_id == user_id,
+                Favorite.message_id == message_id,
+            )
+        )
+        return res.scalar_one_or_none() is not None
+
+
+async def list_favorites(user_id: int) -> list[Favorite]:
+    """Список избранного юзера (новые сверху). Подгружает связанные
+    Message+Vacancy на следующих шагах."""
+    async with AsyncSessionLocal() as session:
+        res = await session.execute(
+            select(Favorite)
+            .where(Favorite.user_id == user_id)
+            .order_by(Favorite.created_at.desc())
+        )
+        return list(res.scalars().all())
+
+
+async def get_favorite(user_id: int, message_id: int) -> Optional[Favorite]:
+    async with AsyncSessionLocal() as session:
+        res = await session.execute(
+            select(Favorite).where(
+                Favorite.user_id == user_id,
+                Favorite.message_id == message_id,
+            )
+        )
+        return res.scalar_one_or_none()
 
 
 async def already_notified(user_id: int, message_id: int) -> bool:

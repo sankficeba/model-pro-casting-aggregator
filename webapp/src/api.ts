@@ -9,6 +9,8 @@ import type {
   CategoryCode,
   DeliverySettings,
   DigestStartResponse,
+  FavoriteShowResponse,
+  FavoritesList,
   MeResponse,
   SubscriptionCheckout,
   SubscriptionStatus,
@@ -212,8 +214,18 @@ export const api = {
   // Subscription
   getSubscriptionStatus: () =>
     request<SubscriptionStatus>("/subscription/status"),
-  createSubscriptionCheckout: () =>
+  createSubscriptionCheckout: (planCode?: string) =>
     request<SubscriptionCheckout>("/subscription/checkout", {
+      method: "POST",
+      body: JSON.stringify({ plan_code: planCode ?? null }),
+    }),
+
+  // Favorites
+  listFavorites: () => request<FavoritesList>("/favorites"),
+  removeFavorite: (messageId: number) =>
+    request<{ ok: boolean }>(`/favorites/${messageId}`, { method: "DELETE" }),
+  showFavoriteInChat: (messageId: number) =>
+    request<FavoriteShowResponse>(`/favorites/${messageId}/show-in-chat`, {
       method: "POST",
       body: "{}",
     }),

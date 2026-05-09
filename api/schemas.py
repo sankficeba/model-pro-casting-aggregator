@@ -389,14 +389,48 @@ class DigestStartResponse(BaseModel):
 # ---------- subscription ----------
 
 
+class FavoriteItem(BaseModel):
+    """Элемент списка избранного для Mini App: компактная плашка с
+    превью текста и метаинформацией. message_id — id канонического
+    Message-row в БД, по нему фронт делает remove / show-in-chat."""
+    message_id: int
+    title: str  # короткий заголовок (категория + первая роль)
+    preview: str  # 2-3 строки plain-text для карточки
+    saved_at: datetime  # ISO timestamp
+    source_label: str  # "@channel" / "приватный канал #N" / "источник"
+
+
+class FavoritesListResponse(BaseModel):
+    items: list[FavoriteItem]
+
+
+class FavoriteShowResponse(BaseModel):
+    sent: bool
+    error: Optional[str] = None
+
+
+class SubscriptionPlan(BaseModel):
+    code: str
+    days: int
+    price_rub: int
+    label: str
+    discount_pct: int = 0
+    badge: Optional[str] = None  # "Популярный" / "Выгодный" и т.д.
+
+
 class SubscriptionStatusResponse(BaseModel):
     active_until: Optional[datetime] = None
     days_left: int = 0
     is_active: bool
     trial_started_at: Optional[datetime] = None
-    plan_price_rub: int
+    plan_price_rub: int  # дефолтный (1m), оставляем для обратной совместимости
     plan_period_days: int
     payments_configured: bool
+    plans: list[SubscriptionPlan]
+
+
+class SubscriptionCheckoutRequest(BaseModel):
+    plan_code: Optional[str] = None  # default: '1m'
 
 
 class SubscriptionCheckoutResponse(BaseModel):

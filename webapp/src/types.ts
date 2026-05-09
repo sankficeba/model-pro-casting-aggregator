@@ -184,6 +184,15 @@ export interface DigestStartResponse {
   remaining: number;
 }
 
+export interface SubscriptionPlan {
+  code: string;
+  days: number;
+  price_rub: number;
+  label: string;
+  discount_pct: number;
+  badge: string | null;
+}
+
 export interface SubscriptionStatus {
   active_until: string | null;  // ISO timestamp
   days_left: number;
@@ -192,11 +201,29 @@ export interface SubscriptionStatus {
   plan_price_rub: number;
   plan_period_days: number;
   payments_configured: boolean;
+  plans: SubscriptionPlan[];
 }
 
 export interface SubscriptionCheckout {
   confirmation_url: string;
   payment_id: string;
+}
+
+export interface FavoriteItem {
+  message_id: number;
+  title: string;
+  preview: string;
+  saved_at: string;
+  source_label: string;
+}
+
+export interface FavoritesList {
+  items: FavoriteItem[];
+}
+
+export interface FavoriteShowResponse {
+  sent: boolean;
+  error?: string | null;
 }
 
 export const CATEGORY_LABELS: Record<CategoryCode, string> = {

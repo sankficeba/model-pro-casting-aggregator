@@ -140,7 +140,7 @@ async def main() -> None:
     try:
         await asyncio.gather(
             userbot.start(),
-            run_bot(bot, llm=llm),
+            run_bot(bot, llm=llm, userbot=userbot),
             night_digest_loop(bot),
             daily_digest_loop(bot),
             expiry_reminder_loop(bot),
