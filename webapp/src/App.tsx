@@ -243,17 +243,16 @@ export default function App() {
   return (
     <SuggestionsProvider>
       <BackgroundShapes />
-      {paymentToast && (
-        <SuccessToast
-          message={paymentToast}
-          onDismiss={() => setPaymentToast(null)}
-          topOffsetPx={showBanner && subStatus ? 76 : 12}
-        />
-      )}
       {showBanner && (
         <SubscriptionBanner
           status={subStatus}
           onClick={() => setScreen({ kind: "subscription" })}
+        />
+      )}
+      {paymentToast && (
+        <SuccessToast
+          message={paymentToast}
+          onDismiss={() => setPaymentToast(null)}
         />
       )}
       {renderScreen()}
