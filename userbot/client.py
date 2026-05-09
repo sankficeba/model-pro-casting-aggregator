@@ -81,62 +81,139 @@ class Userbot:
             settings.tg_api_id,
             settings.tg_api_hash,
         )
+        # Активные entity-ссылки + текущий NewMessage-handler. Нужны для
+        # hot-reload подписок без рестарта процесса (subscribe_channel /
+        # unsubscribe_channel дёргают _rebind_handler).
+        self._entities: list = []
+        self._handler_func = None
+
+    async def _resolve_one(self, row) -> object | None:  # noqa: ANN001
+        """Резолвит ОДИН Channel-row → Telethon entity (best-effort).
+        Для публичного канала — пытаемся idempotent-join (FloodWait
+        не критичен, entity всё равно отдаём).
+        """
+        if row.tg_chat_id is not None:
+            ref_for_log = f"id={row.tg_chat_id}"
+            ref_for_get = row.tg_chat_id
+            is_private = True
+        else:
+            ref_for_log = f"@{row.username}"
+            ref_for_get = f"@{row.username}"
+            is_private = False
+
+        try:
+            entity = await self.client.get_entity(ref_for_get)
+        except Exception as e:  # noqa: BLE001
+            logger.error("Не удалось получить entity для {}: {}", ref_for_log, e)
+            return None
+
+        if is_private:
+            logger.info("Слушаю приватный канал {} (entity id={})",
+                        ref_for_log, getattr(entity, "id", "?"))
+            return entity
+
+        try:
+            await self.client(JoinChannelRequest(entity))
+            logger.info("Вступил в канал {} (id={})", ref_for_log, getattr(entity, "id", "?"))
+        except UserAlreadyParticipantError:
+            logger.info("Уже состою в канале {} (id={})", ref_for_log, getattr(entity, "id", "?"))
+        except (ChannelPrivateError, InviteHashExpiredError) as e:
+            logger.warning("Канал {} недоступен ({}); событий не будет",
+                           ref_for_log, type(e).__name__)
+            return None
+        except Exception as e:  # noqa: BLE001
+            # FloodWait и т.п. — не критично, entity всё равно слушаем.
+            logger.warning("JoinChannelRequest для {} не прошёл ({}); продолжаем слушать",
+                           ref_for_log, e)
+        return entity
 
     async def _resolve_channels(self) -> list:
         await repository.seed_channels_if_empty(settings.tg_channels, added_by=0)
         rows = await repository.list_channels(active_only=True)
-
         if not rows:
             logger.warning("Нет активных каналов в БД — userbot работает «вхолостую»")
             return []
-
-        entities = []
+        entities: list = []
         for row in rows:
-            # Какой ссылкой адресуем канал — публичный username или
-            # приватный chat_id (t.me/c/<id> → -100<id> в БД).
-            if row.tg_chat_id is not None:
-                ref_for_log = f"id={row.tg_chat_id}"
-                ref_for_get = row.tg_chat_id
-                is_private = True
-            else:
-                ref_for_log = f"@{row.username}"
-                ref_for_get = f"@{row.username}"
-                is_private = False
-
-            try:
-                entity = await self.client.get_entity(ref_for_get)
-            except Exception as e:  # noqa: BLE001
-                logger.error("Не удалось получить entity для {}: {}", ref_for_log, e)
-                continue
-
-            # Для приватных каналов аккаунт уже должен быть в них —
-            # вступить через JoinChannelRequest нельзя без invite-hash.
-            if is_private:
-                logger.info("Слушаю приватный канал {} (entity id={})",
-                            ref_for_log, getattr(entity, "id", "?"))
-                entities.append(entity)
-                continue
-
-            # Публичный канал: get_entity только резолвит, не вступает.
-            # Дёргаем JoinChannelRequest идемпотентно (best-effort) — если
-            # упало (FloodWait/pending-approval/прочее), всё равно подключаем
-            # entity к фильтру Telethon: аккаунт мог уже быть участником с
-            # прошлых рестартов, и тогда NewMessage всё равно дойдут.
-            try:
-                await self.client(JoinChannelRequest(entity))
-                logger.info("Вступил в канал {} (id={})", ref_for_log, getattr(entity, "id", "?"))
-            except UserAlreadyParticipantError:
-                logger.info("Уже состою в канале {} (id={})", ref_for_log, getattr(entity, "id", "?"))
-            except (ChannelPrivateError, InviteHashExpiredError) as e:
-                # Канал реально недоступен — entity бесполезен.
-                logger.warning("Канал {} недоступен ({}); событий не будет", ref_for_log, type(e).__name__)
-                continue
-            except Exception as e:  # noqa: BLE001
-                # FloodWait и т.п. — не критично, entity всё равно слушаем.
-                logger.warning("JoinChannelRequest для {} не прошёл ({}); продолжаем слушать", ref_for_log, e)
-
-            entities.append(entity)
+            ent = await self._resolve_one(row)
+            if ent is not None:
+                entities.append(ent)
         return entities
+
+    async def _rebind_handler(self) -> None:
+        """Перевешивает NewMessage-handler с актуальным self._entities.
+        Вызывается после live-add/remove канала."""
+        if self._handler_func is None:
+            return
+        try:
+            self.client.remove_event_handler(self._handler_func)
+        except Exception:  # noqa: BLE001
+            pass
+        self.client.add_event_handler(
+            self._handler_func,
+            events.NewMessage(chats=self._entities or None),
+        )
+
+    @staticmethod
+    def _entity_matches(entity, *, username: str | None, tg_chat_id: int | None) -> bool:
+        e_username = (getattr(entity, "username", None) or "").lower()
+        e_id = getattr(entity, "id", None)
+        if username and e_username == username.lower():
+            return True
+        if tg_chat_id is not None and e_id is not None:
+            # БД хранит -100<id>, Telethon отдаёт bare id. Поддерживаем оба.
+            if tg_chat_id == e_id:
+                return True
+            if abs(tg_chat_id) - 1_000_000_000_000 == e_id:
+                return True
+        return False
+
+    async def subscribe_channel(self, ref: str) -> bool:
+        """Hot-reload: добавить канал в подписку Telethon без рестарта app.
+        Канал должен уже быть в `channels` (через repository.add_channel).
+        Возвращает True, если действительно подписались сейчас."""
+        username, tg_chat_id = repository._parse_channel_ref(ref)
+        if username is None and tg_chat_id is None:
+            return False
+        # Не дублируем подписку, если уже в self._entities.
+        for ent in self._entities:
+            if self._entity_matches(ent, username=username, tg_chat_id=tg_chat_id):
+                return False
+        rows = await repository.list_channels(active_only=True)
+        target = None
+        for r in rows:
+            if username and r.username == username:
+                target = r
+                break
+            if tg_chat_id is not None and r.tg_chat_id == tg_chat_id:
+                target = r
+                break
+        if target is None:
+            return False
+        entity = await self._resolve_one(target)
+        if entity is None:
+            return False
+        self._entities.append(entity)
+        await self._rebind_handler()
+        logger.info("Hot-reload: подписался на {}", ref)
+        return True
+
+    async def unsubscribe_channel(self, ref: str) -> bool:
+        """Hot-reload: убрать канал из подписки Telethon. Никаких сетевых
+        вызовов — только локальная фильтрация self._entities + rebind."""
+        username, tg_chat_id = repository._parse_channel_ref(ref)
+        if username is None and tg_chat_id is None:
+            return False
+        before = len(self._entities)
+        self._entities = [
+            e for e in self._entities
+            if not self._entity_matches(e, username=username, tg_chat_id=tg_chat_id)
+        ]
+        if len(self._entities) == before:
+            return False
+        await self._rebind_handler()
+        logger.info("Hot-reload: отписался от {}", ref)
+        return True
 
     @staticmethod
     def _format_notification(
@@ -318,6 +395,8 @@ class Userbot:
                         callback_data=f"respond:{db_id}",
                     )
                 ])
+            from bot.keyboards import actions_rows
+            kb_buttons += actions_rows(message_id=message_db_id, is_favorited=False)
             reply_markup = InlineKeyboardMarkup(inline_keyboard=kb_buttons)
 
             try:
@@ -453,18 +532,24 @@ class Userbot:
 
     async def start(self) -> None:
         await self.client.start(phone=settings.tg_phone)
-        entities = await self._resolve_channels()
-        if not entities:
+        self._entities = await self._resolve_channels()
+        if not self._entities:
             logger.warning(
                 "Список каналов пуст или ни один не разрешился — userbot работает «вхолостую»"
             )
 
-        @self.client.on(events.NewMessage(chats=entities or None))
         async def _handler(event):  # noqa: ANN001
             await self._handle_message(event)
 
+        # Сохраняем функцию для последующих rebind'ов в hot-reload.
+        self._handler_func = _handler
+        self.client.add_event_handler(
+            _handler,
+            events.NewMessage(chats=self._entities or None),
+        )
+
         logger.info(
             "Userbot запущен, слушаю каналы: {}",
-            [getattr(e, "username", getattr(e, "id", "?")) for e in entities],
+            [getattr(e, "username", getattr(e, "id", "?")) for e in self._entities],
         )
         await self.client.run_until_disconnected()

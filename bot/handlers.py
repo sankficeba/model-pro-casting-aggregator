@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import asyncio
-import os
 
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import Command, CommandStart
@@ -17,6 +16,7 @@ from loguru import logger
 from sqlalchemy import select
 
 from api import profile_repo
+from bot import keyboards
 from bot.response import compose_response, compose_response_llm
 from config import settings
 from db import matching, repository
@@ -37,6 +37,7 @@ HELP_TEXT_ADMIN = HELP_TEXT_USER + (
     "/channels — список каналов\n"
     "/addchannel @username — добавить канал\n"
     "/removechannel @username — отключить канал\n"
+    "/channellink &lt;ref&gt; &lt;url&gt; — задать invite-ссылку для приватного канала\n"
     "/broadcast_legacy &lt;текст&gt; — разовая рассылка юзерам со старой анкетой\n"
     "/cancel — отменить ожидаемую рассылку"
 )
@@ -181,6 +182,8 @@ async def _build_digest_message(
                 callback_data=f"respond:{v.id}",
             )
         ])
+    fav_state = await repository.is_favorited(user_id, canonical_id)
+    kb_buttons += keyboards.actions_rows(message_id=canonical_id, is_favorited=fav_state)
     if pending_left > 0:
         kb_buttons.append([
             InlineKeyboardButton(text="➡ Следующее", callback_data="digest:next")
@@ -228,21 +231,41 @@ async def _send_next_pending(bot: Bot, user_id: int) -> bool:
         return True
 
 
-async def _restart_self(bot: Bot, message: Message, reason: str) -> None:
-    """Отвечаем пользователю и перезапускаем процесс — docker compose поднимет
-    нас обратно с обновлённым списком каналов из БД."""
-    await message.answer(f"{reason}\nПерезапускаю userbot — каналы обновятся через ~10 секунд.")
-    # Дать сообщению уйти в Telegram
-    await asyncio.sleep(0.5)
-    try:
-        await bot.session.close()
-    except Exception:  # noqa: BLE001
-        pass
-    logger.info("Restart requested by admin: {}", reason)
-    os._exit(0)
+async def _channels_changed(
+    *,
+    bot: Bot,
+    message: Message,
+    reason: str,
+    userbot: Userbot | None,
+    action: str,
+    ref: str,
+) -> None:
+    """Hot-reload подписок Telethon после изменения channels. Без
+    рестарта процесса (исторически тут был os._exit(0), теряли
+    события из всех каналов на ~15 сек)."""
+    if userbot is None:
+        await message.answer(f"{reason}\n⚠️ userbot не подключён, перезагрузи app вручную.")
+        return
+    if action == "add":
+        ok = await userbot.subscribe_channel(ref)
+    elif action == "remove":
+        ok = await userbot.unsubscribe_channel(ref)
+    else:
+        ok = False
+    if ok:
+        await message.answer(f"{reason}\n✅ Подписки userbot обновлены без рестарта.")
+    else:
+        await message.answer(
+            f"{reason}\n⚠️ Не удалось обновить подписку live (ref={ref}). "
+            "Проверь логи app."
+        )
 
 
-def build_dispatcher(bot: Bot, llm: LLMProvider | None = None) -> Dispatcher:
+def build_dispatcher(
+    bot: Bot,
+    llm: LLMProvider | None = None,
+    userbot: Userbot | None = None,
+) -> Dispatcher:
     dp = Dispatcher()
 
     @dp.message(CommandStart())
@@ -339,7 +362,46 @@ def build_dispatcher(bot: Bot, llm: LLMProvider | None = None) -> Dispatcher:
         ch_label = (
             f"@{ch.username}" if ch.username else f"приватный (id {ch.tg_chat_id})"
         )
-        await _restart_self(bot, message, f"✅ Канал {ch_label} добавлен.")
+        await _channels_changed(
+            bot=bot, message=message, userbot=userbot,
+            reason=f"✅ Канал {ch_label} добавлен.",
+            action="add", ref=parts[1].strip(),
+        )
+
+    @dp.message(Command("channellink"))
+    async def cmd_set_channel_link(message: Message) -> None:
+        """Записать invite-ссылку на приватный канал, чтобы кнопка
+        «Подробнее» под уведомлением могла переслать туда юзера.
+        Использование:
+          /channellink @username https://t.me/+abc123
+          /channellink t.me/c/1968214811 https://t.me/+abc123
+        Чтобы убрать ссылку — указать слово 'none' вместо URL.
+        """
+        if not _is_admin(message.from_user.id):
+            return
+        parts = (message.text or "").split(maxsplit=2)
+        if len(parts) < 3 or not parts[1].strip() or not parts[2].strip():
+            await message.answer(
+                "Использование: <code>/channellink &lt;@username|t.me/c/&lt;id&gt;&gt; "
+                "&lt;invite_url&gt;</code>\n"
+                "Чтобы очистить — передай <code>none</code> вместо ссылки.",
+                parse_mode="HTML",
+            )
+            return
+        ref = parts[1].strip()
+        link_arg = parts[2].strip()
+        link: str | None = None if link_arg.lower() == "none" else link_arg
+        ok = await repository.set_channel_invite_link(ref, link)
+        if not ok:
+            await message.answer(
+                "Канал не найден. Сначала добавь его через <code>/addchannel</code>.",
+                parse_mode="HTML",
+            )
+            return
+        if link:
+            await message.answer(f"✅ Invite-ссылка сохранена: {link}")
+        else:
+            await message.answer("✅ Invite-ссылка очищена.")
 
     @dp.message(Command("removechannel"))
     async def cmd_remove_channel(message: Message) -> None:
@@ -356,7 +418,11 @@ def build_dispatcher(bot: Bot, llm: LLMProvider | None = None) -> Dispatcher:
         if not removed:
             await message.answer("Такого активного канала не нашёл.")
             return
-        await _restart_self(bot, message, "🗑 Канал отключён.")
+        await _channels_changed(
+            bot=bot, message=message, userbot=userbot,
+            reason="🗑 Канал отключён.",
+            action="remove", ref=parts[1].strip(),
+        )
 
     @dp.message(Command("cancel"))
     async def cmd_cancel(message: Message) -> None:
@@ -451,7 +517,12 @@ def build_dispatcher(bot: Bot, llm: LLMProvider | None = None) -> Dispatcher:
                 except Exception:  # noqa: BLE001
                     pass
             await query.answer(f"Добавлено: {ch_label}")
-            await _restart_self(bot, message, f"✅ Канал {ch_label} добавлен (через предложение).")  # type: ignore[arg-type]
+            await _channels_changed(
+                bot=bot, message=message,  # type: ignore[arg-type]
+                userbot=userbot,
+                reason=f"✅ Канал {ch_label} добавлен (через предложение).",
+                action="add", ref=full_ref,
+            )
         elif action == "skip":
             if message:
                 try:
@@ -514,6 +585,94 @@ def build_dispatcher(bot: Bot, llm: LLMProvider | None = None) -> Dispatcher:
             logger.warning("Не удалось отправить отклик user={}: {}", user_id, e)
             await query.answer("Не получилось отправить отклик. Попробуй ещё раз.", show_alert=True)
 
+    # ---------- Inline-кнопки под уведомлением: Подробнее / Удалить / Избранное ----------
+
+    @dp.callback_query(F.data.startswith("details:"))
+    async def cb_details(query: CallbackQuery) -> None:
+        # callback_data: "details:<message_db_id>"
+        try:
+            msg_id = int((query.data or "").split(":", 1)[1])
+        except (ValueError, IndexError):
+            await query.answer("Битая кнопка.", show_alert=True)
+            return
+        link, label = await repository.get_channel_link_for_message(msg_id)
+        if link:
+            try:
+                await query.answer()
+                await query.message.answer(  # type: ignore[union-attr]
+                    f"🔗 Источник: <b>{label}</b>\n{link}",
+                    parse_mode="HTML",
+                    disable_web_page_preview=False,
+                )
+            except Exception:  # noqa: BLE001
+                await query.answer(link, show_alert=True)
+        else:
+            txt = (
+                f"У админа пока не указана ссылка на {label or 'этот канал'}. "
+                "Попроси добавить её."
+            )
+            await query.answer(txt, show_alert=True)
+
+    @dp.callback_query(F.data == "delself:")
+    async def cb_del_self(query: CallbackQuery) -> None:
+        """Удалить из чата само сообщение, на котором висит кнопка."""
+        try:
+            await query.message.delete()  # type: ignore[union-attr]
+        except Exception:  # noqa: BLE001
+            try:
+                await query.message.edit_reply_markup(reply_markup=None)  # type: ignore[union-attr]
+            except Exception:  # noqa: BLE001
+                pass
+        await query.answer("Удалено.")
+
+    @dp.callback_query(F.data.startswith("fav:"))
+    async def cb_fav(query: CallbackQuery) -> None:
+        """callback_data: 'fav:add:<msg_id>' / 'fav:rm:<msg_id>'."""
+        parts = (query.data or "").split(":", 2)
+        if len(parts) < 3:
+            await query.answer("Битая кнопка.", show_alert=True)
+            return
+        action = parts[1]
+        try:
+            msg_id = int(parts[2])
+        except ValueError:
+            await query.answer("Битая кнопка.", show_alert=True)
+            return
+        user_id = query.from_user.id if query.from_user else 0
+        if not user_id:
+            await query.answer("Не удалось определить юзера.", show_alert=True)
+            return
+
+        if action == "add":
+            matched_ids = await repository.get_matched_vacancy_ids(user_id, msg_id)
+            await repository.add_favorite(user_id, msg_id, matched_ids)
+            new_state = True
+            popup = "Добавлено в избранное ⭐"
+        elif action == "rm":
+            await repository.remove_favorite(user_id, msg_id)
+            new_state = False
+            popup = "Убрано из избранного"
+        else:
+            await query.answer("Неизвестное действие.", show_alert=True)
+            return
+
+        # Перерисовать клавиатуру: меняем только последний ряд (fav).
+        msg = query.message
+        if msg is not None and msg.reply_markup is not None:
+            try:
+                old_rows = list(msg.reply_markup.inline_keyboard)
+                # Отбрасываем хвост из 2 рядов (actions) и подставляем новые.
+                head = old_rows[:-2]
+                new_rows = head + keyboards.actions_rows(
+                    message_id=msg_id, is_favorited=new_state,
+                )
+                await msg.edit_reply_markup(
+                    reply_markup=InlineKeyboardMarkup(inline_keyboard=new_rows)
+                )
+            except Exception:  # noqa: BLE001
+                pass
+        await query.answer(popup)
+
     # ---------- Admin broadcast OR fallback ----------
 
     @dp.message()
@@ -536,7 +695,11 @@ def build_dispatcher(bot: Bot, llm: LLMProvider | None = None) -> Dispatcher:
     return dp
 
 
-async def run_bot(bot: Bot, llm: LLMProvider | None = None) -> None:
-    dp = build_dispatcher(bot, llm=llm)
+async def run_bot(
+    bot: Bot,
+    llm: LLMProvider | None = None,
+    userbot: Userbot | None = None,
+) -> None:
+    dp = build_dispatcher(bot, llm=llm, userbot=userbot)
     logger.info("aiogram-бот запущен")
     await dp.start_polling(bot)

@@ -480,6 +480,9 @@ class Channel(Base):
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
     active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # Ручная invite-ссылка для приватных каналов: используется кнопкой
+    # «Подробнее» под уведомлением, когда username отсутствует.
+    invite_link: Mapped[Optional[str]] = mapped_column(String(256), nullable=True)
 
 
 class Filter(Base):
@@ -722,4 +725,30 @@ class Payment(Base):
             "status IN ('pending','succeeded','canceled')",
             name="ck_payments_status",
         ),
+    )
+
+
+class Favorite(Base):
+    """Сохранённое юзером кастинг-сообщение. Рендерится в Mini App списком,
+    оттуда же пересылается обратно в чат с альтернативной кнопкой
+    «Удалить из избранного»."""
+
+    __tablename__ = "favorites"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    message_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("messages.id", ondelete="CASCADE"), nullable=False
+    )
+    matched_vacancy_ids: Mapped[list[int]] = mapped_column(
+        ARRAY(Integer), default=list, server_default="{}", nullable=False,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "message_id", name="uq_favorites_user_message"),
     )

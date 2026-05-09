@@ -17,6 +17,7 @@ import { BlacklistScreen } from "./components/BlacklistScreen";
 import { CategorySurveyScreen } from "./components/CategorySurveyScreen";
 import { CategoryMenuScreen } from "./components/CategoryMenuScreen";
 import { DeliverySettingsScreen } from "./components/DeliverySettingsScreen";
+import { FavoritesScreen } from "./components/FavoritesScreen";
 import { SubscriptionBanner } from "./components/SubscriptionBanner";
 import { SubscriptionScreen } from "./components/SubscriptionScreen";
 import { SuccessToast } from "./components/SuccessToast";
@@ -36,6 +37,7 @@ type Screen =
   | { kind: "blacklist" }
   | { kind: "suggestChannel" }
   | { kind: "delivery" }
+  | { kind: "favorites" }
   | { kind: "subscription" }
   | { kind: "addCategory" }
   | { kind: "admin" };
@@ -176,6 +178,7 @@ export default function App() {
           onBlacklist={() => setScreen({ kind: "blacklist" })}
           onSuggestChannel={() => setScreen({ kind: "suggestChannel" })}
           onDelivery={() => setScreen({ kind: "delivery" })}
+          onFavorites={() => setScreen({ kind: "favorites" })}
           onChange={async () => { await fetchSubscriptions(); }}
         />
       );
@@ -191,6 +194,10 @@ export default function App() {
 
     if (screen.kind === "delivery") {
       return <DeliverySettingsScreen onBack={goToMenu} />;
+    }
+
+    if (screen.kind === "favorites") {
+      return <FavoritesScreen onBack={goToMenu} />;
     }
 
     if (screen.kind === "subscription") {
@@ -238,7 +245,8 @@ export default function App() {
     screen.kind === "menu" ||
     screen.kind === "blacklist" ||
     screen.kind === "suggestChannel" ||
-    screen.kind === "delivery";
+    screen.kind === "delivery" ||
+    screen.kind === "favorites";
 
   return (
     <SuggestionsProvider>

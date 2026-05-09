@@ -22,9 +22,13 @@ from api.schemas import (
     DeliverySettingsUpdate,
     DigestStartResponse,
     EventProfileSchema,
+    FavoriteItem,
+    FavoriteShowResponse,
+    FavoritesListResponse,
     GeneralProfileSchema,
     ProfileResponse,
     ProfileUpdate,
+    SubscriptionCheckoutRequest,
     SubscriptionCheckoutResponse,
     SubscriptionPatchRequest,
     SubscriptionStatusResponse,
@@ -437,22 +441,27 @@ async def subscription_status(
     user: TelegramUser = Depends(current_user),
 ) -> SubscriptionStatusResponse:
     s = await repo.get_subscription_status(user.id)
+    from api.plans import SUBSCRIPTION_PLANS, get_plan
+    default_plan = get_plan(None)
     return SubscriptionStatusResponse(
         active_until=s["active_until"],
         days_left=s["days_left"],
         is_active=s["is_active"],
         trial_started_at=s["trial_started_at"],
-        plan_price_rub=settings.subscription_price_rub,
-        plan_period_days=settings.subscription_period_days,
+        plan_price_rub=default_plan.price_rub,
+        plan_period_days=default_plan.days,
         payments_configured=yookassa_client.is_configured(),
+        plans=SUBSCRIPTION_PLANS,
     )
 
 
 @app.post("/api/subscription/checkout", response_model=SubscriptionCheckoutResponse)
 async def subscription_checkout(
+    body: SubscriptionCheckoutRequest = SubscriptionCheckoutRequest(),
     user: TelegramUser = Depends(current_user),
 ) -> SubscriptionCheckoutResponse:
-    """Создать YooKassa-платёж и вернуть URL для редиректа на страницу оплаты."""
+    """Создать YooKassa-платёж по выбранному тарифу. Если plan_code пуст,
+    используется тариф по умолчанию (1 месяц)."""
     if not yookassa_client.is_configured():
         raise HTTPException(
             status_code=503,
@@ -460,8 +469,10 @@ async def subscription_checkout(
         )
     import uuid
 
-    days = settings.subscription_period_days
-    amount_rub = settings.subscription_price_rub
+    from api.plans import get_plan
+    plan = get_plan(body.plan_code)
+    days = plan.days
+    amount_rub = plan.price_rub
     idempotency_key = uuid.uuid4().hex
     payment_id = await repo.insert_payment_pending(
         user_id=user.id,
@@ -481,7 +492,7 @@ async def subscription_checkout(
             user_id=user.id,
             idempotency_key=idempotency_key,
             return_url=return_url,
-            description=f"Подписка на {days} дн.",
+            description=f"Подписка: {plan.label}",
         )
     except Exception as e:  # noqa: BLE001
         logger.exception("YooKassa create_payment failed: {}", e)
@@ -493,6 +504,170 @@ async def subscription_checkout(
         confirmation_url=created.confirmation_url,
         payment_id=created.payment_id,
     )
+
+
+# ---------- Favorites ----------
+
+
+def _favorite_keyboard_dict(message_id: int) -> dict:
+    """JSON-структура inline-клавиатуры для пере-отправляемого избранного.
+    Зеркалит bot/keyboards.actions_rows, но в виде dict (для httpx)."""
+    return {
+        "inline_keyboard": [
+            [
+                {"text": "🔗 Подробнее", "callback_data": f"details:{message_id}"},
+                {"text": "❌ Удалить", "callback_data": "delself:"},
+            ],
+            [
+                {"text": "🗂 Удалить из избранного",
+                 "callback_data": f"fav:rm:{message_id}"},
+            ],
+        ]
+    }
+
+
+def _strip_html(text: str) -> str:
+    """Дёшево убрать html-теги из notification_text для preview в Mini App."""
+    import re
+    no_tags = re.sub(r"<[^>]+>", "", text)
+    return no_tags.replace("&lt;", "<").replace("&gt;", ">").replace("&amp;", "&")
+
+
+async def _build_favorite_message(
+    user_id: int, message_id: int, matched_vacancy_ids: list[int],
+) -> tuple[str, dict] | None:
+    """Собрать (notification_text, reply_markup) для пере-отправки в чат
+    из избранного. Возвращает None если canonical Message исчез."""
+    from db import matching
+    from userbot.client import Userbot, _vacancy_title
+
+    loaded = await repo.get_canonical_with_vacancies(message_id)
+    if loaded is None:
+        return None
+    canon_msg, canon_vacancies = loaded
+    post, vac_extractions = matching._orm_to_extractions(canon_msg, canon_vacancies)
+    matched_set = set(matched_vacancy_ids or [])
+    matched_idxs: list[int] = [
+        i for i, v in enumerate(canon_vacancies) if v.id in matched_set
+    ]
+    if not matched_idxs:
+        # Fallback: если ids потерялись, показываем все вакансии canonical.
+        matched_idxs = list(range(len(canon_vacancies)))
+    if not matched_idxs:
+        return None
+    eff_cat = (
+        canon_vacancies[matched_idxs[0]].category if canon_vacancies else None
+    ) or canon_msg.category
+
+    class _PseudoMsg:
+        id = canon_msg.tg_message_id
+        message = canon_msg.text
+
+    text = Userbot._format_notification(
+        post=post,
+        vacancies=vac_extractions,
+        matched_idxs=matched_idxs,
+        message=_PseudoMsg(),
+        chat_username=canon_msg.tg_chat_username,
+        effective_category=eff_cat,
+    )
+
+    # Кнопки: вакансии-отклики + 3-rd row из bot/keyboards (через dict).
+    rows: list[list[dict]] = []
+    for i in matched_idxs:
+        v = canon_vacancies[i]
+        title = _vacancy_title(vac_extractions[i])
+        rows.append([{
+            "text": f"✍ Отклик: {title}"[:64],
+            "callback_data": f"respond:{v.id}",
+        }])
+    fav_kb = _favorite_keyboard_dict(message_id)
+    rows += fav_kb["inline_keyboard"]
+    return text, {"inline_keyboard": rows}
+
+
+def _favorite_preview(text: str) -> tuple[str, str]:
+    """(title, preview) из rendered notification text. title = первая
+    непустая строка без HTML, preview = до 240 символов."""
+    plain = _strip_html(text).strip()
+    lines = [ln.strip() for ln in plain.split("\n") if ln.strip()]
+    title = lines[0] if lines else "Без названия"
+    preview = "\n".join(lines[:5])[:280]
+    return title, preview
+
+
+@app.get("/api/favorites", response_model=FavoritesListResponse)
+async def list_favorites(
+    user: TelegramUser = Depends(current_user),
+) -> FavoritesListResponse:
+    """Список избранных кастингов пользователя — рендерим на лету
+    (на момент чтения, а не на момент сохранения), чтобы тексты всегда
+    были актуальные."""
+    favs = await repo.list_favorites(user.id)
+    items: list[FavoriteItem] = []
+    for f in favs:
+        built = await _build_favorite_message(user.id, f.message_id, list(f.matched_vacancy_ids or []))
+        if built is None:
+            continue
+        text, _markup = built
+        title, preview = _favorite_preview(text)
+        _link, src_label = await repo.get_channel_link_for_message(f.message_id)
+        items.append(FavoriteItem(
+            message_id=f.message_id,
+            title=title,
+            preview=preview,
+            saved_at=f.created_at,
+            source_label=src_label or "источник",
+        ))
+    return FavoritesListResponse(items=items)
+
+
+@app.delete("/api/favorites/{message_id}")
+async def delete_favorite(
+    message_id: int,
+    user: TelegramUser = Depends(current_user),
+) -> dict:
+    ok = await repo.remove_favorite(user.id, message_id)
+    return {"ok": ok}
+
+
+@app.post("/api/favorites/{message_id}/show-in-chat", response_model=FavoriteShowResponse)
+async def show_favorite_in_chat(
+    message_id: int,
+    user: TelegramUser = Depends(current_user),
+) -> FavoriteShowResponse:
+    """Переотправить избранную вакансию в чат бота. Mini App после успеха
+    закрывается через Telegram.WebApp.close()."""
+    fav = await repo.get_favorite(user.id, message_id)
+    if fav is None:
+        raise HTTPException(status_code=404, detail="Не в избранном")
+    built = await _build_favorite_message(
+        user.id, message_id, list(fav.matched_vacancy_ids or []),
+    )
+    if built is None:
+        raise HTTPException(status_code=410, detail="Сообщение больше недоступно")
+    text, markup = built
+    url = f"https://api.telegram.org/bot{settings.bot_token}/sendMessage"
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            r = await client.post(
+                url,
+                json={
+                    "chat_id": user.id,
+                    "text": text,
+                    "parse_mode": "HTML",
+                    "disable_web_page_preview": True,
+                    "reply_markup": markup,
+                },
+            )
+            if r.status_code != 200:
+                logger.warning("Favorite show-in-chat send failed: {} {}",
+                               r.status_code, r.text)
+                return FavoriteShowResponse(sent=False, error=r.text)
+    except httpx.HTTPError as e:
+        logger.warning("Favorite show-in-chat HTTP error: {}", e)
+        return FavoriteShowResponse(sent=False, error=str(e))
+    return FavoriteShowResponse(sent=True)
 
 
 @app.post("/api/yookassa/webhook")
