@@ -442,6 +442,9 @@ def _parse_channel_ref(raw: str) -> tuple[str | None, int | None]:
         # Invite-ссылка не парсится этой функцией — каллер обязан проверить
         # invite через _parse_invite_ref ДО неё.
         return None, None
+    # Если юзер вставил ссылку на конкретный пост (`t.me/foo/12345`), оставляем
+    # только username — иначе мы храним «foo/12345» и Telegram не резолвит.
+    raw = raw.split("/", 1)[0]
     norm = raw.lstrip("@").lower()
     if not norm:
         return None, None
