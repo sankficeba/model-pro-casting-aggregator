@@ -13,6 +13,8 @@ import {
   MessagesSquare,
   Sparkles,
   ListChecks,
+  LifeBuoy,
+  Check,
 } from "lucide-react";
 import { api } from "../api";
 import { tg } from "../telegram";
@@ -22,6 +24,7 @@ import type {
   AdminStats,
   BroadcastFilter,
   BroadcastFilterBody,
+  ProblemItem,
 } from "../types";
 
 type Tab = "profiles" | "messages";
@@ -54,6 +57,7 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
 
       <main className="flex-1 px-5 py-4 space-y-5">
         <StatsBlock />
+        <ProblemsBlock />
         <BroadcastBlock />
 
         <div>
@@ -162,6 +166,94 @@ function StatsBlock() {
         hint={subsHint}
       />
     </div>
+  );
+}
+
+// ===== Problems =====
+
+function ProblemsBlock() {
+  const [items, setItems] = useState<ProblemItem[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState<number | null>(null);
+
+  const load = () => {
+    api.listProblems()
+      .then((r) => setItems(r.items))
+      .catch((e) => setError(String(e)));
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const onResolve = async (e: React.MouseEvent, id: number) => {
+    e.stopPropagation();
+    if (pending !== null) return;
+    setPending(id);
+    try {
+      await api.resolveProblem(id);
+      setItems((prev) => prev?.filter((p) => p.id !== id) ?? null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setPending(null);
+    }
+  };
+
+  const onShow = async (id: number) => {
+    try {
+      await api.showProblemInChat(id);
+      tg?.close();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  };
+
+  return (
+    <section className="space-y-3">
+      <h2 className="text-sm uppercase tracking-wider text-slate-500 inline-flex items-center gap-1.5">
+        <LifeBuoy className="w-4 h-4" />
+        Активные проблемы{items ? ` (${items.length})` : ""}
+      </h2>
+
+      {error && <div className="text-red-400 text-sm">{error}</div>}
+      {!items && !error && <div className="text-slate-500 text-sm">Загрузка…</div>}
+      {items && items.length === 0 && (
+        <div className="text-slate-500 text-sm">Нет открытых тикетов.</div>
+      )}
+
+      {items && items.length > 0 && (
+        <ul className="space-y-2">
+          {items.map((p) => (
+            <li
+              key={p.id}
+              onClick={() => onShow(p.id)}
+              className="rounded-card bg-bg-surface p-3 text-sm cursor-pointer hover:bg-bg-card transition"
+            >
+              <div className="flex items-baseline justify-between gap-2 text-xs text-slate-400">
+                <span>
+                  #{p.id} · {p.username ? `@${p.username}` : `id ${p.user_id}`}
+                </span>
+                <span className="tabular-nums">
+                  {new Date(p.created_at).toLocaleString("ru-RU")}
+                </span>
+              </div>
+              <div className="mt-2 text-slate-200 break-words whitespace-pre-wrap">
+                {p.text}
+              </div>
+              <div className="mt-2 flex justify-end">
+                <button
+                  onClick={(e) => onResolve(e, p.id)}
+                  disabled={pending === p.id}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-chip text-xs bg-emerald-900/40 border border-emerald-800 text-emerald-300 hover:bg-emerald-900/60 disabled:opacity-50"
+                >
+                  <Check className="w-3.5 h-3.5" />
+                  Проблема решена
+                </button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }
 

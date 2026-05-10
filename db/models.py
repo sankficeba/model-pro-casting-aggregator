@@ -752,3 +752,26 @@ class Favorite(Base):
     __table_args__ = (
         UniqueConstraint("user_id", "message_id", name="uq_favorites_user_message"),
     )
+
+
+class Problem(Base):
+    """Тикет «Сообщить о проблеме» из Mini App. Активные (resolved=false)
+    видны в админ-панели; админ может закрыть кнопкой в чат-нотификации
+    или из Mini App."""
+
+    __tablename__ = "problems"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    resolved: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+    resolved_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )

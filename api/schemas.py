@@ -409,6 +409,28 @@ class FavoriteShowResponse(BaseModel):
     error: Optional[str] = None
 
 
+class ProblemReportRequest(BaseModel):
+    text: str = Field(..., min_length=3, max_length=2000)
+
+
+class ProblemItem(BaseModel):
+    id: int
+    user_id: int
+    username: Optional[str] = None
+    full_name: Optional[str] = None
+    text: str
+    created_at: datetime
+
+
+class ProblemsListResponse(BaseModel):
+    items: list[ProblemItem]
+
+
+class ProblemActionResponse(BaseModel):
+    ok: bool
+    error: Optional[str] = None
+
+
 class SubscriptionPlan(BaseModel):
     code: str
     days: int

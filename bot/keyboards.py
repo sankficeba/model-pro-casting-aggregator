@@ -36,3 +36,24 @@ def actions_rows(*, message_id: int, is_favorited: bool) -> list[list[InlineKeyb
         ],
         [fav_btn],
     ]
+
+
+def problem_resolve_row(problem_id: int) -> list[list[InlineKeyboardButton]]:
+    """Кнопка под админ-уведомлением о новой проблеме: «Проблема решена»
+    закрывает тикет и редактирует исходное сообщение в чате."""
+    return [[
+        InlineKeyboardButton(
+            text="✅ Проблема решена",
+            callback_data=f"problem:resolve:{problem_id}",
+        ),
+    ]]
+
+
+def problem_resolve_dict(problem_id: int) -> dict:
+    """Тот же ряд, но в виде dict для отправки через httpx (FastAPI)."""
+    return {
+        "inline_keyboard": [[
+            {"text": "✅ Проблема решена",
+             "callback_data": f"problem:resolve:{problem_id}"},
+        ]]
+    }

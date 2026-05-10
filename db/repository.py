@@ -23,6 +23,7 @@ from db.models import (
     Notification,
     Payment,
     PendingNotification,
+    Problem,
     User,
     UserCategorySubscription,
     Vacancy,
@@ -1664,3 +1665,52 @@ async def get_suggestions(user_id: int) -> dict[str, list]:
             if row is not None:
                 profiles[cat] = _profile_row_to_dict(row)
     return _collect_suggestions(profiles)
+
+
+# ---------- PROBLEMS ----------
+
+async def get_user_by_id(user_id: int) -> Optional[User]:
+    async with AsyncSessionLocal() as session:
+        return (await session.execute(
+            select(User).where(User.id == user_id)
+        )).scalar_one_or_none()
+
+
+async def create_problem(user_id: int, text: str) -> Problem:
+    async with AsyncSessionLocal() as session:
+        p = Problem(user_id=user_id, text=text)
+        session.add(p)
+        await session.commit()
+        await session.refresh(p)
+        return p
+
+
+async def get_problem(problem_id: int) -> Optional[Problem]:
+    async with AsyncSessionLocal() as session:
+        return (await session.execute(
+            select(Problem).where(Problem.id == problem_id)
+        )).scalar_one_or_none()
+
+
+async def list_active_problems() -> list[Problem]:
+    async with AsyncSessionLocal() as session:
+        res = await session.execute(
+            select(Problem)
+            .where(Problem.resolved.is_(False))
+            .order_by(Problem.created_at.desc())
+        )
+        return list(res.scalars().all())
+
+
+async def resolve_problem(problem_id: int) -> bool:
+    """True, если статус действительно поменялся (был активен)."""
+    async with AsyncSessionLocal() as session:
+        p = (await session.execute(
+            select(Problem).where(Problem.id == problem_id)
+        )).scalar_one_or_none()
+        if p is None or p.resolved:
+            return False
+        p.resolved = True
+        p.resolved_at = datetime.now(timezone.utc)
+        await session.commit()
+        return True

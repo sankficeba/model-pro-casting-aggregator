@@ -226,6 +226,24 @@ export interface FavoriteShowResponse {
   error?: string | null;
 }
 
+export interface ProblemItem {
+  id: number;
+  user_id: number;
+  username: string | null;
+  full_name: string | null;
+  text: string;
+  created_at: string;
+}
+
+export interface ProblemsList {
+  items: ProblemItem[];
+}
+
+export interface ProblemActionResponse {
+  ok: boolean;
+  error?: string | null;
+}
+
 export const CATEGORY_LABELS: Record<CategoryCode, string> = {
   creative: "Творческие позиции",
   event: "Event-персонал",

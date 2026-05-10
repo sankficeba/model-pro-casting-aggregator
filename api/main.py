@@ -26,6 +26,10 @@ from api.schemas import (
     FavoriteShowResponse,
     FavoritesListResponse,
     GeneralProfileSchema,
+    ProblemActionResponse,
+    ProblemItem,
+    ProblemReportRequest,
+    ProblemsListResponse,
     ProfileResponse,
     ProfileUpdate,
     SubscriptionCheckoutRequest,
@@ -668,6 +672,115 @@ async def show_favorite_in_chat(
         logger.warning("Favorite show-in-chat HTTP error: {}", e)
         return FavoriteShowResponse(sent=False, error=str(e))
     return FavoriteShowResponse(sent=True)
+
+
+# ---------- Problems ----------
+
+
+def _problem_admin_text(problem_id: int, username: str | None, user_id: int, body: str) -> str:
+    """HTML-текст уведомления админу о новой проблеме."""
+    handle = f"@{username}" if username else f"user #{user_id}"
+    safe = (body or "").replace("<", "&lt;").replace(">", "&gt;")[:1500]
+    return (
+        f"🛟 <b>Новая проблема #{problem_id}</b>\n"
+        f"От: <b>{handle}</b> (id <code>{user_id}</code>)\n\n"
+        f"{safe}"
+    )
+
+
+async def _send_problem_to_admins(problem_id: int, username: str | None, user_id: int, body: str) -> int:
+    """Разослать всем админам нотификацию с кнопкой «Проблема решена».
+    Возвращает кол-во доставленных."""
+    from bot.keyboards import problem_resolve_dict
+    text = _problem_admin_text(problem_id, username, user_id, body)
+    markup = problem_resolve_dict(problem_id)
+    delivered = 0
+    for admin_id in settings.admin_ids:
+        await _notify_admin_html(admin_id, text, reply_markup=markup)
+        delivered += 1
+    return delivered
+
+
+@app.post("/api/problems", response_model=ProblemActionResponse)
+async def report_problem(
+    body: ProblemReportRequest,
+    user: TelegramUser = Depends(current_user),
+) -> ProblemActionResponse:
+    p = await repo.create_problem(user.id, body.text.strip())
+    try:
+        await _send_problem_to_admins(p.id, user.username, user.id, p.text)
+    except Exception as e:  # noqa: BLE001
+        logger.warning("Problem admin notify failed: {}", e)
+    return ProblemActionResponse(ok=True)
+
+
+@app.get("/api/problems", response_model=ProblemsListResponse)
+async def list_problems_admin(
+    user: TelegramUser = Depends(current_user),
+) -> ProblemsListResponse:
+    if not is_admin_user(user):
+        raise HTTPException(status_code=403, detail="forbidden")
+    rows = await repo.list_active_problems()
+    items: list[ProblemItem] = []
+    for p in rows:
+        u = await repo.get_user_by_id(p.user_id)
+        items.append(ProblemItem(
+            id=p.id,
+            user_id=p.user_id,
+            username=getattr(u, "username", None) if u else None,
+            full_name=None,
+            text=p.text,
+            created_at=p.created_at,
+        ))
+    return ProblemsListResponse(items=items)
+
+
+@app.post("/api/problems/{problem_id}/resolve", response_model=ProblemActionResponse)
+async def resolve_problem_admin(
+    problem_id: int,
+    user: TelegramUser = Depends(current_user),
+) -> ProblemActionResponse:
+    if not is_admin_user(user):
+        raise HTTPException(status_code=403, detail="forbidden")
+    ok = await repo.resolve_problem(problem_id)
+    return ProblemActionResponse(ok=ok)
+
+
+@app.post("/api/problems/{problem_id}/show-in-chat", response_model=ProblemActionResponse)
+async def show_problem_in_chat(
+    problem_id: int,
+    user: TelegramUser = Depends(current_user),
+) -> ProblemActionResponse:
+    """Переотправить тикет в чат админа (для удобства просмотра / закрытия)."""
+    if not is_admin_user(user):
+        raise HTTPException(status_code=403, detail="forbidden")
+    p = await repo.get_problem(problem_id)
+    if p is None:
+        raise HTTPException(status_code=404, detail="not_found")
+    reporter = await repo.get_user_by_id(p.user_id)
+    text = _problem_admin_text(
+        p.id,
+        getattr(reporter, "username", None) if reporter else None,
+        p.user_id,
+        p.text,
+    )
+    from bot.keyboards import problem_resolve_dict
+    url = f"https://api.telegram.org/bot{settings.bot_token}/sendMessage"
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            r = await client.post(url, json={
+                "chat_id": user.id,
+                "text": text,
+                "parse_mode": "HTML",
+                "disable_web_page_preview": True,
+                "reply_markup": problem_resolve_dict(p.id),
+            })
+            if r.status_code != 200:
+                logger.warning("Problem show-in-chat failed: {} {}", r.status_code, r.text)
+                return ProblemActionResponse(ok=False, error=r.text)
+    except httpx.HTTPError as e:
+        return ProblemActionResponse(ok=False, error=str(e))
+    return ProblemActionResponse(ok=True)
 
 
 @app.post("/api/yookassa/webhook")
