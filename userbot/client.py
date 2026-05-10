@@ -254,17 +254,27 @@ class Userbot:
     async def subscribe_channel(self, ref: str) -> bool:
         """Hot-reload: добавить канал в подписку Telethon без рестарта app.
         Канал должен уже быть в `channels` (через repository.add_channel).
+        Поддерживает три формы ref: @username, t.me/c/<id>, invite-ссылка.
         Возвращает True, если действительно подписались сейчас."""
-        username, tg_chat_id = repository._parse_channel_ref(ref)
-        if username is None and tg_chat_id is None:
-            return False
+        invite_link = repository._parse_invite_ref(ref)
+        username: str | None = None
+        tg_chat_id: int | None = None
+        if invite_link is None:
+            username, tg_chat_id = repository._parse_channel_ref(ref)
+            if username is None and tg_chat_id is None:
+                return False
         # Не дублируем подписку, если уже в self._entities.
         for ent in self._entities:
-            if self._entity_matches(ent, username=username, tg_chat_id=tg_chat_id):
+            if invite_link is None and self._entity_matches(
+                ent, username=username, tg_chat_id=tg_chat_id,
+            ):
                 return False
         rows = await repository.list_channels(active_only=True)
         target = None
         for r in rows:
+            if invite_link and getattr(r, "invite_link", None) == invite_link:
+                target = r
+                break
             if username and r.username == username:
                 target = r
                 break
@@ -273,6 +283,14 @@ class Userbot:
                 break
         if target is None:
             return False
+        # Если invite-канал уже резолвили (tg_chat_id заполнен), проверим
+        # дедуп ещё раз по нему — чтобы не вступать повторно.
+        if invite_link and target.tg_chat_id is not None:
+            for ent in self._entities:
+                if self._entity_matches(
+                    ent, username=None, tg_chat_id=target.tg_chat_id,
+                ):
+                    return False
         entity = await self._resolve_one(target)
         if entity is None:
             return False
@@ -284,9 +302,23 @@ class Userbot:
     async def unsubscribe_channel(self, ref: str) -> bool:
         """Hot-reload: убрать канал из подписки Telethon. Никаких сетевых
         вызовов — только локальная фильтрация self._entities + rebind."""
-        username, tg_chat_id = repository._parse_channel_ref(ref)
-        if username is None and tg_chat_id is None:
-            return False
+        invite_link = repository._parse_invite_ref(ref)
+        if invite_link is not None:
+            # Для invite поднимаем tg_chat_id из БД (если уже резолвили) и
+            # сравниваем по нему. Если ещё не резолвился — нечего отписывать.
+            rows = await repository.list_channels(active_only=False)
+            target_id = next(
+                (r.tg_chat_id for r in rows
+                 if getattr(r, "invite_link", None) == invite_link),
+                None,
+            )
+            if target_id is None:
+                return False
+            username, tg_chat_id = None, target_id
+        else:
+            username, tg_chat_id = repository._parse_channel_ref(ref)
+            if username is None and tg_chat_id is None:
+                return False
         before = len(self._entities)
         self._entities = [
             e for e in self._entities
