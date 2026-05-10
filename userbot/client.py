@@ -89,25 +89,54 @@ class Userbot:
 
     async def _resolve_one(self, row) -> object | None:  # noqa: ANN001
         """Резолвит ОДИН Channel-row → Telethon entity (best-effort).
-        Для публичного канала — пытаемся idempotent-join (FloodWait
-        не критичен, entity всё равно отдаём).
-        """
-        if row.tg_chat_id is not None:
-            ref_for_log = f"id={row.tg_chat_id}"
-            ref_for_get = row.tg_chat_id
-            is_private = True
-        else:
-            ref_for_log = f"@{row.username}"
-            ref_for_get = f"@{row.username}"
-            is_private = False
 
-        try:
-            entity = await self.client.get_entity(ref_for_get)
-        except Exception as e:  # noqa: BLE001
-            logger.error("Не удалось получить entity для {}: {}", ref_for_log, e)
+        Для public-канала с уже закэшированным `tg_chat_id` сначала пробуем
+        резолв по числу — Telethon берёт entity из session-кэша и не дёргает
+        `ResolveUsernameRequest`. Это защищает от FloodWait-спирали при
+        деплоях, когда контейнер рестартует с холодным кэшем.
+
+        Для свежих public-каналов (tg_chat_id ещё None) — по `@username`,
+        и после успешного резолва записываем `entity.id` обратно в БД.
+        """
+        is_private_only = row.tg_chat_id is not None and row.username is None
+
+        async def _try_get(ref, label: str) -> object | None:
+            try:
+                return await self.client.get_entity(ref)
+            except Exception as e:  # noqa: BLE001
+                logger.warning("get_entity({}) не удался: {}", label, e)
+                return None
+
+        entity: object | None = None
+        ref_for_log = f"id={row.tg_chat_id}" if row.tg_chat_id is not None else f"@{row.username}"
+
+        # Путь 1: tg_chat_id известен → идём через session-кэш по числу.
+        if row.tg_chat_id is not None:
+            entity = await _try_get(row.tg_chat_id, f"id={row.tg_chat_id}")
+
+        # Путь 2: нет id или путь 1 не сработал, но username есть → @username.
+        if entity is None and row.username:
+            entity = await _try_get(f"@{row.username}", f"@{row.username}")
+            if entity is not None and row.tg_chat_id is None:
+                # Кэшируем bare entity.id (как делает _handle_message при
+                # записи messages.tg_chat_id) чтобы на следующем старте идти
+                # Путём 1. Telethon get_entity принимает обе формы и тянет
+                # из session-кэша.
+                e_id = getattr(entity, "id", None)
+                if isinstance(e_id, int):
+                    try:
+                        await repository.cache_channel_tg_chat_id(row.username, e_id)
+                    except Exception as e:  # noqa: BLE001
+                        logger.warning(
+                            "cache_channel_tg_chat_id({}) не удался: {}",
+                            row.username, e,
+                        )
+
+        if entity is None:
+            logger.error("Не удалось получить entity для {}", ref_for_log)
             return None
 
-        if is_private:
+        if is_private_only:
             logger.info("Слушаю приватный канал {} (entity id={})",
                         ref_for_log, getattr(entity, "id", "?"))
             return entity

@@ -488,6 +488,26 @@ async def set_channel_invite_link(ref: str, link: str | None) -> bool:
         return True
 
 
+async def cache_channel_tg_chat_id(username: str, tg_chat_id: int) -> bool:
+    """После успешного резолва @username → entity сохраняем `entity.id` в
+    `channels.tg_chat_id`, чтобы на следующих стартах резолвить из
+    session-кэша по числу (без `ResolveUsernameRequest` → нет FloodWait).
+    Сохраняем в bare-форме (как `messages.tg_chat_id`); Telethon
+    `get_entity` принимает оба варианта."""
+    norm = (username or "").lstrip("@").lower()
+    if not norm:
+        return False
+    async with AsyncSessionLocal() as session:
+        row = (await session.execute(
+            select(Channel).where(Channel.username == norm)
+        )).scalar_one_or_none()
+        if row is None or row.tg_chat_id == tg_chat_id:
+            return False
+        row.tg_chat_id = tg_chat_id
+        await session.commit()
+        return True
+
+
 async def get_channel_link_for_message(message_id: int) -> tuple[str | None, str | None]:
     """Для message_id вернуть (link, channel_label).
     Логика:
