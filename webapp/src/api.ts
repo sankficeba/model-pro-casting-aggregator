@@ -11,6 +11,8 @@ import type {
   DigestStartResponse,
   FavoriteShowResponse,
   FavoritesList,
+  ProblemActionResponse,
+  ProblemsList,
   MeResponse,
   SubscriptionCheckout,
   SubscriptionStatus,
@@ -226,6 +228,24 @@ export const api = {
     request<{ ok: boolean }>(`/favorites/${messageId}`, { method: "DELETE" }),
   showFavoriteInChat: (messageId: number) =>
     request<FavoriteShowResponse>(`/favorites/${messageId}/show-in-chat`, {
+      method: "POST",
+      body: "{}",
+    }),
+
+  // Problems
+  reportProblem: (text: string) =>
+    request<ProblemActionResponse>("/problems", {
+      method: "POST",
+      body: JSON.stringify({ text }),
+    }),
+  listProblems: () => request<ProblemsList>("/problems"),
+  resolveProblem: (problemId: number) =>
+    request<ProblemActionResponse>(`/problems/${problemId}/resolve`, {
+      method: "POST",
+      body: "{}",
+    }),
+  showProblemInChat: (problemId: number) =>
+    request<ProblemActionResponse>(`/problems/${problemId}/show-in-chat`, {
       method: "POST",
       body: "{}",
     }),

@@ -673,6 +673,37 @@ def build_dispatcher(
                 pass
         await query.answer(popup)
 
+    @dp.callback_query(F.data.startswith("problem:resolve:"))
+    async def cb_problem_resolve(query: CallbackQuery) -> None:
+        """Админ закрывает тикет «Сообщить о проблеме» прямо из чат-нотификации."""
+        user_id = query.from_user.id if query.from_user else 0
+        if user_id not in settings.admin_ids:
+            await query.answer("Только для админов.", show_alert=True)
+            return
+        parts = (query.data or "").split(":", 2)
+        try:
+            problem_id = int(parts[2])
+        except (ValueError, IndexError):
+            await query.answer("Битая кнопка.", show_alert=True)
+            return
+        changed = await repository.resolve_problem(problem_id)
+        msg = query.message
+        if msg is not None:
+            try:
+                old_text = msg.html_text if hasattr(msg, "html_text") else (msg.text or "")
+                new_text = f"{old_text}\n\n<i>✅ решено</i>"
+                await msg.edit_text(
+                    new_text,
+                    parse_mode="HTML",
+                    disable_web_page_preview=True,
+                )
+            except Exception:  # noqa: BLE001
+                try:
+                    await msg.edit_reply_markup(reply_markup=None)
+                except Exception:  # noqa: BLE001
+                    pass
+        await query.answer("Закрыто." if changed else "Уже было закрыто.")
+
     # ---------- Admin broadcast OR fallback ----------
 
     @dp.message()

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { CheckCircle2, AlertCircle, ShieldCheck, Plus, Ban, Megaphone, Bell, BellOff, Bookmark } from "lucide-react";
+import { CheckCircle2, AlertCircle, ShieldCheck, Plus, Ban, Megaphone, Bell, BellOff, Bookmark, LifeBuoy } from "lucide-react";
 import { api } from "../api";
 import type { CategoryCode, Subscription } from "../types";
 import { CATEGORY_LABELS } from "../types";
@@ -12,6 +12,7 @@ interface Props {
   onSuggestChannel: () => void;
   onDelivery: () => void;
   onFavorites: () => void;
+  onReportProblem: () => void;
   onAdmin?: () => void;
   isAdmin?: boolean;
   onChange?: () => Promise<void> | void;
@@ -25,6 +26,7 @@ export function CategoryMenuScreen({
   onSuggestChannel,
   onDelivery,
   onFavorites,
+  onReportProblem,
   onAdmin,
   isAdmin,
   onChange,
@@ -150,6 +152,13 @@ export function CategoryMenuScreen({
         >
           <Megaphone className="w-4 h-4" />
           Предложить канал
+        </button>
+        <button
+          onClick={onReportProblem}
+          className="w-full py-3 rounded-card border border-bg-card text-slate-300 hover:border-accent hover:text-accent transition flex items-center justify-center gap-2"
+        >
+          <LifeBuoy className="w-4 h-4" />
+          Сообщить о проблеме
         </button>
       </div>
     </div>
