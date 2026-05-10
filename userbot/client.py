@@ -415,6 +415,7 @@ class Userbot:
                 effective_category=eff_cat,
             )
 
+            from bot.keyboards import EMOJI_RESPOND, actions_rows
             kb_buttons: list[list[InlineKeyboardButton]] = []
             for i, db_id in zip(hit_idxs, matched_db_ids):
                 title = _vacancy_title(vacancies[i])
@@ -422,10 +423,9 @@ class Userbot:
                     InlineKeyboardButton(
                         text=f"Сгенерировать отклик: {title}"[:64],
                         callback_data=f"respond:{db_id}",
-                        icon_custom_emoji_id="5334882760735598374",
+                        icon_custom_emoji_id=EMOJI_RESPOND,
                     )
                 ])
-            from bot.keyboards import actions_rows
             kb_buttons += actions_rows(message_id=message_db_id, is_favorited=False)
             reply_markup = InlineKeyboardMarkup(inline_keyboard=kb_buttons)
 
