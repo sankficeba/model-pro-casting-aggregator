@@ -14,23 +14,23 @@ def actions_rows(*, message_id: int, is_favorited: bool) -> list[list[InlineKeyb
     """
     fav_btn = (
         InlineKeyboardButton(
-            text="🗂 Удалить из избранного",
+            text="❌ Удалить из избранного",
             callback_data=f"fav:rm:{message_id}",
         )
         if is_favorited
         else InlineKeyboardButton(
-            text="🎟 Добавить в избранное",
+            text="🔖 Добавить в избранное",
             callback_data=f"fav:add:{message_id}",
         )
     )
     return [
         [
             InlineKeyboardButton(
-                text="🔗 Подробнее",
+                text="🔗 Ссылка на сообщение",
                 callback_data=f"details:{message_id}",
             ),
             InlineKeyboardButton(
-                text="❌ Удалить",
+                text="🗑 Удалить",
                 callback_data="delself:",
             ),
         ],

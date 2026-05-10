@@ -519,11 +519,11 @@ def _favorite_keyboard_dict(message_id: int) -> dict:
     return {
         "inline_keyboard": [
             [
-                {"text": "🔗 Подробнее", "callback_data": f"details:{message_id}"},
-                {"text": "❌ Удалить", "callback_data": "delself:"},
+                {"text": "🔗 Ссылка на сообщение", "callback_data": f"details:{message_id}"},
+                {"text": "🗑 Удалить", "callback_data": "delself:"},
             ],
             [
-                {"text": "🗂 Удалить из избранного",
+                {"text": "❌ Удалить из избранного",
                  "callback_data": f"fav:rm:{message_id}"},
             ],
         ]
@@ -582,7 +582,7 @@ async def _build_favorite_message(
         v = canon_vacancies[i]
         title = _vacancy_title(vac_extractions[i])
         rows.append([{
-            "text": f"✍ Отклик: {title}"[:64],
+            "text": f"📝 Сгенерировать отклик: {title}"[:64],
             "callback_data": f"respond:{v.id}",
         }])
     fav_kb = _favorite_keyboard_dict(message_id)

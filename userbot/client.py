@@ -420,7 +420,7 @@ class Userbot:
                 title = _vacancy_title(vacancies[i])
                 kb_buttons.append([
                     InlineKeyboardButton(
-                        text=f"✍ Отклик: {title}"[:64],
+                        text=f"📝 Сгенерировать отклик: {title}"[:64],
                         callback_data=f"respond:{db_id}",
                     )
                 ])
