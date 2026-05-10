@@ -12,9 +12,14 @@ from telethon import TelegramClient, events
 from telethon.errors import (
     ChannelPrivateError,
     InviteHashExpiredError,
+    InviteHashInvalidError,
     UserAlreadyParticipantError,
 )
 from telethon.tl.functions.channels import JoinChannelRequest
+from telethon.tl.functions.messages import (
+    CheckChatInviteRequest,
+    ImportChatInviteRequest,
+)
 
 from api.reference_data import all_refs
 from config import settings
@@ -108,7 +113,12 @@ class Userbot:
                 return None
 
         entity: object | None = None
-        ref_for_log = f"id={row.tg_chat_id}" if row.tg_chat_id is not None else f"@{row.username}"
+        invite_link = getattr(row, "invite_link", None)
+        ref_for_log = (
+            f"id={row.tg_chat_id}" if row.tg_chat_id is not None
+            else f"@{row.username}" if row.username
+            else f"invite={invite_link}"
+        )
 
         # Путь 1: tg_chat_id известен → идём через session-кэш по числу.
         if row.tg_chat_id is not None:
@@ -132,11 +142,15 @@ class Userbot:
                             row.username, e,
                         )
 
+        # Путь 3: приватный invite (`https://t.me/+xxx`).
+        if entity is None and invite_link and row.tg_chat_id is None:
+            entity = await self._resolve_invite(row, invite_link)
+
         if entity is None:
             logger.error("Не удалось получить entity для {}", ref_for_log)
             return None
 
-        if is_private_only:
+        if is_private_only or invite_link:
             logger.info("Слушаю приватный канал {} (entity id={})",
                         ref_for_log, getattr(entity, "id", "?"))
             return entity
@@ -154,6 +168,46 @@ class Userbot:
             # FloodWait и т.п. — не критично, entity всё равно слушаем.
             logger.warning("JoinChannelRequest для {} не прошёл ({}); продолжаем слушать",
                            ref_for_log, e)
+        return entity
+
+    async def _resolve_invite(self, row, invite_link: str) -> object | None:
+        """Резолвит приватный канал по invite-ссылке `https://t.me/+xxx`.
+        Если бот ещё не вступил — Import. Если уже вступил — Check (чтобы
+        получить entity без повторного join). После успеха кэшируем
+        tg_chat_id, чтобы будущие рестарты резолвили из session-кэша.
+        """
+        # Извлечь invite hash: всё после '+'.
+        h = invite_link.rsplit("/", 1)[-1].lstrip("+")
+        if not h:
+            logger.warning("Пустой invite hash в '{}'", invite_link)
+            return None
+        try:
+            res = await self.client(ImportChatInviteRequest(h))
+            chats = getattr(res, "chats", None) or []
+            entity = chats[0] if chats else None
+            if entity is not None:
+                logger.info("Вступил по invite {} (id={})", invite_link, getattr(entity, "id", "?"))
+        except UserAlreadyParticipantError:
+            try:
+                check = await self.client(CheckChatInviteRequest(h))
+                entity = getattr(check, "chat", None)
+                logger.info("Уже состою по invite {} (id={})", invite_link, getattr(entity, "id", "?"))
+            except Exception as e:  # noqa: BLE001
+                logger.warning("CheckChatInvite({}) не удался: {}", invite_link, e)
+                return None
+        except (InviteHashExpiredError, InviteHashInvalidError) as e:
+            logger.warning("Invite {} протух/невалиден ({})", invite_link, type(e).__name__)
+            return None
+        except Exception as e:  # noqa: BLE001
+            logger.warning("ImportChatInvite({}) не удался: {}", invite_link, e)
+            return None
+
+        e_id = getattr(entity, "id", None) if entity else None
+        if isinstance(e_id, int):
+            try:
+                await repository.cache_channel_tg_chat_id_by_invite(invite_link, e_id)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("cache по invite {} не записан: {}", invite_link, exc)
         return entity
 
     async def _resolve_channels(self) -> list:

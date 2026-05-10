@@ -397,11 +397,33 @@ def _normalize_username(raw: str) -> str:
     return raw.lstrip("@").strip("/").lower()
 
 
+def _parse_invite_ref(raw: str) -> str | None:
+    """Если raw похож на invite-ссылку приватного канала (`+abc123`,
+    `joinchat/abc123`, `t.me/+abc123`, полный URL), вернуть нормализованную
+    форму `https://t.me/+abc123`. Иначе None.
+    """
+    s = raw.strip()
+    for prefix in ("https://t.me/", "http://t.me/", "t.me/"):
+        if s.startswith(prefix):
+            s = s[len(prefix):]
+            break
+    s = s.strip("/")
+    if s.startswith("joinchat/"):
+        h = s[len("joinchat/"):].split("/", 1)[0]
+        return f"https://t.me/+{h}" if h else None
+    if s.startswith("+"):
+        h = s[1:].split("/", 1)[0]
+        return f"https://t.me/+{h}" if h else None
+    return None
+
+
 def _parse_channel_ref(raw: str) -> tuple[str | None, int | None]:
     """Возвращает (username, tg_chat_id). Ровно одно поле не None.
 
     - `@my_channel` / `https://t.me/my_channel` → (`my_channel`, None)
     - `https://t.me/c/<id>[/<msg_id>]` → (None, -100<id>) — приватный канал.
+    - invite-ссылки (+abc / joinchat/abc) обрабатываются отдельно через
+      `_parse_invite_ref` (см. add_channel).
     - Невалидный ввод → (None, None).
     """
     raw = raw.strip()
@@ -415,6 +437,10 @@ def _parse_channel_ref(raw: str) -> tuple[str | None, int | None]:
         if chat_part.isdigit():
             # t.me/c/<id> — Telethon ожидает -100<id> для каналов/супергрупп.
             return None, int(f"-100{chat_part}")
+        return None, None
+    if raw.startswith("+") or raw.startswith("joinchat/"):
+        # Invite-ссылка не парсится этой функцией — каллер обязан проверить
+        # invite через _parse_invite_ref ДО неё.
         return None, None
     norm = raw.lstrip("@").lower()
     if not norm:
@@ -432,15 +458,28 @@ async def list_channels(active_only: bool = True) -> list[Channel]:
 
 
 async def add_channel(ref: str, added_by: int) -> Optional[Channel]:
-    """Добавить канал по @username или по приватной ссылке t.me/c/<id>.
+    """Добавить канал. Поддерживает три формы:
+    - `@username` / `t.me/username` → public.
+    - `t.me/c/<id>` → private с известным tg_chat_id.
+    - `+abc123` / `t.me/+abc123` / `t.me/joinchat/abc123` → private invite.
+      Сохраняем invite URL в `invite_link`; userbot вступит через
+      `ImportChatInviteRequest` при следующем резолве и закэширует tg_chat_id.
 
-    Если уже существует и active — None. Если был неактивен — реактивируем.
+    Если уже существует и active — None. Был неактивен — реактивируем.
     """
-    username, tg_chat_id = _parse_channel_ref(ref)
-    if username is None and tg_chat_id is None:
-        return None
+    invite_link = _parse_invite_ref(ref)
+    username: str | None = None
+    tg_chat_id: int | None = None
+    if invite_link is None:
+        username, tg_chat_id = _parse_channel_ref(ref)
+        if username is None and tg_chat_id is None:
+            return None
     async with AsyncSessionLocal() as session:
-        if username is not None:
+        if invite_link is not None:
+            existing = await session.execute(
+                select(Channel).where(Channel.invite_link == invite_link)
+            )
+        elif username is not None:
             existing = await session.execute(
                 select(Channel).where(Channel.username == username)
             )
@@ -460,6 +499,7 @@ async def add_channel(ref: str, added_by: int) -> Optional[Channel]:
         ch = Channel(
             username=username,
             tg_chat_id=tg_chat_id,
+            invite_link=invite_link,
             added_by=added_by,
             active=True,
         )
@@ -485,6 +525,23 @@ async def set_channel_invite_link(ref: str, link: str | None) -> bool:
         if row is None:
             return False
         row.invite_link = (link or None)
+        await session.commit()
+        return True
+
+
+async def cache_channel_tg_chat_id_by_invite(invite_link: str, tg_chat_id: int) -> bool:
+    """Записать `entity.id` после ImportChatInvite для приватного канала
+    (хранится в `channels.invite_link`). На следующем старте идём по id из
+    session-кэша вместо повторного импорта приглашения."""
+    if not invite_link:
+        return False
+    async with AsyncSessionLocal() as session:
+        row = (await session.execute(
+            select(Channel).where(Channel.invite_link == invite_link)
+        )).scalar_one_or_none()
+        if row is None or row.tg_chat_id == tg_chat_id:
+            return False
+        row.tg_chat_id = tg_chat_id
         await session.commit()
         return True
 
