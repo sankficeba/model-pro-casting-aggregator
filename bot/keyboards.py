@@ -7,11 +7,11 @@ from aiogram.types import InlineKeyboardButton
 # `icon_custom_emoji_id`). У владельца бота должен быть подключён
 # Telegram Premium, иначе клиенты молча пропустят поле и покажут
 # текст без иконки.
-EMOJI_RESPOND = "5334882760735598374"   # 📝
-EMOJI_DETAILS = "5253577054137362120"   # 🔗
-EMOJI_DELETE = "5445267414562389170"    # 🗑
-EMOJI_FAV_ADD = "5265125516821679394"   # 🔖
-EMOJI_FAV_REMOVE = "5019523782004441717"  # ❌
+EMOJI_RESPOND = "5445190951259612625"   # 📩
+EMOJI_DETAILS = "5778351117733729026"   # 🔗
+EMOJI_DELETE = "5019500511871632068"    # 🗑
+EMOJI_FAV_ADD = "5361760588764566472"   # 📎
+EMOJI_FAV_REMOVE = "5465665476971471368"  # ❌
 
 
 def actions_rows(*, message_id: int, is_favorited: bool) -> list[list[InlineKeyboardButton]]:

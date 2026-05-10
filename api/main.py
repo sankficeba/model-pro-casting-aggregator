@@ -550,6 +550,7 @@ async def _build_favorite_message(
 ) -> tuple[str, dict] | None:
     """Собрать (notification_text, reply_markup) для пере-отправки в чат
     из избранного. Возвращает None если canonical Message исчез."""
+    from bot.keyboards import EMOJI_RESPOND
     from db import matching
     from userbot.client import Userbot, _vacancy_title
 
@@ -592,7 +593,7 @@ async def _build_favorite_message(
         rows.append([{
             "text": f"Сгенерировать отклик: {title}"[:64],
             "callback_data": f"respond:{v.id}",
-            "icon_custom_emoji_id": "5334882760735598374",
+            "icon_custom_emoji_id": EMOJI_RESPOND,
         }])
     fav_kb = _favorite_keyboard_dict(message_id)
     rows += fav_kb["inline_keyboard"]
