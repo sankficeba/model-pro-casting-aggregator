@@ -178,8 +178,9 @@ async def _build_digest_message(
         title = _vacancy_title(vac_extractions[i])
         kb_buttons.append([
             InlineKeyboardButton(
-                text=f"📝 Сгенерировать отклик: {title}"[:64],
+                text=f"Сгенерировать отклик: {title}"[:64],
                 callback_data=f"respond:{v.id}",
+                icon_custom_emoji_id=keyboards.EMOJI_RESPOND,
             )
         ])
     fav_state = await repository.is_favorited(user_id, canonical_id)

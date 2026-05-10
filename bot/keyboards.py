@@ -3,6 +3,16 @@ from __future__ import annotations
 
 from aiogram.types import InlineKeyboardButton
 
+# Premium custom-emoji icons для inline-кнопок (Bot API 9.4 +
+# `icon_custom_emoji_id`). У владельца бота должен быть подключён
+# Telegram Premium, иначе клиенты молча пропустят поле и покажут
+# текст без иконки.
+EMOJI_RESPOND = "5334882760735598374"   # 📝
+EMOJI_DETAILS = "5253577054137362120"   # 🔗
+EMOJI_DELETE = "5445267414562389170"    # 🗑
+EMOJI_FAV_ADD = "5265125516821679394"   # 🔖
+EMOJI_FAV_REMOVE = "5019523782004441717"  # ❌
+
 
 def actions_rows(*, message_id: int, is_favorited: bool) -> list[list[InlineKeyboardButton]]:
     """3 кнопки под каждым кастинг-уведомлением: ссылка на канал,
@@ -14,24 +24,28 @@ def actions_rows(*, message_id: int, is_favorited: bool) -> list[list[InlineKeyb
     """
     fav_btn = (
         InlineKeyboardButton(
-            text="❌ Удалить из избранного",
+            text="Удалить из избранного",
             callback_data=f"fav:rm:{message_id}",
+            icon_custom_emoji_id=EMOJI_FAV_REMOVE,
         )
         if is_favorited
         else InlineKeyboardButton(
-            text="🔖 Добавить в избранное",
+            text="Добавить в избранное",
             callback_data=f"fav:add:{message_id}",
+            icon_custom_emoji_id=EMOJI_FAV_ADD,
         )
     )
     return [
         [
             InlineKeyboardButton(
-                text="🔗 Ссылка на сообщение",
+                text="Ссылка на сообщение",
                 callback_data=f"details:{message_id}",
+                icon_custom_emoji_id=EMOJI_DETAILS,
             ),
             InlineKeyboardButton(
-                text="🗑 Удалить",
+                text="Удалить",
                 callback_data="delself:",
+                icon_custom_emoji_id=EMOJI_DELETE,
             ),
         ],
         [fav_btn],

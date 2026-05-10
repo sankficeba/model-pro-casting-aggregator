@@ -516,15 +516,23 @@ async def subscription_checkout(
 def _favorite_keyboard_dict(message_id: int) -> dict:
     """JSON-структура inline-клавиатуры для пере-отправляемого избранного.
     Зеркалит bot/keyboards.actions_rows, но в виде dict (для httpx)."""
+    from bot.keyboards import (
+        EMOJI_DELETE, EMOJI_DETAILS, EMOJI_FAV_REMOVE,
+    )
     return {
         "inline_keyboard": [
             [
-                {"text": "🔗 Ссылка на сообщение", "callback_data": f"details:{message_id}"},
-                {"text": "🗑 Удалить", "callback_data": "delself:"},
+                {"text": "Ссылка на сообщение",
+                 "callback_data": f"details:{message_id}",
+                 "icon_custom_emoji_id": EMOJI_DETAILS},
+                {"text": "Удалить",
+                 "callback_data": "delself:",
+                 "icon_custom_emoji_id": EMOJI_DELETE},
             ],
             [
-                {"text": "❌ Удалить из избранного",
-                 "callback_data": f"fav:rm:{message_id}"},
+                {"text": "Удалить из избранного",
+                 "callback_data": f"fav:rm:{message_id}",
+                 "icon_custom_emoji_id": EMOJI_FAV_REMOVE},
             ],
         ]
     }
@@ -582,8 +590,9 @@ async def _build_favorite_message(
         v = canon_vacancies[i]
         title = _vacancy_title(vac_extractions[i])
         rows.append([{
-            "text": f"📝 Сгенерировать отклик: {title}"[:64],
+            "text": f"Сгенерировать отклик: {title}"[:64],
             "callback_data": f"respond:{v.id}",
+            "icon_custom_emoji_id": "5334882760735598374",
         }])
     fav_kb = _favorite_keyboard_dict(message_id)
     rows += fav_kb["inline_keyboard"]
