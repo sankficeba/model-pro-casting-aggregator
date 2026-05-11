@@ -661,16 +661,24 @@ def build_dispatcher(
             await query.answer("Неизвестное действие.", show_alert=True)
             return
 
-        # Перерисовать клавиатуру: меняем только последний ряд (fav).
+        # Перерисовать клавиатуру: подменяем ТОЛЬКО ряд с fav-кнопкой,
+        # остальное оставляем как есть. Иначе сломаем «Следующее» (которое
+        # идёт после actions_rows) или продублируем details/delete.
         msg = query.message
         if msg is not None and msg.reply_markup is not None:
             try:
                 old_rows = list(msg.reply_markup.inline_keyboard)
-                # Отбрасываем хвост из 2 рядов (actions) и подставляем новые.
-                head = old_rows[:-2]
-                new_rows = head + keyboards.actions_rows(
+                # Свежий fav-ряд (одиночный).
+                fav_row = keyboards.actions_rows(
                     message_id=msg_id, is_favorited=new_state,
-                )
+                )[-1]
+                new_rows: list = []
+                for row in old_rows:
+                    is_fav_row = any(
+                        (btn.callback_data or "").startswith("fav:")
+                        for btn in row
+                    )
+                    new_rows.append(fav_row if is_fav_row else row)
                 await msg.edit_reply_markup(
                     reply_markup=InlineKeyboardMarkup(inline_keyboard=new_rows)
                 )
