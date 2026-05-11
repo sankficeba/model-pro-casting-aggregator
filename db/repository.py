@@ -532,6 +532,33 @@ async def set_channel_invite_link(ref: str, link: str | None) -> bool:
         return True
 
 
+async def mark_channel_joined(channel_id: int) -> bool:
+    """Установить channels.joined_at = NOW() — мы фактически вступили
+    (JoinChannelRequest вернул успех / UserAlreadyParticipantError) либо
+    подтвердили членство через ImportChatInvite."""
+    async with AsyncSessionLocal() as session:
+        row = (await session.execute(
+            select(Channel).where(Channel.id == channel_id)
+        )).scalar_one_or_none()
+        if row is None or row.joined_at is not None:
+            return False
+        row.joined_at = datetime.now(timezone.utc)
+        await session.commit()
+        return True
+
+
+async def list_pending_join_channels() -> list[Channel]:
+    """Активные каналы, к которым userbot ещё не вступил
+    (joined_at IS NULL). Retry-цикл пытается вступить периодически."""
+    async with AsyncSessionLocal() as session:
+        res = await session.execute(
+            select(Channel)
+            .where(Channel.active.is_(True), Channel.joined_at.is_(None))
+            .order_by(Channel.id)
+        )
+        return list(res.scalars().all())
+
+
 async def cache_channel_tg_chat_id_by_invite(invite_link: str, tg_chat_id: int) -> bool:
     """Записать `entity.id` после ImportChatInvite для приватного канала
     (хранится в `channels.invite_link`). На следующем старте идём по id из

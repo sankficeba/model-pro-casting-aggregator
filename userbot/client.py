@@ -153,21 +153,32 @@ class Userbot:
         if is_private_only or invite_link:
             logger.info("Слушаю приватный канал {} (entity id={})",
                         ref_for_log, getattr(entity, "id", "?"))
+            if not getattr(row, "joined_at", None):
+                await repository.mark_channel_joined(row.id)
+            return entity
+
+        # Пропускаем JoinChannelRequest если уже подтверждено членство:
+        # экономит JoinChannel-бюджет (~30 calls/min) при каждом старте.
+        if getattr(row, "joined_at", None):
             return entity
 
         try:
             await self.client(JoinChannelRequest(entity))
             logger.info("Вступил в канал {} (id={})", ref_for_log, getattr(entity, "id", "?"))
+            await repository.mark_channel_joined(row.id)
         except UserAlreadyParticipantError:
             logger.info("Уже состою в канале {} (id={})", ref_for_log, getattr(entity, "id", "?"))
+            await repository.mark_channel_joined(row.id)
         except (ChannelPrivateError, InviteHashExpiredError) as e:
             logger.warning("Канал {} недоступен ({}); событий не будет",
                            ref_for_log, type(e).__name__)
             return None
         except Exception as e:  # noqa: BLE001
-            # FloodWait и т.п. — не критично, entity всё равно слушаем.
-            logger.warning("JoinChannelRequest для {} не прошёл ({}); продолжаем слушать",
+            # FloodWait и т.п. — не вступили, не добавляем в filter:
+            # retry-цикл попробует позже когда окно откроется.
+            logger.warning("JoinChannelRequest для {} не прошёл ({}); retry позже",
                            ref_for_log, e)
+            return None
         return entity
 
     async def _resolve_invite(self, row, invite_link: str) -> object | None:
@@ -658,6 +669,42 @@ class Userbot:
             chat_username=chat_username,
         )
 
+    async def _retry_pending_joins_loop(self, interval_sec: int = 300) -> None:
+        """Периодически пробует вступить в active-каналы с joined_at IS NULL.
+        Когда JoinChannel-бюджет освободится, постепенно подключим все,
+        что не вступили на старте. Между попытками — пауза, чтобы не выжечь
+        бюджет снова."""
+        while True:
+            await asyncio.sleep(interval_sec)
+            try:
+                pending = await repository.list_pending_join_channels()
+                if not pending:
+                    continue
+                logger.info("retry-join: {} каналов в очереди", len(pending))
+                added = 0
+                for row in pending:
+                    await asyncio.sleep(1.0)
+                    ent = await self._resolve_one(row)
+                    if ent is None:
+                        continue
+                    # Дедуп защита.
+                    dup = False
+                    for e in self._entities:
+                        if self._entity_matches(
+                            e, username=row.username, tg_chat_id=row.tg_chat_id,
+                        ):
+                            dup = True
+                            break
+                    if dup:
+                        continue
+                    self._entities.append(ent)
+                    added += 1
+                if added > 0:
+                    await self._rebind_handler()
+                    logger.info("retry-join: подписался на {} новых каналов", added)
+            except Exception as e:  # noqa: BLE001
+                logger.exception("retry-join loop error: {}", e)
+
     async def start(self) -> None:
         await self.client.start(phone=settings.tg_phone)
         self._entities = await self._resolve_channels()
@@ -680,4 +727,6 @@ class Userbot:
             "Userbot запущен, слушаю каналы: {}",
             [getattr(e, "username", getattr(e, "id", "?")) for e in self._entities],
         )
+        # Фоновая задача: добиваем зафейленные join'ы по мере восстановления флуда.
+        asyncio.create_task(self._retry_pending_joins_loop())
         await self.client.run_until_disconnected()
