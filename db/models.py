@@ -483,6 +483,12 @@ class Channel(Base):
     # Ручная invite-ссылка для приватных каналов: используется кнопкой
     # «Подробнее» под уведомлением, когда username отсутствует.
     invite_link: Mapped[Optional[str]] = mapped_column(String(256), nullable=True)
+    # Отметка о фактическом вступлении (UserAlreadyParticipant ИЛИ Вступил):
+    # NULL = ещё не вступали (retry-цикл попробует снова), set = пропускаем
+    # JoinChannelRequest на старте.
+    joined_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
 
 class Filter(Base):
