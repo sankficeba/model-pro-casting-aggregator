@@ -606,10 +606,16 @@ def build_dispatcher(
             return
         link, label = await repository.get_channel_link_for_message(msg_id)
         if link:
+            # Для приватных также прикрепляем прямую ссылку на сам пост
+            # (t.me/c/<id>/<msg_id>) — invite ведёт только на канал.
+            msg_url = await repository.get_message_permalink(msg_id)
+            body = f"🔗 Источник: <b>{label}</b>\n{link}"
+            if msg_url and msg_url != link:
+                body += f"\n\n📩 Сообщение: {msg_url}"
             try:
                 await query.answer()
                 await query.message.answer(  # type: ignore[union-attr]
-                    f"🔗 Источник: <b>{label}</b>\n{link}",
+                    body,
                     parse_mode="HTML",
                     disable_web_page_preview=False,
                     reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
