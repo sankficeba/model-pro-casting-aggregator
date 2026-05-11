@@ -160,6 +160,9 @@ async def _build_digest_message(
         id = canon_msg.tg_message_id
         message = canon_msg.text
 
+    fallback_link = None
+    if not canon_msg.tg_chat_username:
+        fallback_link, _label = await repository.get_channel_link_for_message(canonical_id)
     text = Userbot._format_notification(
         post=post,
         vacancies=vac_extractions,
@@ -167,6 +170,7 @@ async def _build_digest_message(
         message=_PseudoMsg(),
         chat_username=canon_msg.tg_chat_username,
         effective_category=eff_cat,
+        invite_link=fallback_link,
     )
 
     pending_left = await repository.count_pending(user_id)

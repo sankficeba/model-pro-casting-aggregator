@@ -522,7 +522,7 @@ def _favorite_keyboard_dict(message_id: int) -> dict:
     return {
         "inline_keyboard": [
             [
-                {"text": "Ссылка на сообщение",
+                {"text": "Ссылка на группу",
                  "callback_data": f"details:{message_id}",
                  "icon_custom_emoji_id": EMOJI_DETAILS},
                 {"text": "Удалить",
@@ -576,6 +576,9 @@ async def _build_favorite_message(
         id = canon_msg.tg_message_id
         message = canon_msg.text
 
+    fallback_link = None
+    if not canon_msg.tg_chat_username:
+        fallback_link, _label = await repo.get_channel_link_for_message(message_id)
     text = Userbot._format_notification(
         post=post,
         vacancies=vac_extractions,
@@ -583,6 +586,7 @@ async def _build_favorite_message(
         message=_PseudoMsg(),
         chat_username=canon_msg.tg_chat_username,
         effective_category=eff_cat,
+        invite_link=fallback_link,
     )
 
     # Кнопки: вакансии-отклики + 3-rd row из bot/keyboards (через dict).
