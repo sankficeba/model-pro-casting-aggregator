@@ -532,6 +532,23 @@ async def set_channel_invite_link(ref: str, link: str | None) -> bool:
         return True
 
 
+async def bulk_clear_joined_at(channel_ids: list[int]) -> int:
+    """Сбросить joined_at для перечисленных каналов. Используется,
+    когда верификация через iter_dialogs показывает что бот фактически
+    не состоит в канале (хотя локальный флаг стоит). После сброса
+    retry-цикл попробует JoinChannelRequest заново."""
+    if not channel_ids:
+        return 0
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(
+            update(Channel)
+            .where(Channel.id.in_(channel_ids))
+            .values(joined_at=None)
+        )
+        await session.commit()
+        return result.rowcount or 0
+
+
 async def mark_channel_joined(channel_id: int) -> bool:
     """Установить channels.joined_at = NOW() — мы фактически вступили
     (JoinChannelRequest вернул успех / UserAlreadyParticipantError) либо

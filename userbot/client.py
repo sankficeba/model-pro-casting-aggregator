@@ -669,11 +669,51 @@ class Userbot:
             chat_username=chat_username,
         )
 
+    async def _verify_membership_loop(self, interval_sec: int = 3600) -> None:
+        """Раз в N секунд снимает фактический список dialogs аккаунта и
+        сверяет с `channels.joined_at`. Если канал помечен joined но его
+        нет в dialogs — мы реально не состоим (Telegram возвращал ложный
+        UserAlreadyParticipantError из кэша). Сбрасываем joined_at,
+        чтобы retry-цикл выполнил настоящий JoinChannelRequest.
+        """
+        # Первый прогон через минуту после старта — дать main userbot'у
+        # «отдышаться» после _resolve_channels.
+        await asyncio.sleep(60)
+        while True:
+            try:
+                real_ids: set[int] = set()
+                async for d in self.client.iter_dialogs(archived=False):
+                    if d.is_channel or d.is_group:
+                        real_ids.add(d.entity.id)
+                rows = await repository.list_channels(active_only=True)
+                stale: list[int] = []
+                for r in rows:
+                    if r.joined_at is None or r.tg_chat_id is None:
+                        continue
+                    bare = abs(r.tg_chat_id)
+                    if bare > 1_000_000_000_000:
+                        bare -= 1_000_000_000_000
+                    if bare not in real_ids:
+                        stale.append(r.id)
+                if stale:
+                    cleared = await repository.bulk_clear_joined_at(stale)
+                    logger.warning(
+                        "verify-membership: {} каналов помечены joined но нас нет в dialogs — "
+                        "сброшено для retry", cleared,
+                    )
+                else:
+                    logger.info(
+                        "verify-membership: все {} помеченных каналов подтверждены",
+                        sum(1 for r in rows if r.joined_at is not None),
+                    )
+            except Exception as e:  # noqa: BLE001
+                logger.exception("verify-membership loop error: {}", e)
+            await asyncio.sleep(interval_sec)
+
     async def _retry_pending_joins_loop(self, interval_sec: int = 300) -> None:
         """Периодически пробует вступить в active-каналы с joined_at IS NULL.
-        Когда JoinChannel-бюджет освободится, постепенно подключим все,
-        что не вступили на старте. Между попытками — пауза, чтобы не выжечь
-        бюджет снова."""
+        Throttle: не больше 5 JoinChannelRequest в минуту (12с между
+        попытками) — чтобы Telegram не растил FloodWait-окно."""
         while True:
             await asyncio.sleep(interval_sec)
             try:
@@ -683,7 +723,7 @@ class Userbot:
                 logger.info("retry-join: {} каналов в очереди", len(pending))
                 added = 0
                 for row in pending:
-                    await asyncio.sleep(1.0)
+                    await asyncio.sleep(12.0)
                     ent = await self._resolve_one(row)
                     if ent is None:
                         continue
@@ -729,4 +769,6 @@ class Userbot:
         )
         # Фоновая задача: добиваем зафейленные join'ы по мере восстановления флуда.
         asyncio.create_task(self._retry_pending_joins_loop())
+        # Фоновая верификация: раз в час сверяем joined_at с реальными dialogs.
+        asyncio.create_task(self._verify_membership_loop())
         await self.client.run_until_disconnected()
