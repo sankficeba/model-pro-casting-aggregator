@@ -612,6 +612,13 @@ def build_dispatcher(
                     f"🔗 Источник: <b>{label}</b>\n{link}",
                     parse_mode="HTML",
                     disable_web_page_preview=False,
+                    reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+                        InlineKeyboardButton(
+                            text="Удалить",
+                            callback_data="delself:",
+                            icon_custom_emoji_id=keyboards.EMOJI_DELETE,
+                        ),
+                    ]]),
                 )
             except Exception:  # noqa: BLE001
                 await query.answer(link, show_alert=True)
