@@ -569,6 +569,29 @@ async def cache_channel_tg_chat_id(username: str, tg_chat_id: int) -> bool:
         return True
 
 
+async def get_message_permalink(message_id: int) -> str | None:
+    """Прямой URL на конкретное сообщение.
+    - Public канал → `https://t.me/<username>/<msg_id>`.
+    - Приватный → `https://t.me/c/<bare_chat_id>/<msg_id>`. Открывается у
+      тех, кто уже в канале (для остальных будет пустой экран — поэтому
+      кнопка «Ссылка на группу» отдельно даёт invite_link для входа).
+    """
+    async with AsyncSessionLocal() as session:
+        msg = (await session.execute(
+            select(Message).where(Message.id == message_id)
+        )).scalar_one_or_none()
+        if msg is None:
+            return None
+        if msg.tg_chat_username:
+            return f"https://t.me/{msg.tg_chat_username}/{msg.tg_message_id}"
+        if msg.tg_chat_id is not None:
+            bare = abs(msg.tg_chat_id)
+            if bare > 1_000_000_000_000:
+                bare -= 1_000_000_000_000
+            return f"https://t.me/c/{bare}/{msg.tg_message_id}"
+        return None
+
+
 async def get_channel_link_for_message(message_id: int) -> tuple[str | None, str | None]:
     """Для message_id вернуть (link, channel_label).
     Логика:

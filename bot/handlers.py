@@ -162,7 +162,7 @@ async def _build_digest_message(
 
     fallback_link = None
     if not canon_msg.tg_chat_username:
-        fallback_link, _label = await repository.get_channel_link_for_message(canonical_id)
+        fallback_link = await repository.get_message_permalink(canonical_id)
     text = Userbot._format_notification(
         post=post,
         vacancies=vac_extractions,

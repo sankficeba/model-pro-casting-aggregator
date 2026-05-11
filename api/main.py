@@ -578,7 +578,7 @@ async def _build_favorite_message(
 
     fallback_link = None
     if not canon_msg.tg_chat_username:
-        fallback_link, _label = await repo.get_channel_link_for_message(message_id)
+        fallback_link = await repo.get_message_permalink(message_id)
     text = Userbot._format_notification(
         post=post,
         vacancies=vac_extractions,
