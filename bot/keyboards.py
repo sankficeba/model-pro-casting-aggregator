@@ -38,7 +38,7 @@ def actions_rows(*, message_id: int, is_favorited: bool) -> list[list[InlineKeyb
     return [
         [
             InlineKeyboardButton(
-                text="Ссылка на сообщение",
+                text="Ссылка на группу",
                 callback_data=f"details:{message_id}",
                 icon_custom_emoji_id=EMOJI_DETAILS,
             ),

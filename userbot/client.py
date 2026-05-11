@@ -339,11 +339,19 @@ class Userbot:
         message,
         chat_username: str | None,
         effective_category: str | None = None,
+        invite_link: str | None = None,
     ) -> str:
-        """Карточка для пользователя. Перечисляет только подошедшие вакансии."""
+        """Карточка для пользователя. Перечисляет только подошедшие вакансии.
+
+        `invite_link` — fallback URL для приватных каналов: если у канала нет
+        username (приватка), но есть admin-выставленная invite-ссылка, ставим
+        её в «Открыть сообщение» — лучше чем ничего.
+        """
         link = ""
         if chat_username:
             link = f"https://t.me/{chat_username}/{message.id}"
+        elif invite_link:
+            link = invite_link
 
         eff_cat = effective_category or post.category or "creative"
         emoji, cat_label = _CATEGORY_HEADERS.get(
@@ -494,11 +502,15 @@ class Userbot:
             # подошедшей вакансии.
             first_matched = vacancies[hit_idxs[0]]
             eff_cat = first_matched.category or post.category
+            fallback_link = None
+            if not chat_username:
+                fallback_link, _label = await repository.get_channel_link_for_message(message_db_id)
             notification_text = self._format_notification(
                 post=post, vacancies=vacancies,
                 matched_idxs=hit_idxs,
                 message=message, chat_username=chat_username,
                 effective_category=eff_cat,
+                invite_link=fallback_link,
             )
 
             from bot.keyboards import EMOJI_RESPOND, actions_rows
