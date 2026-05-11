@@ -37,8 +37,13 @@ async def night_digest_loop(bot: Bot) -> None:
                     f"За ночь было опубликовано <b>{count}</b> подходящих объявлений. "
                     f"Хочешь посмотреть?"
                 )
+                from bot.keyboards import EMOJI_NEXT
                 kb = InlineKeyboardMarkup(inline_keyboard=[[
-                    InlineKeyboardButton(text="➡ Далее", callback_data="digest:next")
+                    InlineKeyboardButton(
+                        text="следующая вакансия",
+                        callback_data="digest:next",
+                        icon_custom_emoji_id=EMOJI_NEXT,
+                    )
                 ]])
                 try:
                     await bot.send_message(
@@ -107,8 +112,13 @@ async def daily_digest_loop(bot: Bot) -> None:
                     f"За сегодня — <b>{count}</b> подходящих кастингов. "
                     f"Хочешь посмотреть?"
                 )
+                from bot.keyboards import EMOJI_NEXT
                 kb = InlineKeyboardMarkup(inline_keyboard=[[
-                    InlineKeyboardButton(text="➡ Далее", callback_data="digest:next")
+                    InlineKeyboardButton(
+                        text="следующая вакансия",
+                        callback_data="digest:next",
+                        icon_custom_emoji_id=EMOJI_NEXT,
+                    )
                 ]])
                 try:
                     await bot.send_message(
