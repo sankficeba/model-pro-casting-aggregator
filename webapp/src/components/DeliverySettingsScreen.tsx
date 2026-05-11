@@ -168,7 +168,7 @@ export function DeliverySettingsScreen({ onBack }: Props) {
                   role="status"
                   className="rounded-card border border-red-500/60 bg-red-950/30 text-red-200 text-sm px-3 py-2 animate-fade-in-out"
                 >
-                  Пока что активных объявлений нет.
+                  Пока что новых объявлений нет.
                 </div>
               )}
             </>

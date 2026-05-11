@@ -191,7 +191,11 @@ async def _build_digest_message(
     kb_buttons += keyboards.actions_rows(message_id=canonical_id, is_favorited=fav_state)
     if pending_left > 0:
         kb_buttons.append([
-            InlineKeyboardButton(text="➡ Следующее", callback_data="digest:next")
+            InlineKeyboardButton(
+                text="следующая вакансия",
+                callback_data="digest:next",
+                icon_custom_emoji_id=keyboards.EMOJI_NEXT,
+            )
         ])
     return text, InlineKeyboardMarkup(inline_keyboard=kb_buttons)
 
@@ -308,7 +312,7 @@ def build_dispatcher(
         """Начать рассматривать накопленные объявления (digest mode)."""
         sent = await _send_next_pending(bot, message.from_user.id)
         if not sent:
-            await message.answer("Пока что активных объявлений нет.")
+            await message.answer("Пока что новых объявлений нет.")
 
     @dp.callback_query(F.data == "digest:next")
     async def cb_digest_next(query: CallbackQuery) -> None:
@@ -317,7 +321,7 @@ def build_dispatcher(
         sent = await _send_next_pending(bot, query.from_user.id)
         if not sent:
             try:
-                await query.message.answer("Пока что активных объявлений нет.")  # type: ignore[union-attr]
+                await query.message.answer("Пока что новых объявлений нет.")  # type: ignore[union-attr]
             except Exception:  # noqa: BLE001
                 pass
         await query.answer()

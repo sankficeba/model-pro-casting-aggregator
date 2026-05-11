@@ -12,6 +12,7 @@ EMOJI_DETAILS = "5778351117733729026"   # 🔗
 EMOJI_DELETE = "5019500511871632068"    # 🗑
 EMOJI_FAV_ADD = "5361760588764566472"   # 📎
 EMOJI_FAV_REMOVE = "5465665476971471368"  # ❌
+EMOJI_NEXT = "5404546954183059646"  # ▶️
 
 
 def actions_rows(*, message_id: int, is_favorited: bool) -> list[list[InlineKeyboardButton]]:
