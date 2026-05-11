@@ -504,7 +504,7 @@ class Userbot:
             eff_cat = first_matched.category or post.category
             fallback_link = None
             if not chat_username:
-                fallback_link, _label = await repository.get_channel_link_for_message(message_db_id)
+                fallback_link = await repository.get_message_permalink(message_db_id)
             notification_text = self._format_notification(
                 post=post, vacancies=vacancies,
                 matched_idxs=hit_idxs,
