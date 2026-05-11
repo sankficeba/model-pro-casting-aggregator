@@ -167,8 +167,15 @@ class Userbot:
             logger.info("Вступил в канал {} (id={})", ref_for_log, getattr(entity, "id", "?"))
             await repository.mark_channel_joined(row.id)
         except UserAlreadyParticipantError:
-            logger.info("Уже состою в канале {} (id={})", ref_for_log, getattr(entity, "id", "?"))
-            await repository.mark_channel_joined(row.id)
+            # ВНИМАНИЕ: Telegram отдаёт эту ошибку из stale-кэша даже когда
+            # мы РЕАЛЬНО не участники. НЕ маркируем joined_at — иначе уйдём
+            # в цикл retry↔verify. verify-loop через iter_dialogs позже
+            # подтвердит реальное членство и проставит joined_at сам.
+            logger.info(
+                "JoinChannelRequest для {} → UserAlreadyParticipantError; "
+                "ждём подтверждения через verify-loop",
+                ref_for_log,
+            )
         except (ChannelPrivateError, InviteHashExpiredError) as e:
             logger.warning("Канал {} недоступен ({}); событий не будет",
                            ref_for_log, type(e).__name__)
@@ -671,10 +678,11 @@ class Userbot:
 
     async def _verify_membership_loop(self, interval_sec: int = 3600) -> None:
         """Раз в N секунд снимает фактический список dialogs аккаунта и
-        сверяет с `channels.joined_at`. Если канал помечен joined но его
-        нет в dialogs — мы реально не состоим (Telegram возвращал ложный
-        UserAlreadyParticipantError из кэша). Сбрасываем joined_at,
-        чтобы retry-цикл выполнил настоящий JoinChannelRequest.
+        делает bidirectional sync с `channels.joined_at`:
+        - есть в dialogs, joined_at NULL → SET (подтверждаем членство).
+        - помечен joined, но НЕ в dialogs → сбрасываем joined_at
+          (Telegram отдавал ложный UserAlreadyParticipant из кэша).
+        Эта пара правил блокирует цикл «retry-set / verify-clear».
         """
         # Первый прогон через минуту после старта — дать main userbot'у
         # «отдышаться» после _resolve_channels.
@@ -682,28 +690,41 @@ class Userbot:
         while True:
             try:
                 real_ids: set[int] = set()
-                async for d in self.client.iter_dialogs(archived=False):
+                # archived=None — захватываем все папки/архивы (мы реально
+                # участник даже если канал в архиве).
+                async for d in self.client.iter_dialogs(archived=None):
                     if d.is_channel or d.is_group:
                         real_ids.add(d.entity.id)
                 rows = await repository.list_channels(active_only=True)
                 stale: list[int] = []
+                confirm: list[int] = []
                 for r in rows:
-                    if r.joined_at is None or r.tg_chat_id is None:
+                    if r.tg_chat_id is None:
                         continue
                     bare = abs(r.tg_chat_id)
                     if bare > 1_000_000_000_000:
                         bare -= 1_000_000_000_000
-                    if bare not in real_ids:
+                    really_in = bare in real_ids
+                    if really_in and r.joined_at is None:
+                        confirm.append(r.id)
+                    elif not really_in and r.joined_at is not None:
                         stale.append(r.id)
+                if confirm:
+                    for cid in confirm:
+                        await repository.mark_channel_joined(cid)
+                    logger.info(
+                        "verify-membership: подтверждено членство для {} каналов",
+                        len(confirm),
+                    )
                 if stale:
                     cleared = await repository.bulk_clear_joined_at(stale)
                     logger.warning(
                         "verify-membership: {} каналов помечены joined но нас нет в dialogs — "
                         "сброшено для retry", cleared,
                     )
-                else:
+                if not stale and not confirm:
                     logger.info(
-                        "verify-membership: все {} помеченных каналов подтверждены",
+                        "verify-membership: всё в синке ({} помеченных)",
                         sum(1 for r in rows if r.joined_at is not None),
                     )
             except Exception as e:  # noqa: BLE001
