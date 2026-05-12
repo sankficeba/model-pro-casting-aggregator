@@ -166,13 +166,19 @@ async def health() -> dict:
 
 @app.get("/api/me")
 async def me(user: TelegramUser = Depends(current_user)) -> dict:
-    """Кто я + админ ли + список подписок на категории."""
+    """Кто я + админ ли + список подписок на категории.
+    `bot_chat_active=false` сигнализирует фронту что юзер не нажимал /start
+    в боте (или заблокировал/удалил его) — нотификации не доходят, нужно
+    показать плашку с инструкцией."""
     subscriptions = await repo.get_subscriptions(user.id)
+    db_user = await repo.get_user_by_id(user.id)
+    bot_chat_active = bool(getattr(db_user, "bot_chat_active", True))
     return {
         "user_id": user.id,
         "username": user.username,
         "is_admin": is_admin_user(user),
         "subscriptions": subscriptions,
+        "bot_chat_active": bot_chat_active,
     }
 
 
