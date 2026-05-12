@@ -149,6 +149,7 @@ export interface AdminVacancyRow {
 export interface AdminMessageRow {
   id: number;
   tg_chat_username: string | null;
+  tg_chat_id: number | null;
   tg_message_id: number;
   text: string;
   is_casting: boolean;

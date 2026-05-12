@@ -60,6 +60,7 @@ class AdminVacancy(BaseModel):
 class AdminMessage(BaseModel):
     id: int
     tg_chat_username: Optional[str] = None
+    tg_chat_id: Optional[int] = None
     tg_message_id: int
     text: str
     is_casting: bool
@@ -289,16 +290,9 @@ async def list_messages(
     _: TelegramUser = Depends(admin_user),
 ) -> list[AdminMessage]:
     async with AsyncSessionLocal() as session:
-        # Подсчёт уведомлений на сообщение одним запросом — иначе N+1.
-        notif_counts_stmt = (
-            select(Notification.message_id, func.count(Notification.id).label("cnt"))
-            .group_by(Notification.message_id)
-        )
-        notif_counts = {
-            row.message_id: row.cnt
-            for row in (await session.execute(notif_counts_stmt)).all()
-        }
-
+        # Сначала достаём страницу сообщений, потом считаем уведомления
+        # только для них — иначе при росте notifications таблица сканится
+        # вся каждый раз.
         msg_stmt = (
             select(Message)
             .options(selectinload(Message.vacancies))
@@ -311,10 +305,24 @@ async def list_messages(
         res = await session.execute(msg_stmt)
         rows = res.scalars().all()
 
+        page_ids = [m.id for m in rows]
+        notif_counts: dict[int, int] = {}
+        if page_ids:
+            notif_counts_stmt = (
+                select(Notification.message_id, func.count(Notification.id).label("cnt"))
+                .where(Notification.message_id.in_(page_ids))
+                .group_by(Notification.message_id)
+            )
+            notif_counts = {
+                row.message_id: row.cnt
+                for row in (await session.execute(notif_counts_stmt)).all()
+            }
+
     return [
         AdminMessage(
             id=m.id,
             tg_chat_username=m.tg_chat_username,
+            tg_chat_id=m.tg_chat_id,
             tg_message_id=m.tg_message_id,
             text=m.text,
             is_casting=m.is_casting,
