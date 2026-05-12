@@ -5,6 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#0d1326" />
     <title>ModelPro — Анкета</title>
+    <!-- Preconnect: открываем TCP+TLS к Telegram SDK в фоне, пока
+         парсится HTML. API/webapp — same-origin, отдельный preconnect
+         не нужен (но warmup-fetch в main.tsx даст cold-start hit на
+         первом запросе). -->
+    <link rel="dns-prefetch" href="https://telegram.org" />
+    <link rel="preconnect" href="https://telegram.org" crossorigin />
     <!-- Telegram Mini App SDK -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
   </head>
