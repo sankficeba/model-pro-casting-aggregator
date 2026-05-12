@@ -409,6 +409,10 @@ class FavoriteShowResponse(BaseModel):
     error: Optional[str] = None
 
 
+class FavoritesSettings(BaseModel):
+    retention_days: int = Field(5, ge=0, le=90)
+
+
 class ProblemReportRequest(BaseModel):
     text: str = Field(..., min_length=3, max_length=2000)
 

@@ -11,6 +11,7 @@ import type {
   DigestStartResponse,
   FavoriteShowResponse,
   FavoritesList,
+  FavoritesSettings,
   ProblemActionResponse,
   ProblemsList,
   MeResponse,
@@ -224,6 +225,13 @@ export const api = {
 
   // Favorites
   listFavorites: () => request<FavoritesList>("/favorites"),
+  getFavoritesSettings: () =>
+    request<FavoritesSettings>("/favorites/settings"),
+  putFavoritesSettings: (settings: FavoritesSettings) =>
+    request<FavoritesSettings>("/favorites/settings", {
+      method: "PUT",
+      body: JSON.stringify(settings),
+    }),
   removeFavorite: (messageId: number) =>
     request<{ ok: boolean }>(`/favorites/${messageId}`, { method: "DELETE" }),
   showFavoriteInChat: (messageId: number) =>

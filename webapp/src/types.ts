@@ -229,6 +229,11 @@ export interface FavoriteShowResponse {
   error?: string | null;
 }
 
+export interface FavoritesSettings {
+  /** Срок автоудаления в днях. 0 = не удалять автоматически. */
+  retention_days: number;
+}
+
 export interface ProblemItem {
   id: number;
   user_id: number;

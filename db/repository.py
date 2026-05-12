@@ -826,6 +826,51 @@ async def list_favorites(user_id: int) -> list[Favorite]:
         return list(res.scalars().all())
 
 
+async def prune_old_favorites(user_id: int) -> int:
+    """Удалить старые избранные согласно user.favorites_retention_days.
+    0 = не удалять. Возвращает кол-во удалённых строк."""
+    async with AsyncSessionLocal() as session:
+        u = (await session.execute(
+            select(User.favorites_retention_days).where(User.id == user_id)
+        )).scalar_one_or_none()
+        days = int(u) if u is not None else 5
+        if days <= 0:
+            return 0
+        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+        from sqlalchemy import delete as sa_delete
+        result = await session.execute(
+            sa_delete(Favorite).where(
+                Favorite.user_id == user_id,
+                Favorite.created_at < cutoff,
+            )
+        )
+        await session.commit()
+        return result.rowcount or 0
+
+
+async def get_favorites_retention_days(user_id: int) -> int:
+    async with AsyncSessionLocal() as session:
+        u = (await session.execute(
+            select(User.favorites_retention_days).where(User.id == user_id)
+        )).scalar_one_or_none()
+        return int(u) if u is not None else 5
+
+
+async def set_favorites_retention_days(user_id: int, days: int) -> bool:
+    """Установить срок автоудаления. days=0 → не удалять. Допустимый
+    диапазон 0..90."""
+    if days < 0 or days > 90:
+        return False
+    async with AsyncSessionLocal() as session:
+        await session.execute(
+            update(User).where(User.id == user_id).values(
+                favorites_retention_days=days,
+            )
+        )
+        await session.commit()
+        return True
+
+
 async def get_favorite(user_id: int, message_id: int) -> Optional[Favorite]:
     async with AsyncSessionLocal() as session:
         res = await session.execute(
