@@ -417,8 +417,24 @@ class Userbot:
                 f"• <b>{_vacancy_title(v)}</b> — {_format_age(v)}, {gender_ru}, {rate_str}{extras_str}"
             )
 
-        lines.append("")
-        lines.append(post.summary or (message.message or "")[:300])
+        # Body: предпочитаем описания матчнутых вакансий — они конкретны
+        # для роли. post.summary показываем только когда пост одно-ролевой
+        # (иначе summary часто описывает другую часть поста, не
+        # матчнутую — путаница как с «8 ролей: показано про остеоартрит,
+        # а юзер матчанулся на «Зрители с бессонницей»).
+        per_role_desc = [
+            vacancies[i].description for i in matched_idxs
+            if vacancies[i].description
+        ]
+        if per_role_desc:
+            body = "\n\n".join(per_role_desc)
+        elif len(vacancies) <= 1:
+            body = post.summary or (message.message or "")[:300]
+        else:
+            body = None
+        if body:
+            lines.append("")
+            lines.append(body)
         if link:
             lines.append(f"\n<a href=\"{link}\">Открыть сообщение</a>")
         return "\n".join(lines)
