@@ -1326,11 +1326,36 @@ async def pop_next_pending(user_id: int) -> Optional[dict]:
 
 
 async def count_pending(user_id: int) -> int:
+    """Считает pending-записи юзера, исключая те, чей text_hash уже
+    отмечен в notifications (= при попытке отправки сработал бы
+    UNIQUE-дедуп и юзер их всё равно не увидел бы). Это даёт честное
+    число «осталось нерассмотренных» для шапки digest-сообщения."""
+    from sqlalchemy import or_
     async with AsyncSessionLocal() as session:
+        notified_hashes = (
+            select(Notification.text_hash)
+            .where(
+                Notification.user_id == user_id,
+                Notification.text_hash.is_not(None),
+            )
+        )
+        notified_msg_ids = (
+            select(Notification.message_id)
+            .where(Notification.user_id == user_id)
+        )
         res = await session.execute(
             select(sa_func.count())
             .select_from(PendingNotification)
-            .where(PendingNotification.user_id == user_id)
+            .where(
+                PendingNotification.user_id == user_id,
+                # Не считаем pending, чей text_hash уже отмечен в notifications
+                or_(
+                    PendingNotification.text_hash.is_(None),
+                    ~PendingNotification.text_hash.in_(notified_hashes),
+                ),
+                # И не считаем pending, чей message_id уже отмечен в notifications.
+                ~PendingNotification.message_id.in_(notified_msg_ids),
+            )
         )
         return int(res.scalar() or 0)
 
