@@ -1924,14 +1924,24 @@ def _collect_suggestions(profiles: dict[str, dict]) -> dict[str, list]:
 
 
 async def get_suggestions(user_id: int) -> dict[str, list]:
-    """Собрать suggestions из всех 4 профилей юзера."""
-    profiles: dict[str, dict] = {}
-    async with AsyncSessionLocal() as session:
-        for cat, model in CATEGORY_TO_MODEL.items():
-            res = await session.execute(select(model).where(model.user_id == user_id))
+    """Собрать suggestions из всех 4 профилей юзера. 4 запроса идут
+    параллельно через gather — ~50мс вместо ~200мс на последовательных."""
+    import asyncio as _asyncio
+
+    async def _fetch_one(cat: str, model) -> tuple[str, Optional[dict]]:
+        async with AsyncSessionLocal() as session:
+            res = await session.execute(
+                select(model).where(model.user_id == user_id)
+            )
             row = res.scalar_one_or_none()
-            if row is not None:
-                profiles[cat] = _profile_row_to_dict(row)
+            return cat, _profile_row_to_dict(row) if row is not None else None
+
+    results = await _asyncio.gather(
+        *(_fetch_one(cat, model) for cat, model in CATEGORY_TO_MODEL.items())
+    )
+    profiles: dict[str, dict] = {
+        cat: data for cat, data in results if data is not None
+    }
     return _collect_suggestions(profiles)
 
 

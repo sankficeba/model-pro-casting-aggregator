@@ -172,8 +172,11 @@ async def me(user: TelegramUser = Depends(current_user)) -> dict:
     `bot_chat_active=false` сигнализирует фронту что юзер не нажимал /start
     в боте (или заблокировал/удалил его) — нотификации не доходят, нужно
     показать плашку с инструкцией."""
-    subscriptions = await repo.get_subscriptions(user.id)
-    db_user = await repo.get_user_by_id(user.id)
+    import asyncio as _asyncio
+    subscriptions, db_user = await _asyncio.gather(
+        repo.get_subscriptions(user.id),
+        repo.get_user_by_id(user.id),
+    )
     bot_chat_active = bool(getattr(db_user, "bot_chat_active", True))
     return {
         "user_id": user.id,
@@ -397,8 +400,11 @@ async def channel_suggestion(
 
 @app.get("/api/delivery-settings", response_model=DeliverySettingsResponse)
 async def get_delivery(user: TelegramUser = Depends(current_user)) -> DeliverySettingsResponse:
-    s = await repo.get_delivery_settings(user.id)
-    pending_count = await repo.count_pending(user.id)
+    import asyncio as _asyncio
+    s, pending_count = await _asyncio.gather(
+        repo.get_delivery_settings(user.id),
+        repo.count_pending(user.id),
+    )
     return DeliverySettingsResponse(**s, pending_count=pending_count)
 
 
