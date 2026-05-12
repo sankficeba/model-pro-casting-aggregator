@@ -1047,22 +1047,29 @@ async def set_user_blacklist(user_id: int, words: list[str]) -> list[str]:
 # Глобальный blacklist подстрок (case-insensitive). Сообщение, содержащее
 # любую из них, не рассылается ВСЕМ пользователям независимо от их
 # персонального blacklist. Используется чтобы массово отсечь военную
-# и подобную тематику.
+# и подобную тематику. Многословные фразы матчатся через \s+ (любые
+# пробелы/переносы), односложные — по границам слова.
 GLOBAL_BLACKLIST_SUBSTRINGS = (
-    "сво",  # включая «НЕ СВО», «оператор БПЛА на СВО» и т.п.
+    "сво",                 # включая «НЕ СВО», «на СВО»
+    "служба по контракту", # военная контрактная служба
 )
 
 
 def text_has_global_blacklist(text: str) -> bool:
-    """True если в тексте есть хоть одно слово из глобального blacklist'а.
-    Сравнение по СЛОВУ через границы, чтобы не ловить «свобода» / «свой»."""
+    """True если в тексте есть хоть одна фраза из глобального blacklist'а.
+    - Односложная фраза («сво») — точное совпадение по границам слова,
+      чтобы не цеплять «свобода»/«свой».
+    - Многословная фраза («служба по контракту») — слова разделяются
+      \\s+, то есть любым количеством пробелов/переносов между ними."""
     import re
     if not text:
         return False
     lower = text.lower()
-    for sub in GLOBAL_BLACKLIST_SUBSTRINGS:
+    for phrase in GLOBAL_BLACKLIST_SUBSTRINGS:
+        parts = phrase.split()
+        joined = r"\s+".join(re.escape(p) for p in parts)
         # \b не работает для кириллицы в Python re, используем явные границы.
-        pattern = r"(?:^|[^а-яa-z0-9])" + re.escape(sub) + r"(?:$|[^а-яa-z0-9])"
+        pattern = r"(?:^|[^а-яa-z0-9])" + joined + r"(?:$|[^а-яa-z0-9])"
         if re.search(pattern, lower):
             return True
     return False
