@@ -677,15 +677,32 @@ class Userbot:
             chat_username=chat_username,
         )
 
-    async def _handle_message(self, event):
+    async def _handle_message(self, event, origin: str = "push"):
         text = (event.message.message or "").strip()
         if not text:
             return
-        logger.debug("Новое сообщение: {!r}", text[:120])
 
         chat = event.message.chat
         chat_id = getattr(chat, "id", 0)
         chat_username = getattr(chat, "username", None)
+        msg_id = getattr(event.message, "id", 0)
+        # Возраст сообщения: для отладки лага push vs pull. Если у Telethon
+        # Message есть .date — считаем дельту от now (UTC).
+        msg_date = getattr(event.message, "date", None)
+        age_sec: float | None = None
+        if msg_date is not None:
+            try:
+                age_sec = (datetime.now(timezone.utc) - msg_date).total_seconds()
+            except Exception:  # noqa: BLE001
+                age_sec = None
+        logger.info(
+            "msg origin={} chat={} tg_msg_id={} age={}s text={!r}",
+            origin,
+            chat_username or chat_id,
+            msg_id,
+            f"{age_sec:.1f}" if age_sec is not None else "?",
+            text[:80],
+        )
 
         th = text_hash(text)
 
@@ -800,7 +817,7 @@ class Userbot:
                                     if age > _PULL_MAX_AGE:
                                         skipped_old += 1
                                         continue
-                                await self._handle_message(_PullEvent(m, entity))
+                                await self._handle_message(_PullEvent(m, entity), origin="pull")
                                 handled += 1
                             if handled or skipped_old:
                                 logger.info(
