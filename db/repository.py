@@ -1044,6 +1044,30 @@ async def set_user_blacklist(user_id: int, words: list[str]) -> list[str]:
     return cleaned
 
 
+# Глобальный blacklist подстрок (case-insensitive). Сообщение, содержащее
+# любую из них, не рассылается ВСЕМ пользователям независимо от их
+# персонального blacklist. Используется чтобы массово отсечь военную
+# и подобную тематику.
+GLOBAL_BLACKLIST_SUBSTRINGS = (
+    "сво",  # включая «НЕ СВО», «оператор БПЛА на СВО» и т.п.
+)
+
+
+def text_has_global_blacklist(text: str) -> bool:
+    """True если в тексте есть хоть одно слово из глобального blacklist'а.
+    Сравнение по СЛОВУ через границы, чтобы не ловить «свобода» / «свой»."""
+    import re
+    if not text:
+        return False
+    lower = text.lower()
+    for sub in GLOBAL_BLACKLIST_SUBSTRINGS:
+        # \b не работает для кириллицы в Python re, используем явные границы.
+        pattern = r"(?:^|[^а-яa-z0-9])" + re.escape(sub) + r"(?:$|[^а-яa-z0-9])"
+        if re.search(pattern, lower):
+            return True
+    return False
+
+
 async def filter_users_by_blacklist(user_ids: list[int], text: str) -> list[int]:
     """Возвращает user_ids, у которых нет запрещённых слов в тексте.
     Сравнение case-insensitive."""
