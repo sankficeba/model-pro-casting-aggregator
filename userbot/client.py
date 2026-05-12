@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from aiogram import Bot
@@ -44,6 +45,11 @@ _CATEGORY_HEADERS = {
     "general":  ("🛠", "Разнорабочие"),
     "admin":    ("💻", "Администрирование"),
 }
+
+
+# Pull-backup отсекает сообщения старше этого возраста — устаревшие
+# вакансии (опубликованы > суток назад) пользователю не нужны.
+_PULL_MAX_AGE = timedelta(hours=24)
 
 
 class _PullEvent:
@@ -747,6 +753,7 @@ class Userbot:
         await asyncio.sleep(60)
         while True:
             try:
+                now = datetime.now(timezone.utc)
                 for entity in list(self._entities):
                     bare = abs(getattr(entity, "id", 0))
                     if bare > 1_000_000_000_000:
@@ -762,16 +769,34 @@ class Userbot:
                             if m and m.id > last:
                                 msgs.append(m)
                         if msgs:
+                            handled = 0
+                            skipped_old = 0
                             # Перевернём в хронологический порядок.
                             for m in reversed(msgs):
-                                await self._handle_message(_PullEvent(m, entity))
+                                # Bump last_seen всегда — иначе будем повторно
+                                # тянуть старые сообщения каждый цикл.
                                 self._last_seen_msg_id[bare] = max(
                                     self._last_seen_msg_id.get(bare, 0), m.id,
                                 )
-                            logger.info(
-                                "pull-backup: chat={} подтянуто {} сообщений (last={})",
-                                bare, len(msgs), self._last_seen_msg_id[bare],
-                            )
+                                # Отсечка по возрасту: вакансии старше 24ч
+                                # никого уже не интересуют. pull-backup
+                                # имеет смысл только как страховка от
+                                # задержек event-доставки.
+                                msg_date = getattr(m, "date", None)
+                                if msg_date is not None:
+                                    age = now - msg_date
+                                    if age > _PULL_MAX_AGE:
+                                        skipped_old += 1
+                                        continue
+                                await self._handle_message(_PullEvent(m, entity))
+                                handled += 1
+                            if handled or skipped_old:
+                                logger.info(
+                                    "pull-backup: chat={} обработано={} пропущено_старых={} "
+                                    "(last={})",
+                                    bare, handled, skipped_old,
+                                    self._last_seen_msg_id[bare],
+                                )
                     except Exception as e:  # noqa: BLE001
                         logger.warning("pull-backup({}) не удался: {}", bare, e)
                     # Throttle: 10 RPC/сек — далеко от лимита (~30/сек).
