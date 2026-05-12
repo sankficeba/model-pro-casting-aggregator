@@ -13,6 +13,7 @@ import {
 } from "./telegram";
 import { AdminDashboard } from "./components/AdminDashboard";
 import { BackgroundShapes } from "./components/BackgroundShapes";
+import { BotChatRequiredBanner } from "./components/BotChatRequiredBanner";
 import { BlacklistScreen } from "./components/BlacklistScreen";
 import { CategorySurveyScreen } from "./components/CategorySurveyScreen";
 import { CategoryMenuScreen } from "./components/CategoryMenuScreen";
@@ -74,10 +75,13 @@ export default function App() {
     }
   };
 
+  const [botChatActive, setBotChatActive] = useState<boolean>(true);
+
   const fetchSubscriptions = async (): Promise<Subscription[]> => {
     const me: MeResponse = await api.getMe();
     setSubscriptions(me.subscriptions ?? []);
     setIsAdmin(me.is_admin);
+    setBotChatActive(me.bot_chat_active !== false);
     return me.subscriptions ?? [];
   };
 
@@ -259,6 +263,9 @@ export default function App() {
   return (
     <SuggestionsProvider>
       <BackgroundShapes />
+      {!botChatActive && screen.kind !== "loading" && screen.kind !== "error" && (
+        <BotChatRequiredBanner />
+      )}
       {showBanner && (
         <SubscriptionBanner
           status={subStatus}

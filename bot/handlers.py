@@ -288,6 +288,12 @@ def build_dispatcher(
             message.from_user.id,
             username=message.from_user.username,
         )
+        # Сбрасываем флаг «мёртвый чат» — раз юзер прислал /start, диалог
+        # точно живой. Это вернёт его в рассылки и нотификации.
+        try:
+            await repository.mark_user_bot_chat_active(message.from_user.id)
+        except Exception:  # noqa: BLE001
+            pass
         # Активируем пробный период при первом /start.
         active_until = await repository.start_trial_if_first_time(
             message.from_user.id, settings.subscription_trial_days,

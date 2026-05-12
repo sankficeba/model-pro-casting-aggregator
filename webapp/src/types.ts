@@ -76,6 +76,9 @@ export interface MeResponse {
   username: string | null;
   is_admin: boolean;
   subscriptions?: Subscription[];
+  /** false = у юзера НЕТ активного чата с ботом (не нажимал /start
+   *  или заблокировал бота). Mini App показывает плашку-инструкцию. */
+  bot_chat_active?: boolean;
 }
 
 export interface AdminStats {
