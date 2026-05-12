@@ -111,24 +111,35 @@ class BroadcastStartResponse(BaseModel):
 
 @router.get("/stats", response_model=AdminStats)
 async def stats(_: TelegramUser = Depends(admin_user)) -> AdminStats:
-    async with AsyncSessionLocal() as session:
-        profiles_total = (await session.execute(select(func.count(ActorProfile.user_id)))).scalar_one()
-        profiles_completed = (
-            await session.execute(
-                select(func.count(ActorProfile.user_id)).where(ActorProfile.completed_at.is_not(None))
-            )
-        ).scalar_one()
-        messages_total = (await session.execute(select(func.count(Message.id)))).scalar_one()
-        messages_casting = (
-            await session.execute(select(func.count(Message.id)).where(Message.is_casting.is_(True)))
-        ).scalar_one()
-        notifications_total = (await session.execute(select(func.count(Notification.id)))).scalar_one()
-        notifications_success = (
-            await session.execute(
-                select(func.count(Notification.id)).where(Notification.success.is_(True))
-            )
-        ).scalar_one()
-    extra = await repo.get_extended_admin_stats()
+    """Параллелим 6 COUNT-запросов + extra через gather: было ~6 ×
+    последовательных roundtrip'ов, стало 1 окно ~ один longest count."""
+    import asyncio as _asyncio
+
+    async def _count(stmt) -> int:
+        async with AsyncSessionLocal() as session:
+            return (await session.execute(stmt)).scalar_one()
+
+    (
+        profiles_total,
+        profiles_completed,
+        messages_total,
+        messages_casting,
+        notifications_total,
+        notifications_success,
+        extra,
+    ) = await _asyncio.gather(
+        _count(select(func.count(ActorProfile.user_id))),
+        _count(select(func.count(ActorProfile.user_id)).where(
+            ActorProfile.completed_at.is_not(None)
+        )),
+        _count(select(func.count(Message.id))),
+        _count(select(func.count(Message.id)).where(Message.is_casting.is_(True))),
+        _count(select(func.count(Notification.id))),
+        _count(select(func.count(Notification.id)).where(
+            Notification.success.is_(True)
+        )),
+        repo.get_extended_admin_stats(),
+    )
     return AdminStats(
         profiles_total=profiles_total,
         profiles_completed=profiles_completed,
