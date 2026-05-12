@@ -446,6 +446,16 @@ class Userbot:
         if not post.is_casting or not vacancy_ids or not vacancies:
             return
 
+        # Глобальный blacklist: военная тематика и т.п. отсекается до
+        # матчинга. Сообщение остаётся в БД для аудита, но никому не идёт.
+        raw_text_for_blocklist = (getattr(message, "message", "") or "").strip()
+        if repository.text_has_global_blacklist(raw_text_for_blocklist):
+            logger.info(
+                "Global blacklist отсёк msg {} (содержит запрещённую подстроку)",
+                message_db_id,
+            )
+            return
+
         user_to_idxs = await matching.find_matching_vacancies(post, vacancies)
         if not user_to_idxs:
             logger.debug("Нет подходящих анкет для сообщения {}", message_db_id)
