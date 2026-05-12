@@ -628,22 +628,31 @@ async def list_favorites(
     """Список избранных кастингов пользователя. Bulk-load по message_ids
     в 3 запроса (messages, vacancies, channels) вместо N×3 для каждого
     избранного — было ~10-15с при 28 избранных, стало ~200мс."""
+    import time as _time
     from sqlalchemy import select as _select
     from db import matching
     from db.models import Channel, Message as MessageRow, Vacancy as VacancyRow
     from db.session import AsyncSessionLocal
     from userbot.client import Userbot, _vacancy_title  # noqa: F401
 
+    t0 = _time.monotonic()
     # Авто-чистка по сроку retention перед выдачей списка.
     try:
         await repo.prune_old_favorites(user.id)
     except Exception:  # noqa: BLE001
         pass
+    t1 = _time.monotonic()
     favs = await repo.list_favorites(user.id)
+    t2 = _time.monotonic()
     if not favs:
+        logger.info(
+            "favorites user={} empty (prune={:.0f}ms list={:.0f}ms)",
+            user.id, (t1 - t0) * 1000, (t2 - t1) * 1000,
+        )
         return FavoritesListResponse(items=[])
 
     msg_ids = [f.message_id for f in favs]
+    t_bulk_start = _time.monotonic()
     async with AsyncSessionLocal() as session:
         msgs_res = await session.execute(
             _select(MessageRow).where(MessageRow.id.in_(msg_ids))
@@ -670,6 +679,7 @@ async def list_favorites(
             )
             for c in ch_res.scalars():
                 channels_by_chat[c.tg_chat_id] = c
+    t_bulk_end = _time.monotonic()
 
     def _source_label(msg: MessageRow) -> str:
         if msg.tg_chat_username:
@@ -721,6 +731,16 @@ async def list_favorites(
             saved_at=f.created_at,
             source_label=_source_label(msg),
         ))
+    t_end = _time.monotonic()
+    logger.info(
+        "favorites user={} n={} (prune={:.0f}ms list={:.0f}ms bulk={:.0f}ms render={:.0f}ms total={:.0f}ms)",
+        user.id, len(items),
+        (t1 - t0) * 1000,
+        (t2 - t1) * 1000,
+        (t_bulk_end - t_bulk_start) * 1000,
+        (t_end - t_bulk_end) * 1000,
+        (t_end - t0) * 1000,
+    )
     return FavoritesListResponse(items=items)
 
 
