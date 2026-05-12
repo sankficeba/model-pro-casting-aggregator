@@ -40,6 +40,12 @@ class User(Base):
     last_active: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+    # False если Telegram отказывается доставить сообщение
+    # (chat not found / blocked / deactivated). Такие юзеры исключаются
+    # из рассылок и нотификаций.
+    bot_chat_active: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="true"
+    )
     # Список слов/фраз, при наличии которых в тексте поста уведомление
     # не отправляется юзеру. Сравнение case-insensitive.
     blacklisted_words: Mapped[list[str]] = mapped_column(

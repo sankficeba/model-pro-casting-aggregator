@@ -1100,14 +1100,19 @@ def text_has_global_blacklist(text: str) -> bool:
 
 
 async def filter_users_by_blacklist(user_ids: list[int], text: str) -> list[int]:
-    """Возвращает user_ids, у которых нет запрещённых слов в тексте.
-    Сравнение case-insensitive."""
+    """Возвращает user_ids, у которых нет запрещённых слов в тексте
+    И активен чат с ботом (bot_chat_active=True). Юзеры без живого
+    чата отсекаются здесь же одним запросом — нет смысла слать
+    нотификацию, если Telegram её всё равно отклонит."""
     if not user_ids:
         return []
     text_lower = (text or "").lower()
     async with AsyncSessionLocal() as session:
         res = await session.execute(
-            select(User.id, User.blacklisted_words).where(User.id.in_(user_ids))
+            select(User.id, User.blacklisted_words).where(
+                User.id.in_(user_ids),
+                User.bot_chat_active.is_(True),
+            )
         )
         ok: list[int] = []
         for uid, words in res.all():
@@ -1461,7 +1466,9 @@ async def list_broadcast_audience(
     )
     if filter_code == "all" and not has_demographic:
         async with AsyncSessionLocal() as session:
-            res = await session.execute(select(User.id))
+            res = await session.execute(
+                select(User.id).where(User.bot_chat_active.is_(True))
+            )
             return [int(uid) for uid in res.scalars().all()]
 
     categories = (
@@ -1504,6 +1511,15 @@ async def list_broadcast_audience(
                 stmt = stmt.where(profile_cls.full_name.ilike(f"%{name_query}%"))
             res = await session.execute(stmt)
             user_ids.update(int(uid) for uid in res.scalars().all())
+        # Финальная фильтрация: отсекаем юзеров без активного чата с ботом.
+        if user_ids:
+            res = await session.execute(
+                select(User.id).where(
+                    User.id.in_(user_ids),
+                    User.bot_chat_active.is_(True),
+                )
+            )
+            user_ids = {int(uid) for uid in res.scalars().all()}
     return sorted(user_ids)
 
 
@@ -1850,6 +1866,42 @@ async def get_suggestions(user_id: int) -> dict[str, list]:
 
 
 # ---------- PROBLEMS ----------
+
+async def mark_user_bot_chat_inactive(user_id: int) -> bool:
+    """Помечаем юзера как недостижимого ботом: больше не пытаемся слать
+    рассылки/нотификации до тех пор, пока он сам не вернётся в чат."""
+    async with AsyncSessionLocal() as session:
+        await session.execute(
+            update(User).where(User.id == user_id).values(bot_chat_active=False)
+        )
+        await session.commit()
+        return True
+
+
+async def mark_user_bot_chat_active(user_id: int) -> bool:
+    """Восстановить флаг при успешной отправке (юзер вернулся / разблокировал)."""
+    async with AsyncSessionLocal() as session:
+        await session.execute(
+            update(User).where(User.id == user_id, User.bot_chat_active.is_(False))
+            .values(bot_chat_active=True)
+        )
+        await session.commit()
+        return True
+
+
+def is_bot_chat_dead_error(text: str) -> bool:
+    """True если текст ошибки Telegram Bot API указывает на отсутствие
+    активного чата (chat not found / blocked / deactivated)."""
+    if not text:
+        return False
+    t = text.lower()
+    return (
+        "chat not found" in t
+        or "bot was blocked by the user" in t
+        or "user is deactivated" in t
+        or "bots can't send messages to bots" in t
+    )
+
 
 async def get_user_by_id(user_id: int) -> Optional[User]:
     async with AsyncSessionLocal() as session:
