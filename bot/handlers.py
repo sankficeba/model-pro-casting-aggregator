@@ -85,6 +85,11 @@ async def _process_admin_broadcast(
         except Exception as e:  # noqa: BLE001
             logger.warning("broadcast: copy_message to {} failed: {}", uid, e)
             failed += 1
+            if repository.is_bot_chat_dead_error(str(e)):
+                try:
+                    await repository.mark_user_bot_chat_inactive(uid)
+                except Exception:  # noqa: BLE001
+                    pass
         await asyncio.sleep(0.04)
     await message.answer(
         f"✅ Готово.\nОтправлено: <b>{sent}</b> · Ошибок: <b>{failed}</b>",
@@ -480,6 +485,11 @@ def build_dispatcher(
             except Exception as e:  # noqa: BLE001
                 logger.warning("broadcast_legacy: send to {} failed: {}", uid, e)
                 failed += 1
+                if repository.is_bot_chat_dead_error(str(e)):
+                    try:
+                        await repository.mark_user_bot_chat_inactive(uid)
+                    except Exception:  # noqa: BLE001
+                        pass
             await asyncio.sleep(0.05)
         await message.answer(
             f"Готово. Отправлено: <b>{sent}</b>, ошибок: <b>{failed}</b>.",

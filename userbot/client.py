@@ -614,6 +614,11 @@ class Userbot:
                 await repository.update_notification_failed(
                     user_id=user_id, message_id=message_db_id, error=str(e),
                 )
+                if repository.is_bot_chat_dead_error(str(e)):
+                    try:
+                        await repository.mark_user_bot_chat_inactive(user_id)
+                    except Exception:  # noqa: BLE001
+                        pass
             await asyncio.sleep(0.05)
 
     async def _process_duplicate(
