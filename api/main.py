@@ -25,6 +25,7 @@ from api.schemas import (
     FavoriteItem,
     FavoriteShowResponse,
     FavoritesListResponse,
+    FavoritesSettings,
     GeneralProfileSchema,
     ProblemActionResponse,
     ProblemItem,
@@ -633,6 +634,11 @@ async def list_favorites(
     from db.session import AsyncSessionLocal
     from userbot.client import Userbot, _vacancy_title  # noqa: F401
 
+    # Авто-чистка по сроку retention перед выдачей списка.
+    try:
+        await repo.prune_old_favorites(user.id)
+    except Exception:  # noqa: BLE001
+        pass
     favs = await repo.list_favorites(user.id)
     if not favs:
         return FavoritesListResponse(items=[])
@@ -725,6 +731,25 @@ async def delete_favorite(
 ) -> dict:
     ok = await repo.remove_favorite(user.id, message_id)
     return {"ok": ok}
+
+
+@app.get("/api/favorites/settings", response_model=FavoritesSettings)
+async def get_favorites_settings(
+    user: TelegramUser = Depends(current_user),
+) -> FavoritesSettings:
+    days = await repo.get_favorites_retention_days(user.id)
+    return FavoritesSettings(retention_days=days)
+
+
+@app.put("/api/favorites/settings", response_model=FavoritesSettings)
+async def put_favorites_settings(
+    body: FavoritesSettings,
+    user: TelegramUser = Depends(current_user),
+) -> FavoritesSettings:
+    ok = await repo.set_favorites_retention_days(user.id, body.retention_days)
+    if not ok:
+        raise HTTPException(status_code=400, detail="retention_days must be 0..90")
+    return body
 
 
 @app.post("/api/favorites/{message_id}/show-in-chat", response_model=FavoriteShowResponse)

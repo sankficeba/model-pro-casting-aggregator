@@ -46,6 +46,10 @@ class User(Base):
     bot_chat_active: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=True, server_default="true"
     )
+    # Срок автоудаления избранных вакансий: N дней, 0 = не удалять.
+    favorites_retention_days: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=5, server_default="5"
+    )
     # Список слов/фраз, при наличии которых в тексте поста уведомление
     # не отправляется юзеру. Сравнение case-insensitive.
     blacklisted_words: Mapped[list[str]] = mapped_column(

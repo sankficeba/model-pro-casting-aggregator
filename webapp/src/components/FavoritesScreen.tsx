@@ -18,15 +18,22 @@ const fmtDate = (iso: string): string => {
   });
 };
 
+const RETENTION_OPTIONS = [1, 3, 5, 7, 14, 30, 0];
+
 export function FavoritesScreen({ onBack }: Props) {
   const [items, setItems] = useState<FavoriteItem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pendingId, setPendingId] = useState<number | null>(null);
+  const [retention, setRetention] = useState<number>(5);
 
   const refresh = useCallback(async () => {
     try {
-      const data = await api.listFavorites();
+      const [data, settings] = await Promise.all([
+        api.listFavorites(),
+        api.getFavoritesSettings().catch(() => ({ retention_days: 5 })),
+      ]);
       setItems(data.items);
+      setRetention(settings.retention_days ?? 5);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
@@ -35,6 +42,15 @@ export function FavoritesScreen({ onBack }: Props) {
   useEffect(() => {
     refresh();
   }, [refresh]);
+
+  const onRetentionChange = async (days: number) => {
+    setRetention(days);
+    try {
+      await api.putFavoritesSettings({ retention_days: days });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  };
 
   const handleRemove = async (id: number) => {
     if (pendingId !== null) return;
@@ -85,6 +101,28 @@ export function FavoritesScreen({ onBack }: Props) {
           <Bookmark className="w-6 h-6 text-accent" />
           Избранные вакансии
         </h1>
+
+        <div className="rounded-card border border-bg-card bg-bg-card/30 px-3 py-2.5 text-xs text-slate-300 space-y-1.5">
+          <label className="flex items-center justify-between gap-2">
+            <span>Автоудалять через:</span>
+            <select
+              value={retention}
+              onChange={(e) => onRetentionChange(parseInt(e.target.value, 10))}
+              className="bg-bg-card rounded-card px-2 py-1 outline-none focus:ring-1 ring-accent text-xs"
+            >
+              {RETENTION_OPTIONS.map((d) => (
+                <option key={d} value={d}>
+                  {d === 0 ? "не удалять" : `${d} ${d === 1 ? "день" : d < 5 ? "дня" : "дней"}`}
+                </option>
+              ))}
+            </select>
+          </label>
+          {retention > 0 && (
+            <div className="text-[11px] text-slate-500">
+              Старее этого срока — удаляются автоматически при открытии экрана.
+            </div>
+          )}
+        </div>
 
         {error && (
           <div className="rounded-card bg-red-950/40 border border-red-900 px-3 py-2 text-sm text-red-300">
