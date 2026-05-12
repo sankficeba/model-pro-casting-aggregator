@@ -532,6 +532,30 @@ async def set_channel_invite_link(ref: str, link: str | None) -> bool:
         return True
 
 
+async def get_last_seen_msg_per_channel() -> dict[int, int]:
+    """Возвращает {tg_chat_id: MAX(tg_message_id)} — последнее увиденное
+    сообщение для каждого канала из таблицы messages. Используется
+    pull-backup-циклом в userbot для warm-start."""
+    async with AsyncSessionLocal() as session:
+        res = await session.execute(
+            select(Message.tg_chat_id, sa_func.max(Message.tg_message_id))
+            .where(Message.tg_chat_id.is_not(None))
+            .group_by(Message.tg_chat_id)
+        )
+        out: dict[int, int] = {}
+        for chat_id, max_id in res.all():
+            if chat_id is None or max_id is None:
+                continue
+            bare = abs(int(chat_id))
+            if bare > 1_000_000_000_000:
+                bare -= 1_000_000_000_000
+            # Берём максимум, если для одного канала есть и bare, и -100 формы.
+            prev = out.get(bare, 0)
+            if int(max_id) > prev:
+                out[bare] = int(max_id)
+        return out
+
+
 async def bulk_clear_joined_at(channel_ids: list[int]) -> int:
     """Сбросить joined_at для перечисленных каналов. Используется,
     когда верификация через iter_dialogs показывает что бот фактически

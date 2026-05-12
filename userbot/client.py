@@ -46,6 +46,30 @@ _CATEGORY_HEADERS = {
 }
 
 
+class _PullEvent:
+    """Minimal duck-type для подмены NewMessage-event в pull-backup loop.
+    `_handle_message` использует только `.message.message / .message.id /
+    .message.chat` — мы их предоставляем явно (chat берётся из entity,
+    с которого мы запросили историю, потому что Telethon Message.chat
+    может быть None для lazy-resolved сообщений)."""
+    def __init__(self, msg, chat_entity):  # noqa: ANN001
+        self.message = _PullMessage(msg, chat_entity)
+
+
+class _PullMessage:
+    def __init__(self, msg, chat_entity):  # noqa: ANN001
+        self._msg = msg
+        self.chat = chat_entity
+
+    @property
+    def id(self) -> int:
+        return self._msg.id
+
+    @property
+    def message(self) -> str:
+        return self._msg.message or ""
+
+
 def _labels(codes: list[str], mapping: dict[str, str]) -> str:
     if not codes:
         return "—"
@@ -702,6 +726,60 @@ class Userbot:
             chat_username=chat_username,
         )
 
+    async def _pull_backup_loop(self, interval_sec: int = 30) -> None:
+        """Подстраховка против задержки Telegram event-delivery: каждые
+        N сек опрашивает GetHistory по каждому слушаемому каналу. Если
+        Telegram уже доставил NewMessage — наша запись в `messages` UNIQUE
+        по (tg_chat_id, tg_message_id) поймает дубль, плюс canonical-lookup
+        по text_hash в `_handle_message` дополнительно отсечёт повторный
+        LLM-вызов. Так что pull-backup НЕ дублирует уведомления.
+        """
+        # Прогрев last_seen из БД, чтобы при свежем старте не залить пайплайн
+        # тоннами «новых» сообщений 3-дневной давности (canonical lookup всё
+        # равно их отсеет, но это лишний LLM-расход).
+        self._last_seen_msg_id = await repository.get_last_seen_msg_per_channel()
+        logger.info(
+            "pull-backup: загружено {} last_seen меток",
+            len(self._last_seen_msg_id),
+        )
+        # Первая итерация через 60 сек после старта — дать _resolve_channels
+        # отработать.
+        await asyncio.sleep(60)
+        while True:
+            try:
+                for entity in list(self._entities):
+                    bare = abs(getattr(entity, "id", 0))
+                    if bare > 1_000_000_000_000:
+                        bare -= 1_000_000_000_000
+                    if bare == 0:
+                        continue
+                    last = self._last_seen_msg_id.get(bare, 0)
+                    try:
+                        msgs = []
+                        # iter_messages выдаёт новейшие первыми; ограничим
+                        # окно — обычно 1-2 новых за интервал.
+                        async for m in self.client.iter_messages(entity, limit=10, min_id=last):
+                            if m and m.id > last:
+                                msgs.append(m)
+                        if msgs:
+                            # Перевернём в хронологический порядок.
+                            for m in reversed(msgs):
+                                await self._handle_message(_PullEvent(m, entity))
+                                self._last_seen_msg_id[bare] = max(
+                                    self._last_seen_msg_id.get(bare, 0), m.id,
+                                )
+                            logger.info(
+                                "pull-backup: chat={} подтянуто {} сообщений (last={})",
+                                bare, len(msgs), self._last_seen_msg_id[bare],
+                            )
+                    except Exception as e:  # noqa: BLE001
+                        logger.warning("pull-backup({}) не удался: {}", bare, e)
+                    # Throttle: 10 RPC/сек — далеко от лимита (~30/сек).
+                    await asyncio.sleep(0.1)
+            except Exception as e:  # noqa: BLE001
+                logger.exception("pull-backup loop error: {}", e)
+            await asyncio.sleep(interval_sec)
+
     async def _verify_membership_loop(self, interval_sec: int = 3600) -> None:
         """Раз в N секунд снимает фактический список dialogs аккаунта и
         делает bidirectional sync с `channels.joined_at`:
@@ -818,4 +896,6 @@ class Userbot:
         asyncio.create_task(self._retry_pending_joins_loop())
         # Фоновая верификация: раз в час сверяем joined_at с реальными dialogs.
         asyncio.create_task(self._verify_membership_loop())
+        # Pull-backup: подстраховка от задержек Telegram event-delivery.
+        asyncio.create_task(self._pull_backup_loop())
         await self.client.run_until_disconnected()
