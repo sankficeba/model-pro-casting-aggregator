@@ -16,6 +16,11 @@ interface TelegramWebApp {
   ready: () => void;
   expand: () => void;
   close: () => void;
+  // Bot API 6.1+ — открывает Telegram-ссылку (t.me/...) внутри клиента
+  // БЕЗ закрытия Mini App.
+  openTelegramLink?: (url: string) => void;
+  // Bot API 6.1+ — открывает внешнюю ссылку. Mini App не закрывается.
+  openLink?: (url: string, options?: { try_instant_view?: boolean }) => void;
   // Bot API 8.0+ (опц.). Полноэкранный режим — без полупрозрачного шита.
   requestFullscreen?: () => void;
   // Bot API 7.7+ (опц.). Запрещает свайп вниз закрывать форму, удобно при заполнении.
@@ -123,4 +128,18 @@ export function notify(type: "error" | "success" | "warning") {
 
 export function closeApp() {
   tg?.close();
+}
+
+/** Открыть Telegram-ссылку (t.me/...) НЕ закрывая Mini App.
+ *  Вне Telegram — обычный window.open. */
+export function openTelegramLink(url: string): void {
+  if (tg?.openTelegramLink) {
+    try {
+      tg.openTelegramLink(url);
+      return;
+    } catch {
+      /* fallback */
+    }
+  }
+  window.open(url, "_blank", "noopener,noreferrer");
 }
