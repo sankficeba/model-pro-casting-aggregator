@@ -27,13 +27,24 @@ export function FavoritesScreen({ onBack }: Props) {
   const [retention, setRetention] = useState<number>(5);
 
   const refresh = useCallback(async () => {
+    const t_mount = performance.now();
     try {
+      const t_fetch_start = performance.now();
       const [data, settings] = await Promise.all([
         api.listFavorites(),
         api.getFavoritesSettings().catch(() => ({ retention_days: 5 })),
       ]);
+      const t_fetch_end = performance.now();
       setItems(data.items);
       setRetention(settings.retention_days ?? 5);
+      // Замер render: ждём кадр после setState.
+      requestAnimationFrame(() => {
+        const t_render = performance.now();
+        api.reportPerf("favorites_open", t_render - t_mount, {
+          fetch: t_fetch_end - t_fetch_start,
+          render: t_render - t_fetch_end,
+        });
+      });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }

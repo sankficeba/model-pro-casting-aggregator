@@ -232,6 +232,18 @@ export const api = {
       method: "PUT",
       body: JSON.stringify(settings),
     }),
+  reportPerf: (event: string, total_ms: number, parts: Record<string, number>) =>
+    request<{ ok: boolean }>("/perf", {
+      method: "POST",
+      body: JSON.stringify({
+        event,
+        total_ms: Math.round(total_ms),
+        parts: Object.fromEntries(
+          Object.entries(parts).map(([k, v]) => [k, Math.round(v)]),
+        ),
+        user_agent: navigator.userAgent.slice(0, 200),
+      }),
+    }).catch(() => ({ ok: false })),
   removeFavorite: (messageId: number) =>
     request<{ ok: boolean }>(`/favorites/${messageId}`, { method: "DELETE" }),
   showFavoriteInChat: (messageId: number) =>

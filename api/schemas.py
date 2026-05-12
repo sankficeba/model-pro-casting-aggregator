@@ -413,6 +413,14 @@ class FavoritesSettings(BaseModel):
     retention_days: int = Field(5, ge=0, le=90)
 
 
+class PerfEvent(BaseModel):
+    """Клиентская метрика производительности из Mini App."""
+    event: str = Field(..., max_length=64)
+    total_ms: int = Field(..., ge=0, le=600_000)
+    parts: dict[str, int] = Field(default_factory=dict)
+    user_agent: Optional[str] = Field(None, max_length=256)
+
+
 class ProblemReportRequest(BaseModel):
     text: str = Field(..., min_length=3, max_length=2000)
 

@@ -26,6 +26,7 @@ from api.schemas import (
     FavoriteShowResponse,
     FavoritesListResponse,
     FavoritesSettings,
+    PerfEvent,
     GeneralProfileSchema,
     ProblemActionResponse,
     ProblemItem,
@@ -770,6 +771,24 @@ async def put_favorites_settings(
     if not ok:
         raise HTTPException(status_code=400, detail="retention_days must be 0..90")
     return body
+
+
+@app.post("/api/perf")
+async def report_perf(
+    body: PerfEvent,
+    user: TelegramUser = Depends(current_user),
+) -> dict:
+    """Принимает клиентские perf-метрики из Mini App и логирует.
+    Помогает понять что тормозит у конкретного юзера (network/render),
+    когда total на бэкенде хороший, а юзер видит лаг."""
+    parts_str = " ".join(f"{k}={v}ms" for k, v in (body.parts or {}).items())
+    logger.info(
+        "perf user={} event={} total={}ms {}{}",
+        user.id, body.event, body.total_ms,
+        parts_str,
+        f" ua={body.user_agent[:60]}" if body.user_agent else "",
+    )
+    return {"ok": True}
 
 
 @app.post("/api/favorites/{message_id}/show-in-chat", response_model=FavoriteShowResponse)
