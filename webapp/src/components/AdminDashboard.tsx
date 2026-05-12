@@ -17,7 +17,7 @@ import {
   Check,
 } from "lucide-react";
 import { api } from "../api";
-import { tg } from "../telegram";
+import { openTelegramLink, tg } from "../telegram";
 import type {
   AdminMessageRow,
   AdminProfileRow,
@@ -600,14 +600,13 @@ function MessagesTab() {
               <li key={m.id} className="rounded-card bg-bg-surface p-3 text-sm">
                 <div className="flex items-baseline justify-between gap-2 text-xs text-slate-400">
                   {url ? (
-                    <a
-                      href={url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-accent hover:underline"
+                    <button
+                      type="button"
+                      onClick={() => openTelegramLink(url)}
+                      className="text-accent hover:underline text-left"
                     >
                       {headerText} ↗
-                    </a>
+                    </button>
                   ) : (
                     <span>{headerText}</span>
                   )}
