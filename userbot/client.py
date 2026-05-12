@@ -737,13 +737,20 @@ class Userbot:
             chat_username=chat_username,
         )
 
-    async def _pull_backup_loop(self, interval_sec: int = 30) -> None:
-        """Подстраховка против задержки Telegram event-delivery: каждые
-        N сек опрашивает GetHistory по каждому слушаемому каналу. Если
-        Telegram уже доставил NewMessage — наша запись в `messages` UNIQUE
-        по (tg_chat_id, tg_message_id) поймает дубль, плюс canonical-lookup
-        по text_hash в `_handle_message` дополнительно отсечёт повторный
-        LLM-вызов. Так что pull-backup НЕ дублирует уведомления.
+    async def _pull_backup_loop(self, idle_sec: int = 2) -> None:
+        """Подстраховка против задержки Telegram event-delivery:
+        непрерывно опрашивает GetHistory по каждому слушаемому каналу.
+        После полного прохода — небольшой idle (`idle_sec`), затем сразу
+        новый проход. Это гарантирует доставку <1 мин даже когда
+        NewMessage-push задерживается на стороне Telegram.
+
+        Если Telegram уже доставил NewMessage — наша запись в `messages`
+        UNIQUE по (tg_chat_id, tg_message_id) поймает дубль, плюс
+        canonical-lookup по text_hash в `_handle_message` дополнительно
+        отсечёт повторный LLM-вызов. Pull-backup не дублирует уведомления.
+
+        Throttle между каналами 0.1 сек = 10 RPC/сек, в 3 раза ниже
+        безопасного лимита GetHistory (~30/сек).
         """
         # Прогрев last_seen из БД, чтобы при свежем старте не залить пайплайн
         # тоннами «новых» сообщений 3-дневной давности (canonical lookup всё
@@ -808,7 +815,8 @@ class Userbot:
                     await asyncio.sleep(0.1)
             except Exception as e:  # noqa: BLE001
                 logger.exception("pull-backup loop error: {}", e)
-            await asyncio.sleep(interval_sec)
+            # Continuous polling: только короткая пауза между full-pass'ами.
+            await asyncio.sleep(idle_sec)
 
     async def _verify_membership_loop(self, interval_sec: int = 3600) -> None:
         """Раз в N секунд снимает фактический список dialogs аккаунта и
