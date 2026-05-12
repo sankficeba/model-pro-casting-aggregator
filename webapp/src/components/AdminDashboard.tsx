@@ -2,7 +2,7 @@
  *  - сверху подборка ключевых чисел;
  *  - блок «Рассылка» с фильтром по аудитории и кнопкой «Подготовить»;
  *  - вкладки «Анкеты» / «Сообщения» для деталей. */
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ChevronLeft,
   Megaphone,
@@ -511,18 +511,66 @@ function ProfilesTab() {
 
 // ===== Messages =====
 
+const PAGE_SIZE = 50;
+
+function msgPermalink(m: AdminMessageRow): string | null {
+  if (m.tg_chat_username) {
+    return `https://t.me/${m.tg_chat_username}/${m.tg_message_id}`;
+  }
+  if (m.tg_chat_id != null) {
+    let bare = Math.abs(m.tg_chat_id);
+    if (bare > 1_000_000_000_000) bare -= 1_000_000_000_000;
+    return `https://t.me/c/${bare}/${m.tg_message_id}`;
+  }
+  return null;
+}
+
 function MessagesTab() {
   const [rows, setRows] = useState<AdminMessageRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [castingOnly, setCastingOnly] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
 
+  // Сбрасываем при смене фильтра + грузим первую страницу.
   useEffect(() => {
+    let cancelled = false;
     setRows(null);
-    api
-      .adminMessages(50, 0, castingOnly)
-      .then(setRows)
-      .catch((e) => setError(String(e)));
+    setHasMore(true);
+    setError(null);
+    api.adminMessages(PAGE_SIZE, 0, castingOnly)
+      .then((batch) => {
+        if (cancelled) return;
+        setRows(batch);
+        setHasMore(batch.length === PAGE_SIZE);
+      })
+      .catch((e) => !cancelled && setError(String(e)));
+    return () => { cancelled = true; };
   }, [castingOnly]);
+
+  // Подгрузка по скроллу — IntersectionObserver на sentinel в конце списка.
+  useEffect(() => {
+    if (!rows || !hasMore || loadingMore) return;
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
+    const obs = new IntersectionObserver(
+      (entries) => {
+        if (!entries[0].isIntersecting) return;
+        setLoadingMore(true);
+        api.adminMessages(PAGE_SIZE, rows.length, castingOnly)
+          .then((batch) => {
+            setRows((prev) => [...(prev ?? []), ...batch]);
+            setHasMore(batch.length === PAGE_SIZE);
+          })
+          .catch((e) => setError(String(e)))
+          .finally(() => setLoadingMore(false));
+      },
+      { rootMargin: "200px" },
+    );
+    obs.observe(sentinel);
+    return () => obs.disconnect();
+  }, [rows, hasMore, loadingMore, castingOnly]);
 
   return (
     <div className="space-y-3">
@@ -543,40 +591,67 @@ function MessagesTab() {
 
       {rows && (
         <ul className="space-y-2">
-          {rows.map((m) => (
-            <li key={m.id} className="rounded-card bg-bg-surface p-3 text-sm">
-              <div className="flex items-baseline justify-between gap-2 text-xs text-slate-400">
-                <span>
-                  @{m.tg_chat_username ?? "?"} · #{m.tg_message_id}
-                </span>
-                <span className="tabular-nums">
-                  {new Date(m.received_at).toLocaleString("ru-RU")}
-                </span>
-              </div>
-              <div className="mt-1 flex flex-wrap gap-1.5">
-                <span
-                  className={
-                    "text-[10px] px-1.5 py-0.5 rounded " +
-                    (m.is_casting
-                      ? "bg-green-900/60 text-green-300"
-                      : "bg-slate-800 text-slate-500")
-                  }
-                >
-                  {m.is_casting ? "casting" : "non-casting"}
-                </span>
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-300">
-                  conf {m.confidence.toFixed(2)}
-                </span>
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-300">
-                  → {m.notified_count} польз.
-                </span>
-              </div>
-              <div className="mt-2 text-slate-200 break-words">
-                {m.summary || m.text.slice(0, 200)}
-              </div>
-            </li>
-          ))}
+          {rows.map((m) => {
+            const url = msgPermalink(m);
+            const headerText = m.tg_chat_username
+              ? `@${m.tg_chat_username} · #${m.tg_message_id}`
+              : `приватный · #${m.tg_message_id}`;
+            return (
+              <li key={m.id} className="rounded-card bg-bg-surface p-3 text-sm">
+                <div className="flex items-baseline justify-between gap-2 text-xs text-slate-400">
+                  {url ? (
+                    <a
+                      href={url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-accent hover:underline"
+                    >
+                      {headerText} ↗
+                    </a>
+                  ) : (
+                    <span>{headerText}</span>
+                  )}
+                  <span className="tabular-nums">
+                    {new Date(m.received_at).toLocaleString("ru-RU")}
+                  </span>
+                </div>
+                <div className="mt-1 flex flex-wrap gap-1.5">
+                  <span
+                    className={
+                      "text-[10px] px-1.5 py-0.5 rounded " +
+                      (m.is_casting
+                        ? "bg-green-900/60 text-green-300"
+                        : "bg-slate-800 text-slate-500")
+                    }
+                  >
+                    {m.is_casting ? "casting" : "non-casting"}
+                  </span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-300">
+                    conf {m.confidence.toFixed(2)}
+                  </span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-300">
+                    → {m.notified_count} польз.
+                  </span>
+                </div>
+                <div className="mt-2 text-slate-200 break-words">
+                  {m.summary || m.text.slice(0, 200)}
+                </div>
+              </li>
+            );
+          })}
         </ul>
+      )}
+
+      {rows && hasMore && (
+        <div
+          ref={sentinelRef}
+          className="text-center text-xs text-slate-500 py-3"
+        >
+          {loadingMore ? "Загружаем ещё…" : "↓ Прокрути ниже"}
+        </div>
+      )}
+      {rows && !hasMore && rows.length > 0 && (
+        <div className="text-center text-xs text-slate-600 py-3">— конец —</div>
       )}
     </div>
   );
