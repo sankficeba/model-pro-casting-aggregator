@@ -538,6 +538,20 @@ class LLMProvider(ABC):
             if v.shooting_date:
                 v.shooting_date = _normalize_date_str(v.shooting_date)
 
+        # Fallback для gender: gpt-4o-mini регулярно теряет gender на
+        # явно женских постах (юбка/колготки/беременная/-ка-суффикс).
+        # Если LLM оставил None — пробуем определить по тексту И
+        # role_label каждой вакансии.
+        inferred = _infer_gender_from_text(text)
+        if inferred:
+            for v in parsed.vacancies:
+                if not v.gender:
+                    # Проверяем ещё по role_label вакансии: если она в
+                    # мужской форме — не перебиваем (вдруг гибрид-пост).
+                    if _role_label_is_male(v.role_label):
+                        continue
+                    v.gender = inferred
+
         normalized = normalize_extracted(parsed)
         if normalized.project_types != parsed.project_types:
             logger.debug(
@@ -559,6 +573,66 @@ import re as _re
 _NUMERIC_DATE_RE = _re.compile(
     r"\b(\d{1,2})(?:\s*[-–—]\s*(\d{1,2}))?\.(\d{1,2})(?:\.(\d{2,4}))?\b"
 )
+
+
+# Маркеры пола для regex-fallback. Female markers — самые надёжные:
+# биологические состояния, феминитив-суффиксы в role_label, и явно
+# женский гардероб.
+_FEMALE_TEXT_MARKERS = (
+    # биологические состояния
+    "беременн", "декретн", "кормящ", "мамочк", "грудничк",
+    # одежда / аксессуары женские
+    "юбк", "колготк", "корсет", "платье", "каблук", "лоферы",
+    "чулк", "шубк", "лосин",
+    # явные обращения
+    "девушк", "девочк", "женщин", "ж.", "ж-",
+    # феминитив-суффиксы как самостоятельные слова
+    "танцовщиц", "актрис", "ведущ", "официантк", "продавщиц",
+    "уборщиц", "хостес", "фотомодел", "промо-модел", "промо-моде",
+    "мама ", "мать ", "молодая мама",
+)
+_MALE_TEXT_MARKERS = (
+    "парень", "парн", "мужчин", "юнош", "м.", "м-",
+    "актёр", "актер", "ведущий ", "танцор",
+)
+_MALE_ROLE_SUFFIXES = ("ор", "ист", "ёр", "ер", "ник", "тель", "ач")
+
+
+def _infer_gender_from_text(text: str) -> str | None:
+    """Если LLM оставил gender=None, ищем явные маркеры в тексте.
+    male-маркеры приоритетнее (post про мужскую роль с женским
+    гардеробом — редкий гибрид, но всё же)."""
+    if not text:
+        return None
+    lower = text.lower()
+    has_male = any(m in lower for m in _MALE_TEXT_MARKERS)
+    has_female = any(m in lower for m in _FEMALE_TEXT_MARKERS)
+    if has_male and has_female:
+        return None  # неоднозначно — оставим None, не угадываем
+    if has_female:
+        return "female"
+    if has_male:
+        return "male"
+    return None
+
+
+def _role_label_is_male(role_label: str | None) -> bool:
+    """True если role_label похож на мужскую форму профессии."""
+    if not role_label:
+        return False
+    rl = role_label.lower().strip()
+    # явные мужские базовые слова
+    if any(w in rl for w in ("актёр", "актер", "танцор", "ведущий")):
+        return True
+    # суффиксы — но осторожно, могут быть и женские «дикторша» / «модель»
+    # Берём строго: конец слова на -ор/-ист/-ёр/-ер/-ник если перед ним
+    # согласная (e.g. «диктор», «оператор», «строитель», «грузчик»).
+    last_word = rl.split()[-1]
+    if last_word.endswith(_MALE_ROLE_SUFFIXES):
+        # но если оканчивается на «ка/ица/щица» — это феминитив
+        if not last_word.endswith(("ка", "ица", "щица", "ша")):
+            return True
+    return False
 
 
 def _normalize_date_str(s: str) -> str:
