@@ -261,6 +261,7 @@ async def insert_message_with_vacancies(
                             role_label=v.role_label,
                             category=v.category,
                             work_types=list(v.work_types),
+                            shooting_date=v.shooting_date,
                         )
                         .returning(Vacancy.id)
                     )

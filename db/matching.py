@@ -324,6 +324,7 @@ def _orm_to_extractions(
             hair_length=list(v.hair_length),
             description=v.description,
             role_label=v.role_label,
+            shooting_date=getattr(v, "shooting_date", None),
         )
         for v in vacancies
     ]

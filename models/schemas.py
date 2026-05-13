@@ -26,6 +26,7 @@ class VacancyExtraction(BaseModel):
     hair_length: list[str] = []
     description: Optional[str] = None
     role_label: Optional[str] = None
+    shooting_date: Optional[str] = None
 
 
 class PostExtraction(BaseModel):

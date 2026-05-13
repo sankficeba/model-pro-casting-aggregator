@@ -46,6 +46,16 @@ _CATEGORY_HEADERS = {
     "admin":    ("💻", "Администрирование"),
 }
 
+# Premium custom-emoji IDs для inline-рендера в тексте нотификации
+# через HTML tag <tg-emoji emoji-id="...">fallback</tg-emoji>.
+# Не-Premium юзеры видят fallback unicode внутри тега.
+_PREMIUM_HEADER_EMOJI_ID = "5375464961822695044"   # 🎬 кастинг-хлопушка
+_PREMIUM_DATE_EMOJI_ID = "5413879192267805083"    # 🗓 календарь
+
+
+def _premium_emoji(custom_id: str, fallback: str) -> str:
+    return f'<tg-emoji emoji-id="{custom_id}">{fallback}</tg-emoji>'
+
 
 # Pull-backup отсекает сообщения старше этого возраста — устаревшие
 # вакансии (опубликованы > суток назад) пользователю не нужны.
@@ -409,6 +419,13 @@ class Userbot:
         emoji, cat_label = _CATEGORY_HEADERS.get(
             eff_cat, ("🎬", "Творческие позиции"),
         )
+        # Premium-эмодзи в шапке только для creative — там 🎬 семантически
+        # подходит. Для остальных категорий fallback unicode.
+        header_emoji_html = (
+            _premium_emoji(_PREMIUM_HEADER_EMOJI_ID, emoji)
+            if eff_cat == "creative" else emoji
+        )
+
         # Для creative показываем project_types; для остальных — work_types
         # из подошедших вакансий (всё равно они одной категории).
         if eff_cat == "creative":
@@ -423,11 +440,29 @@ class Userbot:
                         shown_work_types.append(code)
             meta_left = f"Должности: {_labels(shown_work_types, _WORK_TYPE_LABELS)}"
 
+        # Дата съёмки/смены — собираем из shooting_date матчнутых вакансий.
+        shooting_dates: list[str] = []
+        seen_dates: set[str] = set()
+        for idx in matched_idxs:
+            sd = (vacancies[idx].shooting_date or "").strip()
+            if sd and sd not in seen_dates:
+                seen_dates.add(sd)
+                shooting_dates.append(sd)
+        date_line = (
+            f"{_premium_emoji(_PREMIUM_DATE_EMOJI_ID, '🗓')} "
+            f"<b>Дата:</b> {', '.join(shooting_dates)}"
+            if shooting_dates else None
+        )
+
         lines: list[str] = [
-            f"<b>{emoji} Подходящая вакансия — {cat_label}</b>",
-            f"{meta_left} | Город: {post.city or '—'}",
-            f"<b>Подходящие роли ({len(matched_idxs)}):</b>",
+            f"<b>{header_emoji_html} Подходящая вакансия — {cat_label}</b>",
         ]
+        if date_line:
+            lines.append("")
+            lines.append(date_line)
+        lines.append("")
+        lines.append(f"{meta_left} | Город: {post.city or '—'}")
+        lines.append(f"<b>Подходящие роли ({len(matched_idxs)}):</b>")
         for idx in matched_idxs:
             v = vacancies[idx]
             gender_ru = {"male": "м", "female": "ж"}.get(v.gender or "", "—")

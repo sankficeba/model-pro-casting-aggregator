@@ -627,6 +627,9 @@ class Vacancy(Base):
     )
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     role_label: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    # Дата съёмки/смены как free text (LLM извлекает). Показывается в
+    # нотификации отдельной строкой «🗓 Дата: …».
+    shooting_date: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
 
     # Per-category matching: override для гибрид-постов (если категория этой
     # вакансии отличается от доминирующей категории поста). NULL = inherit.
