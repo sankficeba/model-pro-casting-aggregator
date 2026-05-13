@@ -104,6 +104,16 @@ export default function App() {
     setScreen({ kind: "menu" });
   };
 
+  // Keepalive ping каждые 30 сек: iOS WebKit агрессивно закрывает
+  // idle HTTP/2 connections. Без этого следующий клик после ~30с idle
+  // снова попадает на cold-start TLS handshake (~8с).
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      fetch("/api/health").catch(() => {});
+    }, 30_000);
+    return () => window.clearInterval(id);
+  }, []);
+
   useEffect(() => {
     initTelegram();
     refreshMe();
