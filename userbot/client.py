@@ -38,18 +38,23 @@ _WORK_TYPE_LABELS = {
     for it in _REFS[ref_key]
 }
 
-# Per-category эмодзи + русское название для шапки нотификации.
+# Per-category эмодзи (fallback unicode) + русское название для шапки.
 _CATEGORY_HEADERS = {
     "creative": ("🎬", "Творческие позиции"),
     "event":    ("🎉", "Event-персонал"),
     "general":  ("🛠", "Разнорабочие"),
-    "admin":    ("💻", "Администрирование"),
+    "admin":    ("🌟", "Администрирование"),
 }
 
-# Premium custom-emoji IDs для inline-рендера в тексте нотификации
-# через HTML tag <tg-emoji emoji-id="...">fallback</tg-emoji>.
-# Не-Premium юзеры видят fallback unicode внутри тега.
-_PREMIUM_HEADER_EMOJI_ID = "5375464961822695044"   # 🎬 кастинг-хлопушка
+# Premium custom-emoji IDs per category для inline-рендера в HTML тег
+# <tg-emoji emoji-id="...">fallback</tg-emoji>. Не-Premium юзеры видят
+# fallback unicode внутри тега.
+_PREMIUM_CATEGORY_EMOJI_ID = {
+    "creative": "5375464961822695044",   # 🎬 кастинг-хлопушка
+    "event":    "5461151367559141950",   # 🎉
+    "general":  "5393178351844223003",   # 🛠
+    "admin":    "5337116611880967451",   # 🌟
+}
 _PREMIUM_DATE_EMOJI_ID = "5413879192267805083"    # 🗓 календарь
 
 
@@ -419,11 +424,11 @@ class Userbot:
         emoji, cat_label = _CATEGORY_HEADERS.get(
             eff_cat, ("🎬", "Творческие позиции"),
         )
-        # Premium-эмодзи в шапке только для creative — там 🎬 семантически
-        # подходит. Для остальных категорий fallback unicode.
+        # Premium-эмодзи в шапке — per-category. Если для категории нет
+        # premium-id, fallback к обычному unicode.
+        header_premium_id = _PREMIUM_CATEGORY_EMOJI_ID.get(eff_cat)
         header_emoji_html = (
-            _premium_emoji(_PREMIUM_HEADER_EMOJI_ID, emoji)
-            if eff_cat == "creative" else emoji
+            _premium_emoji(header_premium_id, emoji) if header_premium_id else emoji
         )
 
         # Для creative показываем project_types; для остальных — work_types
