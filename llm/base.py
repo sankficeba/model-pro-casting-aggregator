@@ -532,6 +532,12 @@ class LLMProvider(ABC):
                 if not v.shooting_date:
                     v.shooting_date = detected_date
 
+        # Нормализация числового формата dd.mm → «dd месяц» во всех
+        # vacancies (откуда бы дата ни взялась — LLM или regex).
+        for v in parsed.vacancies:
+            if v.shooting_date:
+                v.shooting_date = _normalize_date_str(v.shooting_date)
+
         normalized = normalize_extracted(parsed)
         if normalized.project_types != parsed.project_types:
             logger.debug(
@@ -539,6 +545,41 @@ class LLMProvider(ABC):
                 parsed.project_types, normalized.project_types,
             )
         return normalized
+
+
+_MONTH_NAMES = {
+    1: "января", 2: "февраля", 3: "марта", 4: "апреля",
+    5: "мая", 6: "июня", 7: "июля", 8: "августа",
+    9: "сентября", 10: "октября", 11: "ноября", 12: "декабря",
+}
+
+import re as _re
+
+# Числовые даты «15.05», «13-14.06», «5.6.2026», «27.05.26».
+_NUMERIC_DATE_RE = _re.compile(
+    r"\b(\d{1,2})(?:\s*[-–—]\s*(\d{1,2}))?\.(\d{1,2})(?:\.(\d{2,4}))?\b"
+)
+
+
+def _normalize_date_str(s: str) -> str:
+    """Преобразует «15.05» → «15 мая», «13-14.06» → «13-14 июня».
+    Сохраняет диапазоны и опциональный год. Не трогает форматы
+    которые уже текстовые («15 мая») или не-даты («10.000» — там mm=000,
+    регекс не сматчит)."""
+    def _sub(m: _re.Match) -> str:
+        d1 = int(m.group(1))
+        d2 = int(m.group(2)) if m.group(2) else None
+        mm = int(m.group(3))
+        year = m.group(4)
+        if mm < 1 or mm > 12:
+            return m.group(0)
+        month = _MONTH_NAMES[mm]
+        date_part = f"{d1}-{d2}" if d2 else str(d1)
+        result = f"{date_part} {month}"
+        if year:
+            result += f" {year}"
+        return result
+    return _NUMERIC_DATE_RE.sub(_sub, s)
 
 
 _DATE_PATTERNS = (
@@ -571,10 +612,16 @@ def _scan_shooting_date(text: str) -> str | None:
             key = raw.lower()
             if key in seen:
                 continue
-            # Отфильтруем мусор: «10-18» который на самом деле «10-18 лет»
-            # или «10-18 человек» — это не время.
-            tail = text[m.end():m.end() + 8].lower()
-            if tail.lstrip().startswith(("лет", "челов", "год")):
+            # Отфильтруем мусор: «3-4» который на самом деле «3-4 фото»,
+            # «10-18 лет», «6-7 человек», «5-10 штук» — это не дата/время.
+            tail = text[m.end():m.end() + 12].lower()
+            tail_stripped = tail.lstrip()
+            if tail_stripped.startswith((
+                "лет", "год", "годов",
+                "челов", "девуш", "парн", "ребят", "мальч", "дев",
+                "фото", "видео", "снимк", "шт",
+                "размер", "р-р", "роле",
+            )):
                 continue
             seen.add(key)
             out.append(raw)
