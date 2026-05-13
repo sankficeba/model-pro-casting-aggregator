@@ -469,6 +469,15 @@ class LLMProvider(ABC):
             )
             parsed = parsed.model_copy(update={"is_casting": False})
 
+        # Regex fallback для shooting_date: gpt-4o-mini его регулярно
+        # пропускает. Если LLM не заполнил, сканируем текст по типичным
+        # русским/числовым датам и подставляем.
+        detected_date = _scan_shooting_date(text)
+        if detected_date and parsed.vacancies:
+            for v in parsed.vacancies:
+                if not v.shooting_date:
+                    v.shooting_date = detected_date
+
         normalized = normalize_extracted(parsed)
         if normalized.project_types != parsed.project_types:
             logger.debug(
@@ -476,3 +485,32 @@ class LLMProvider(ABC):
                 parsed.project_types, normalized.project_types,
             )
         return normalized
+
+
+_DATE_PATTERNS = (
+    # «20-22 мая», «13-14 июня», «3 мая», «27 — 28 апреля»
+    r"\b(\d{1,2}\s*(?:[-–—]\s*\d{1,2}\s*)?(?:января|февраля|марта|апреля|"
+    r"мая|июня|июля|августа|сентября|октября|ноября|декабря))\b",
+    # «14.05.2026», «13.05», «5.6.26» — числовые форматы
+    r"\b(\d{1,2}\.\d{1,2}(?:\.\d{2,4})?)\b",
+)
+
+
+def _scan_shooting_date(text: str) -> str | None:
+    """Regex-fallback на случай если LLM пропустил shooting_date.
+    Собирает ВСЕ найденные даты, дедуплицирует и объединяет запятой.
+    Возвращает None если ничего не нашёл."""
+    import re
+    if not text:
+        return None
+    seen: set[str] = set()
+    out: list[str] = []
+    for pat in _DATE_PATTERNS:
+        for m in re.finditer(pat, text, flags=re.IGNORECASE):
+            raw = m.group(1).strip()
+            key = raw.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(raw)
+    return ", ".join(out) if out else None
