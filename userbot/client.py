@@ -75,6 +75,10 @@ class _PullMessage:
     def message(self) -> str:
         return self._msg.message or ""
 
+    @property
+    def date(self):  # noqa: ANN201
+        return getattr(self._msg, "date", None)
+
 
 def _labels(codes: list[str], mapping: dict[str, str]) -> str:
     if not codes:
