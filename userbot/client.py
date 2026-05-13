@@ -453,9 +453,25 @@ class Userbot:
             if sd and sd not in seen_dates:
                 seen_dates.add(sd)
                 shooting_dates.append(sd)
+        # Если в строке есть «:» или диапазон часов, показываем как
+        # «Дата и время», иначе просто «Дата».
+        joined_date = ", ".join(shooting_dates)
+        has_time = any(
+            (":" in d) or ("ч" in d.lower())
+            or any(ch.isdigit() and "-" in d for ch in d)
+            and not any(month in d.lower() for month in (
+                "янв","фев","мар","апр","мая","июн","июл","авг","сен","окт","ноя","дек",
+            ))
+            for d in shooting_dates
+        )
+        # Упрощённая эвристика — если строка содержит «:» или «утром/днём/
+        # вечером/ночью» считаем что есть время.
+        time_markers = (":", "утром", "днём", "днем", "вечером", "ночью", "ночная", "утра", "дня", "вечера")
+        has_time = any(any(t in d.lower() for t in time_markers) for d in shooting_dates)
+        label = "Дата и время" if has_time else "Дата"
         date_line = (
             f"{_premium_emoji(_PREMIUM_DATE_EMOJI_ID, '🗓')} "
-            f"<b>Дата:</b> {', '.join(shooting_dates)}"
+            f"<b>{label}:</b> {joined_date}"
             if shooting_dates else None
         )
 
