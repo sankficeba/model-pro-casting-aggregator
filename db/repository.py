@@ -1388,7 +1388,9 @@ async def count_pending(user_id: int) -> int:
 
 async def list_users_with_pending_in_morning() -> list[tuple[int, int]]:
     """Найти юзеров: night_mode_enabled=TRUE, текущий MSK-час == night_end_hour,
-    есть pending, и night_digest_last_sent_at не сегодня. Возвращает [(user_id, count)]."""
+    есть pending, и night_digest_last_sent_at не сегодня. Возвращает [(user_id, count)].
+    Счёт идентичен count_pending(): исключает уже отправленные (по text_hash / message_id)."""
+    from sqlalchemy import or_
     msk_now = datetime.now(timezone.utc) + _MSK_OFFSET
     msk_hour = msk_now.hour
     msk_today_start_utc = (msk_now.replace(hour=0, minute=0, second=0, microsecond=0)) - _MSK_OFFSET
@@ -1408,6 +1410,21 @@ async def list_users_with_pending_in_morning() -> list[tuple[int, int]]:
                 # last_sent_at NULL OR < сегодня MSK 00:00
                 (User.night_digest_last_sent_at.is_(None))
                 | (User.night_digest_last_sent_at < msk_today_start_utc),
+                # Тот же фильтр, что в count_pending(): не учитываем уже отправленные
+                or_(
+                    PendingNotification.text_hash.is_(None),
+                    ~PendingNotification.text_hash.in_(
+                        select(Notification.text_hash).where(
+                            Notification.user_id == User.id,
+                            Notification.text_hash.is_not(None),
+                        )
+                    ),
+                ),
+                ~PendingNotification.message_id.in_(
+                    select(Notification.message_id).where(
+                        Notification.user_id == User.id,
+                    )
+                ),
             )
             .group_by(User.id)
         )
@@ -1427,7 +1444,9 @@ async def mark_night_digest_sent(user_id: int) -> None:
 async def list_users_for_daily_digest_due() -> list[tuple[int, int]]:
     """Юзеры в digest-режиме с включённой ежедневной плашкой, у которых
     текущий MSK-час == digest_daily_hour, есть pending, и daily-digest
-    сегодня ещё не уходил. Возвращает [(user_id, count)]."""
+    сегодня ещё не уходил. Возвращает [(user_id, count)].
+    Счёт идентичен count_pending(): исключает уже отправленные (по text_hash / message_id)."""
+    from sqlalchemy import or_
     msk_now = datetime.now(timezone.utc) + _MSK_OFFSET
     msk_hour = msk_now.hour
     msk_today_start_utc = (
@@ -1449,6 +1468,21 @@ async def list_users_for_daily_digest_due() -> list[tuple[int, int]]:
                 User.digest_daily_hour == msk_hour,
                 (User.digest_daily_last_sent_at.is_(None))
                 | (User.digest_daily_last_sent_at < msk_today_start_utc),
+                # Тот же фильтр, что в count_pending(): не учитываем уже отправленные
+                or_(
+                    PendingNotification.text_hash.is_(None),
+                    ~PendingNotification.text_hash.in_(
+                        select(Notification.text_hash).where(
+                            Notification.user_id == User.id,
+                            Notification.text_hash.is_not(None),
+                        )
+                    ),
+                ),
+                ~PendingNotification.message_id.in_(
+                    select(Notification.message_id).where(
+                        Notification.user_id == User.id,
+                    )
+                ),
             )
             .group_by(User.id)
         )
