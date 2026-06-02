@@ -26,7 +26,7 @@ from api.reference_data import all_refs
 from config import settings
 from db import matching, repository
 from db.dedup import text_hash
-from llm.base import LLMProvider
+from llm.base import LLMBillingError, LLMProvider
 from models.schemas import PostExtraction, VacancyExtraction
 
 _REFS = all_refs()
@@ -773,7 +773,23 @@ class Userbot:
             return
 
         # LLM extract — race-окно 2-5 секунд.
-        post = await self.llm.extract(text)
+        try:
+            post = await self.llm.extract(text)
+        except LLMBillingError:
+            logger.warning(
+                "LLM billing error — сохраняем msg_id={} для retry", event.message.id
+            )
+            message_db_id, _ = await repository.insert_message_with_vacancies(
+                tg_chat_id=chat_id,
+                tg_chat_username=chat_username,
+                tg_message_id=event.message.id,
+                text=text,
+                text_hash=th,
+                extracted=PostExtraction(confidence=0.0),
+            )
+            if message_db_id is not None:
+                await repository.mark_for_llm_retry(message_db_id)
+            return
         logger.info(
             "LLM extract: casting={} project={} city={} vacancies={} conf={:.2f}",
             post.is_casting, post.project_types, post.city,
@@ -813,6 +829,41 @@ class Userbot:
             message=event.message,
             chat_username=chat_username,
         )
+
+    async def _llm_retry_loop(self) -> None:
+        """Каждые 5 минут повторно прогоняет через LLM сообщения,
+        сохранённые с llm_retry_needed=True из-за нехватки баланса."""
+        import types as _types
+        while True:
+            try:
+                await asyncio.sleep(300)
+                pending = await repository.get_messages_for_llm_retry()
+                if not pending:
+                    continue
+                logger.info("LLM retry: {} сообщений в очереди", len(pending))
+                for msg_id, text, text_hash_val, chat_username, tg_message_id in pending:
+                    try:
+                        post = await self.llm.extract(text)
+                    except LLMBillingError:
+                        logger.debug("LLM retry: баланс ещё не пополнен, прерываем")
+                        break
+                    vacancy_ids = await repository.apply_llm_retry(msg_id, post)
+                    if post.is_casting and vacancy_ids:
+                        fake_msg = _types.SimpleNamespace(message=text, id=tg_message_id)
+                        await self._process_canonical(
+                            message_db_id=msg_id,
+                            text_hash_value=text_hash_val,
+                            post=post,
+                            vacancies=post.vacancies,
+                            vacancy_ids=vacancy_ids,
+                            message=fake_msg,
+                            chat_username=chat_username,
+                        )
+                    await asyncio.sleep(0.5)
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:  # noqa: BLE001
+                logger.exception("llm_retry_loop error: {}", e)
 
     async def _pull_backup_loop(self, idle_sec: int = 2) -> None:
         """Подстраховка против задержки Telegram event-delivery:

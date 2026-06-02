@@ -11,6 +11,10 @@ from pydantic import ValidationError
 from llm.normalize import normalize_extracted
 from models.schemas import PostExtraction
 
+
+class LLMBillingError(Exception):
+    """Провайдер вернул ошибку нехватки баланса/квоты."""
+
 SYSTEM_PROMPT = """Ты разбираешь объявления о работе и кастингах из
 Telegram-каналов. Из присланного сообщения нужно извлечь параметры
 поиска и вернуть СТРОГО JSON-объект без markdown-обёрток.
@@ -547,9 +551,15 @@ class LLMProvider(ABC):
         """Возвращает «сырой» ответ модели (ожидается JSON-строка)."""
 
     async def extract(self, text: str) -> PostExtraction:
-        """Извлечь структурированные данные из текста объявления."""
+        """Извлечь структурированные данные из текста объявления.
+
+        Поднимает LLMBillingError если провайдер вернул ошибку баланса —
+        caller должен сохранить сообщение для повторной обработки.
+        """
         try:
             raw = await self._complete_json(SYSTEM_PROMPT, text)
+        except LLMBillingError:
+            raise
         except Exception as e:  # noqa: BLE001
             logger.exception("LLM call failed: {}", e)
             return PostExtraction(confidence=0.0)

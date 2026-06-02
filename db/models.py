@@ -564,6 +564,9 @@ class Message(Base):
     rate: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     summary: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     confidence: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    llm_retry_needed: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
 
     # Хвост от старой схемы — заполняется только в исторических строках,
     # новые записи их не используют. Оставлено для совместимости.

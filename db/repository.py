@@ -1386,6 +1386,89 @@ async def count_pending(user_id: int) -> int:
         return int(res.scalar() or 0)
 
 
+async def mark_for_llm_retry(message_id: int) -> None:
+    """Помечает сообщение для повторного LLM-вызова (нехватка баланса)."""
+    async with AsyncSessionLocal() as session:
+        await session.execute(
+            update(Message)
+            .where(Message.id == message_id)
+            .values(llm_retry_needed=True)
+        )
+        await session.commit()
+
+
+async def get_messages_for_llm_retry(limit: int = 50) -> list[tuple[int, str, str | None, str | None, int]]:
+    """Сообщения с llm_retry_needed=True, порциями по `limit`.
+    Возвращает [(id, text, text_hash, tg_chat_username, tg_message_id)]."""
+    async with AsyncSessionLocal() as session:
+        res = await session.execute(
+            select(
+                Message.id,
+                Message.text,
+                Message.text_hash,
+                Message.tg_chat_username,
+                Message.tg_message_id,
+            )
+            .where(Message.llm_retry_needed.is_(True))
+            .order_by(Message.received_at)
+            .limit(limit)
+        )
+        return list(res.all())
+
+
+async def apply_llm_retry(message_id: int, post: "PostExtraction") -> list[int]:
+    """Обновляет сообщение результатом повторного LLM-вызова, создаёт
+    вакансии и сбрасывает флаг retry. Возвращает список vacancy_id."""
+    async with AsyncSessionLocal() as session:
+        await session.execute(
+            update(Message)
+            .where(Message.id == message_id)
+            .values(
+                is_casting=post.is_casting,
+                project_types=list(post.project_types),
+                city=post.city,
+                summary=post.summary,
+                confidence=post.confidence,
+                category=post.category,
+                llm_retry_needed=False,
+            )
+        )
+        vacancy_ids: list[int] = []
+        if post.is_casting and post.vacancies:
+            for idx, v in enumerate(post.vacancies):
+                vac_stmt = (
+                    pg_insert(Vacancy)
+                    .values(
+                        message_id=message_id,
+                        idx=idx,
+                        role_types=list(v.role_types),
+                        gender=v.gender,
+                        age_min=v.age_min,
+                        age_max=v.age_max,
+                        rate=v.rate,
+                        ethnicity=list(v.ethnicity),
+                        height_min=v.height_min,
+                        height_max=v.height_max,
+                        body_type=list(v.body_type),
+                        hair_color=list(v.hair_color),
+                        hair_length=list(v.hair_length),
+                        description=v.description,
+                        role_label=v.role_label,
+                        category=v.category,
+                        work_types=list(v.work_types),
+                        shooting_date=v.shooting_date,
+                    )
+                    .on_conflict_do_nothing()
+                    .returning(Vacancy.id)
+                )
+                vac_res = await session.execute(vac_stmt)
+                vac_id = vac_res.scalar_one_or_none()
+                if vac_id is not None:
+                    vacancy_ids.append(vac_id)
+        await session.commit()
+        return vacancy_ids
+
+
 async def list_users_with_pending_in_morning() -> list[tuple[int, int]]:
     """Найти юзеров: night_mode_enabled=TRUE, текущий MSK-час == night_end_hour,
     есть pending, и night_digest_last_sent_at не сегодня. Возвращает [(user_id, count)].

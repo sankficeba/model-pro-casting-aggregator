@@ -154,6 +154,7 @@ async def main() -> None:
             night_digest_loop(bot),
             daily_digest_loop(bot),
             expiry_reminder_loop(bot),
+            userbot._llm_retry_loop(),
         )
     finally:
         await bot.session.close()
