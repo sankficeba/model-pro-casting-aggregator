@@ -591,7 +591,11 @@ def build_dispatcher(
             return
 
         role_label = vacancy.role_label or "вакансия"
-        text = compose_response(rp, role_label)
+        if message_row.tg_chat_username:
+            message_link = f"https://t.me/{message_row.tg_chat_username}/{message_row.tg_message_id}"
+        else:
+            message_link = None
+        text = compose_response(rp, role_label, message_link)
 
         from html import escape
         body = escape(text)

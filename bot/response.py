@@ -16,24 +16,36 @@ for _key in ("work_types_event", "work_types_general", "work_types_admin"):
         _WORK_TYPE_LABELS[_it["code"]] = _it["label"]
 
 
-def compose_response(rp: ResponseProfile, role_label: str) -> str:
-    """Формирует текст отклика в структурированном формате.
+def compose_response(
+    rp: ResponseProfile,
+    role_label: str,
+    message_link: str | None = None,
+) -> str:
+    """Формирует текст отклика.
 
     Формат:
-        Откликаюсь: <роль>
-        ФИО: <имя>
-        Возраст: <возраст>
-        Телефон: <телефон>
-        Рост / размеры: X / Y  (только creative и event)
-        Опыт: <текст опыта>
+        Здравствуйте, откликаюсь на <роль>
+        <ссылка на сообщение>
+
+        <ФИО>
+        <возраст>
+        <телефон>
+        <рост> / <размер>   (только creative и event)
+        <текст опыта>
     """
     lines: list[str] = []
 
-    lines.append(f"Откликаюсь: {role_label}")
-    lines.append(f"ФИО: {rp.full_name or '—'}")
+    lines.append(f"Здравствуйте, откликаюсь на {role_label}")
+    if message_link:
+        lines.append(message_link)
+    lines.append("")
+
+    if rp.full_name:
+        lines.append(rp.full_name)
     if rp.actual_age is not None:
-        lines.append(f"Возраст: {rp.actual_age}")
-    lines.append(f"Телефон: {rp.phone or '—'}")
+        lines.append(str(rp.actual_age))
+    if rp.phone:
+        lines.append(rp.phone)
 
     if rp.category in ("creative", "event"):
         size_parts: list[str] = []
@@ -42,20 +54,19 @@ def compose_response(rp: ResponseProfile, role_label: str) -> str:
         if rp.clothing_size:
             size_parts.append(str(rp.clothing_size))
         if size_parts:
-            lines.append(f"Рост / размеры: {' / '.join(size_parts)}")
+            lines.append(" / ".join(size_parts))
 
     if rp.experience_text:
-        lines.append(f"Опыт: {rp.experience_text}")
+        lines.append(rp.experience_text)
     elif rp.category == "creative":
         skill_labels: list[str] = []
         for code in rp.skills_sport + rp.skills_dance + rp.skills_vocal + rp.skills_instruments:
-            lbl = _SKILL_LABELS.get(code, code)
-            skill_labels.append(lbl)
+            skill_labels.append(_SKILL_LABELS.get(code, code))
         if skill_labels:
-            lines.append(f"Навыки: {', '.join(skill_labels)}")
+            lines.append(", ".join(skill_labels))
         elif rp.has_experience is True:
-            lines.append("Опыт съёмок: есть")
+            lines.append("Опыт съёмок есть")
         elif rp.has_experience is False:
-            lines.append("Опыт съёмок: пока нет")
+            lines.append("Опыта съёмок пока нет")
 
     return "\n".join(lines)
