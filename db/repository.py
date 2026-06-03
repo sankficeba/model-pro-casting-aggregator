@@ -51,8 +51,30 @@ class ResponseProfile:
     skills_instruments: list[str] = field(default_factory=list)
 
 
+def _orm_to_response_profile(p: object, category: str) -> ResponseProfile:
+    return ResponseProfile(
+        category=category,
+        full_name=getattr(p, "full_name", None),
+        actual_age=getattr(p, "actual_age", None),
+        phone=getattr(p, "phone", None),
+        height_cm=getattr(p, "height_cm", None),
+        clothing_size=getattr(p, "clothing_size", None),
+        shoe_size=getattr(p, "shoe_size", None),
+        experience_text=getattr(p, "experience_text", None),
+        has_experience=getattr(p, "has_experience", None),
+        skills_sport=list(getattr(p, "skills_sport", None) or []),
+        skills_dance=list(getattr(p, "skills_dance", None) or []),
+        skills_vocal=list(getattr(p, "skills_vocal", None) or []),
+        skills_instruments=list(getattr(p, "skills_instruments", None) or []),
+    )
+
+
 async def get_response_profile(user_id: int, category: str) -> Optional[ResponseProfile]:
-    """Загружает per-category профиль пользователя для генерации отклика."""
+    """Загружает per-category профиль пользователя для генерации отклика.
+
+    Для creative-категории: пробует CreativeProfile, при отсутствии
+    откатывается на legacy ActorProfile.
+    """
     _models = {
         "creative": CreativeProfile,
         "event": EventProfile,
@@ -65,24 +87,17 @@ async def get_response_profile(user_id: int, category: str) -> Optional[Response
     async with AsyncSessionLocal() as session:
         res = await session.execute(select(Model).where(Model.user_id == user_id))
         p = res.scalar_one_or_none()
-        if p is None:
-            return None
-        rp = ResponseProfile(
-            category=category,
-            full_name=p.full_name,
-            actual_age=p.actual_age,
-            phone=getattr(p, "phone", None),
-            height_cm=getattr(p, "height_cm", None),
-            clothing_size=getattr(p, "clothing_size", None),
-            shoe_size=getattr(p, "shoe_size", None),
-            experience_text=getattr(p, "experience_text", None),
-            has_experience=getattr(p, "has_experience", None),
-            skills_sport=list(getattr(p, "skills_sport", None) or []),
-            skills_dance=list(getattr(p, "skills_dance", None) or []),
-            skills_vocal=list(getattr(p, "skills_vocal", None) or []),
-            skills_instruments=list(getattr(p, "skills_instruments", None) or []),
-        )
-        return rp
+        if p is not None:
+            return _orm_to_response_profile(p, category)
+        # Фолбэк для creative: пользователи со старой ActorProfile-анкетой
+        if category == "creative":
+            res2 = await session.execute(
+                select(ActorProfile).where(ActorProfile.user_id == user_id)
+            )
+            ap = res2.scalar_one_or_none()
+            if ap is not None:
+                return _orm_to_response_profile(ap, category)
+        return None
 
 
 # ---------- USERS ----------
