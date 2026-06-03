@@ -2,6 +2,7 @@
 Используется userbot'ом и aiogram-ботом."""
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
@@ -30,6 +31,58 @@ from db.models import (
 )
 from db.session import AsyncSessionLocal
 from models.schemas import PostExtraction, UserFilter
+
+
+@dataclass
+class ResponseProfile:
+    """Данные профиля, необходимые для генерации отклика на вакансию."""
+    category: str
+    full_name: Optional[str] = None
+    actual_age: Optional[int] = None
+    phone: Optional[str] = None
+    height_cm: Optional[int] = None
+    clothing_size: Optional[int] = None
+    shoe_size: Optional[int] = None
+    experience_text: Optional[str] = None
+    has_experience: Optional[bool] = None
+    skills_sport: list[str] = field(default_factory=list)
+    skills_dance: list[str] = field(default_factory=list)
+    skills_vocal: list[str] = field(default_factory=list)
+    skills_instruments: list[str] = field(default_factory=list)
+
+
+async def get_response_profile(user_id: int, category: str) -> Optional[ResponseProfile]:
+    """Загружает per-category профиль пользователя для генерации отклика."""
+    _models = {
+        "creative": CreativeProfile,
+        "event": EventProfile,
+        "general": GeneralProfile,
+        "admin": AdminProfile,
+    }
+    Model = _models.get(category)
+    if Model is None:
+        return None
+    async with AsyncSessionLocal() as session:
+        res = await session.execute(select(Model).where(Model.user_id == user_id))
+        p = res.scalar_one_or_none()
+        if p is None:
+            return None
+        rp = ResponseProfile(
+            category=category,
+            full_name=p.full_name,
+            actual_age=p.actual_age,
+            phone=getattr(p, "phone", None),
+            height_cm=getattr(p, "height_cm", None),
+            clothing_size=getattr(p, "clothing_size", None),
+            shoe_size=getattr(p, "shoe_size", None),
+            experience_text=getattr(p, "experience_text", None),
+            has_experience=getattr(p, "has_experience", None),
+            skills_sport=list(getattr(p, "skills_sport", None) or []),
+            skills_dance=list(getattr(p, "skills_dance", None) or []),
+            skills_vocal=list(getattr(p, "skills_vocal", None) or []),
+            skills_instruments=list(getattr(p, "skills_instruments", None) or []),
+        )
+        return rp
 
 
 # ---------- USERS ----------

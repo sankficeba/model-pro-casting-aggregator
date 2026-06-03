@@ -17,7 +17,7 @@ from sqlalchemy import select
 
 from api import profile_repo
 from bot import keyboards
-from bot.response import compose_response, compose_response_llm
+from bot.response import compose_response
 from config import settings
 from db import matching, repository
 from db.models import Message as MessageRow
@@ -574,13 +574,6 @@ def build_dispatcher(
             return
 
         user_id = query.from_user.id if query.from_user else 0
-        profile = await profile_repo.get_profile(user_id)
-        if profile is None:
-            await query.answer(
-                "Сначала заполни анкету в Mini App — без неё нечего вставлять в отклик.",
-                show_alert=True,
-            )
-            return
 
         loaded = await repository.get_vacancy_with_message(vacancy_id)
         if loaded is None:
@@ -588,16 +581,19 @@ def build_dispatcher(
             return
         vacancy, message_row = loaded
 
-        # Если LLM-провайдер прокинут — собираем «живой» текст; на любую
-        # ошибку (нет сети, плохой JSON и т.п.) compose_response_llm
-        # сам откатится на детерминированный шаблон.
-        if llm is not None:
-            text = await compose_response_llm(profile, message_row, vacancy, llm)
-        else:
-            text = compose_response(profile, message_row, vacancy)
-        # Оборачиваем в <pre> для удобного однотап-копирования в Telegram.
-        from html import escape
+        category = vacancy.category or message_row.category or "creative"
+        rp = await repository.get_response_profile(user_id, category)
+        if rp is None:
+            await query.answer(
+                "Сначала заполни анкету в Mini App — без неё нечего вставлять в отклик.",
+                show_alert=True,
+            )
+            return
 
+        role_label = vacancy.role_label or "вакансия"
+        text = compose_response(rp, role_label)
+
+        from html import escape
         body = escape(text)
         try:
             await query.message.answer(  # type: ignore[union-attr]
