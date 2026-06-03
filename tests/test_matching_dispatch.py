@@ -20,3 +20,16 @@ def test_resolve_returns_none_when_both_none():
     post = PostExtraction(is_casting=True, category=None)
     v = VacancyExtraction(category=None)
     assert _resolve_effective_category(post, v) is None
+
+
+def test_resolve_hybrid_post_helper_in_admin_post():
+    """Гибридный пост: хелпер (general) в admin-посте.
+
+    LLM должен выставить category="general" явно на вакансии хелпера,
+    иначе он унаследует "admin" и до GeneralProfile-пользователей не дойдёт.
+    """
+    post = PostExtraction(is_casting=True, category="admin")
+    helper_vacancy = VacancyExtraction(work_types=["helper"], category="general")
+    admin_vacancy = VacancyExtraction(work_types=["registration_operator"], category=None)
+    assert _resolve_effective_category(post, helper_vacancy) == "general"
+    assert _resolve_effective_category(post, admin_vacancy) == "admin"
