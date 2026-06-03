@@ -40,6 +40,7 @@ class ProfileBase(BaseModel):
 
     # Step 4
     has_experience: Optional[bool] = None
+    experience_text: Optional[str] = Field(None, max_length=2000)
     education: Optional[str] = None
     tax_status: Optional[str] = None
 
@@ -194,6 +195,7 @@ class CreativeProfileSchema(_BaseProfileSchema):
     hair_color: Optional[str] = Field(default=None, max_length=32)
     hair_length: Optional[str] = Field(default=None, max_length=32)
     has_experience: Optional[bool] = None
+    experience_text: Optional[str] = Field(default=None, max_length=2000)
     education: Optional[str] = Field(default=None, max_length=32)
     eye_color: Optional[str] = Field(default=None, max_length=32)
     marks: list[str] = Field(default_factory=list)

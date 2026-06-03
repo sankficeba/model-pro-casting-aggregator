@@ -188,6 +188,7 @@ class ActorProfile(Base):
 
     # --- Step 4: Профессиональные параметры ---
     has_experience: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+    experience_text: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     education: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
     tax_status: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
 
@@ -302,6 +303,7 @@ class CreativeProfile(Base):
     hair_color: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
     hair_length: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
     has_experience: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+    experience_text: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     education: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
     tax_status: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
     eye_color: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)

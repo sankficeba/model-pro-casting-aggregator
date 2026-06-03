@@ -59,6 +59,7 @@ def _to_response(p: ActorProfile) -> ProfileResponse:
         hair_color=p.hair_color,
         hair_length=p.hair_length,
         has_experience=p.has_experience,
+        experience_text=p.experience_text,
         education=p.education,
         tax_status=p.tax_status,
         eye_color=p.eye_color,

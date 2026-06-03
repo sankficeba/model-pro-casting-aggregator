@@ -47,15 +47,6 @@ export function CreativeForm({ onDone }: Props) {
 
   if (loading || !refs) return <div className="p-6 text-slate-400">Загрузка…</div>;
 
-  const expValue =
-    data.has_experience === true
-      ? "yes"
-      : data.has_experience === false
-        ? "no"
-        : null;
-  const expChange = (v: string | null) =>
-    update({ has_experience: v === "yes" ? true : v === "no" ? false : null });
-
   const progressPct = Math.round(((TOTAL_REQUIRED - validate(data).length) / TOTAL_REQUIRED) * 100);
 
   return (
@@ -249,12 +240,17 @@ export function CreativeForm({ onDone }: Props) {
 
       <section className="space-y-3">
         <h3 className="text-sm uppercase tracking-wider text-slate-500">Профессиональное</h3>
-        <SelectField
-          label="Опыт"
-          value={expValue}
-          onChange={expChange}
-          options={[{ value: "yes", label: "Есть" }, { value: "no", label: "Нет" }]}
-        />
+        <label className="block space-y-1">
+          <span className="text-sm text-slate-400">Опыт работы</span>
+          <textarea
+            value={data.experience_text ?? ""}
+            onChange={(e) => update({ experience_text: e.target.value })}
+            placeholder="Опиши свой опыт: где снимался(ась), какие проекты, роли, агентства…"
+            rows={4}
+            maxLength={2000}
+            className="w-full bg-bg-card rounded-card px-3 py-2 outline-none focus:ring-1 ring-accent resize-none"
+          />
+        </label>
         <SelectField
           label="Образование"
           value={data.education ?? null}
