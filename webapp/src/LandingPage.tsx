@@ -190,7 +190,7 @@ function useGlobalStyles() {
       }
     `;
     document.head.appendChild(el);
-    return () => document.head.removeChild(el);
+    return () => { document.head.removeChild(el); };
   }, []);
 }
 
