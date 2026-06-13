@@ -626,7 +626,7 @@ export function LandingPage() {
       </section>
 
       {/* ══ CTA PHOTO BAND ═══════════════════════════════════════════════════ */}
-      <div style={{ position: "relative", overflow: "hidden", height: 420 }}>
+      <div style={{ position: "relative", overflow: "hidden", height: 420, background: BLACK }}>
         <img src={P.event1} alt="" style={{
           position: "absolute", inset: 0, width: "100%", height: "100%",
           objectFit: "cover", filter: "brightness(0.25) grayscale(20%)",
