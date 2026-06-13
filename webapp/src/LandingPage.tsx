@@ -267,6 +267,85 @@ function Label({ children, light }: { children: React.ReactNode; light?: boolean
   );
 }
 
+// ── Clip-text photo reveal (aroundbrand-style) ────────────────────────────────
+const CLIP_PHOTOS = [P.h1, P.h2, P.h3, P.studio, P.event1, P.shoot2];
+
+function ClipTextHero() {
+  const [photoIdx, setPhotoIdx] = useState(0);
+
+  useEffect(() => {
+    const id = setInterval(() => setPhotoIdx((i) => (i + 1) % CLIP_PHOTOS.length), 3200);
+    return () => clearInterval(id);
+  }, []);
+
+  return (
+    <section style={{ background: WHITE, overflow: "hidden", position: "relative" }}>
+      {/* photo strip behind text — fixed so it parallaxes through the letters */}
+      <div style={{
+        position: "absolute", inset: 0,
+        backgroundImage: `url(${CLIP_PHOTOS[photoIdx]})`,
+        backgroundSize: "cover",
+        backgroundPosition: "center",
+        backgroundAttachment: "fixed",
+        transition: "background-image 0.8s ease",
+        filter: "brightness(0.92) saturate(1.1)",
+      }} />
+
+      {/* White overlay outside text — makes text the "window" */}
+      <div style={{ position: "relative", padding: "0 0 8px" }}>
+        <h2 style={{
+          fontFamily: SERIF,
+          fontWeight: 900,
+          fontSize: "clamp(88px, 18vw, 260px)",
+          lineHeight: 0.84,
+          textTransform: "uppercase",
+          letterSpacing: "-0.02em",
+          margin: 0,
+          padding: "64px 5vw 72px",
+          /* clip the background image through the text */
+          backgroundImage: `url(${CLIP_PHOTOS[photoIdx]})`,
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+          backgroundAttachment: "fixed",
+          WebkitBackgroundClip: "text",
+          backgroundClip: "text",
+          WebkitTextFillColor: "transparent",
+          color: "transparent",
+          userSelect: "none",
+          transition: "background-image 0.8s ease",
+        }}>
+          Model<br />Pro<br /><em style={{ fontStyle: "italic", fontWeight: 400 }}>Agency</em>
+        </h2>
+
+        {/* Bottom strip info */}
+        <div style={{
+          position: "absolute", bottom: 32, right: "5vw",
+          display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8,
+        }}>
+          <div style={{ fontSize: 11, letterSpacing: 3, textTransform: "uppercase", color: "rgba(0,0,0,0.35)", fontFamily: SANS }}>
+            Telegram · Mini App
+          </div>
+          <a href={APP_URL} target="_blank" rel="noopener noreferrer"
+            style={{ fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: GOLD, textDecoration: "none", fontFamily: SANS }}>
+            Открыть бота ›
+          </a>
+        </div>
+
+        {/* Dots indicator */}
+        <div style={{ position: "absolute", bottom: 32, left: "5vw", display: "flex", gap: 6 }}>
+          {CLIP_PHOTOS.map((_, i) => (
+            <div key={i} onClick={() => setPhotoIdx(i)} style={{
+              width: i === photoIdx ? 24 : 6, height: 6,
+              borderRadius: 3, background: i === photoIdx ? GOLD : "rgba(0,0,0,0.18)",
+              transition: "all 0.3s", cursor: "pointer",
+            }} />
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 export function LandingPage() {
   useGlobalStyles();
@@ -446,6 +525,9 @@ export function LandingPage() {
         items={["Актёры и Модели", "Event-персонал", "Кастинги", "Хелперы", "Реклама"]}
         size={72} bg={BLACK} color={WHITE}
       />
+
+      {/* ══ CLIP-TEXT — фото сквозь буквы (aroundbrand-style) ══════════════ */}
+      <ClipTextHero />
 
       {/* ══ TAGLINE — золотая полоса ══════════════════════════════════════════ */}
       <div style={{
