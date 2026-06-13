@@ -193,86 +193,155 @@ export function LandingPage() {
       </nav>
 
       {/* ── HERO ── */}
-      <section style={{ paddingTop: 72, display: "grid", gridTemplateColumns: "1fr 1fr", minHeight: "calc(100vh - 72px)" }}>
-        {/* Left: photo */}
-        <div style={{ position: "relative", overflow: "hidden", background: "#1a1a1a" }}>
-          <img
-            src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=900&q=85"
-            alt="модель"
-            style={{ width: "100%", height: "100%", objectFit: "cover", filter: "grayscale(20%)", display: "block" }}
-          />
-          <div style={{
-            position: "absolute", inset: 0,
-            background: "linear-gradient(to right, rgba(0,0,0,0.3) 0%, transparent 60%)",
-          }} />
-        </div>
-
-        {/* Right: text */}
+      <section style={{
+        paddingTop: 72,
+        minHeight: "100vh",
+        background: "#0a0a0a",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        position: "relative",
+        overflow: "hidden",
+      }}>
+        {/* Фоновые градиентные блики */}
         <div style={{
-          display: "flex", flexDirection: "column",
-          justifyContent: "center", padding: "60px 64px",
-          background: WHITE,
+          position: "absolute", top: "20%", left: "30%",
+          width: 600, height: 600,
+          background: "radial-gradient(circle, rgba(201,169,110,0.08) 0%, transparent 65%)",
+          pointerEvents: "none",
+        }} />
+        <div style={{
+          position: "absolute", bottom: "15%", right: "25%",
+          width: 400, height: 400,
+          background: "radial-gradient(circle, rgba(201,169,110,0.06) 0%, transparent 65%)",
+          pointerEvents: "none",
+        }} />
+
+        {/* Центральный блок — рамка */}
+        <div style={{
+          border: "1px solid rgba(255,255,255,0.25)",
+          padding: "64px 88px",
+          textAlign: "center",
+          position: "relative",
         }}>
-          <div style={{ width: 48, height: 2, background: GOLD, marginBottom: 32 }} />
+          {/* Уголки как у рамки */}
+          {[
+            { top: -1, left: -1, borderTop: "2px solid " + GOLD, borderLeft: "2px solid " + GOLD },
+            { top: -1, right: -1, borderTop: "2px solid " + GOLD, borderRight: "2px solid " + GOLD },
+            { bottom: -1, left: -1, borderBottom: "2px solid " + GOLD, borderLeft: "2px solid " + GOLD },
+            { bottom: -1, right: -1, borderBottom: "2px solid " + GOLD, borderRight: "2px solid " + GOLD },
+          ].map((s, i) => (
+            <div key={i} style={{ position: "absolute", width: 24, height: 24, ...s }} />
+          ))}
+
           <h1 style={{
-            fontSize: "clamp(36px, 4vw, 60px)",
-            fontWeight: 800, lineHeight: 1.05,
-            textTransform: "uppercase", letterSpacing: 2,
-            marginBottom: 28,
-            background: "linear-gradient(135deg, #1a1a1a 0%, #a78bfa 50%, #60a5fa 100%)",
+            fontSize: "clamp(52px, 8vw, 120px)",
+            fontWeight: 800,
+            lineHeight: 0.95,
+            letterSpacing: "0.04em",
+            textTransform: "uppercase",
+            fontFamily: "Georgia, 'Times New Roman', serif",
+            background: "linear-gradient(160deg, #ffffff 0%, #e8d5a3 40%, #c9a96e 70%, #ffffff 100%)",
+            WebkitBackgroundClip: "text",
+            WebkitTextFillColor: "transparent",
+            backgroundClip: "text",
+            marginBottom: 20,
+          }}>
+            Model Pro
+          </h1>
+
+          <div style={{
+            fontSize: "clamp(14px, 2.5vw, 26px)",
+            letterSpacing: "0.55em",
+            textTransform: "uppercase",
+            fontFamily: "Georgia, 'Times New Roman', serif",
+            fontWeight: 400,
+            background: "linear-gradient(90deg, rgba(255,255,255,0.5) 0%, rgba(201,169,110,0.9) 50%, rgba(255,255,255,0.5) 100%)",
             WebkitBackgroundClip: "text",
             WebkitTextFillColor: "transparent",
             backgroundClip: "text",
           }}>
-            Первым узнавай<br />о&nbsp;кастингах
-          </h1>
-          <p style={{ fontSize: 15, lineHeight: 1.75, color: "#555", marginBottom: 44, maxWidth: 400 }}>
-            Model Promo Agency — Telegram-бот, который круглосуточно мониторит
-            более 200 каналов и присылает кастинги, съёмки и event-вакансии
-            точно по твоим параметрам.
-          </p>
-          <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
-            <a
-              href={APP_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{
-                display: "inline-flex", alignItems: "center", gap: 10,
-                background: BLACK, color: WHITE,
-                padding: "16px 36px", textDecoration: "none",
-                fontSize: 11, letterSpacing: 2, fontWeight: 700, textTransform: "uppercase",
-                transition: "background 0.2s",
-              }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = GOLD; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = BLACK; }}
-            >
-              <TgIcon /> Открыть Mini App
-            </a>
-            <a
-              href="#как-работает"
-              style={{
-                display: "inline-flex", alignItems: "center",
-                border: `1px solid #ccc`,
-                color: BLACK, padding: "16px 32px", textDecoration: "none",
-                fontSize: 11, letterSpacing: 2, fontWeight: 500, textTransform: "uppercase",
-                transition: "border-color 0.2s",
-              }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = GOLD; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "#ccc"; }}
-            >
-              Узнать больше
-            </a>
+            Agency
           </div>
+        </div>
 
-          {/* Stats */}
-          <div style={{ display: "flex", gap: 40, marginTop: 60, paddingTop: 40, borderTop: "1px solid #eee" }}>
-            {[["200+", "Каналов"], ["4", "Категории"], ["24/7", "Мониторинг"]].map(([n, l]) => (
-              <div key={l}>
-                <div style={{ fontSize: 28, fontWeight: 800, color: BLACK, letterSpacing: -1 }}>{n}</div>
-                <div style={{ fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: "#999", marginTop: 4 }}>{l}</div>
-              </div>
-            ))}
-          </div>
+        {/* Подзаголовок */}
+        <p style={{
+          marginTop: 52,
+          fontSize: 14,
+          letterSpacing: "0.2em",
+          textTransform: "uppercase",
+          color: "rgba(255,255,255,0.4)",
+          textAlign: "center",
+        }}>
+          Агрегатор кастингов и вакансий
+        </p>
+
+        {/* Кнопки */}
+        <div style={{ display: "flex", gap: 16, marginTop: 40, flexWrap: "wrap", justifyContent: "center" }}>
+          <a
+            href={APP_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 10,
+              background: GOLD, color: BLACK,
+              padding: "16px 40px", textDecoration: "none",
+              fontSize: 11, letterSpacing: 3, fontWeight: 700, textTransform: "uppercase",
+              transition: "opacity 0.2s",
+            }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.opacity = "0.85"; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.opacity = "1"; }}
+          >
+            <TgIcon /> Открыть Mini App
+          </a>
+          <a
+            href="#как-работает"
+            style={{
+              display: "inline-flex", alignItems: "center",
+              border: "1px solid rgba(255,255,255,0.2)",
+              color: "rgba(255,255,255,0.7)", padding: "16px 32px", textDecoration: "none",
+              fontSize: 11, letterSpacing: 3, fontWeight: 500, textTransform: "uppercase",
+              transition: "border-color 0.2s, color 0.2s",
+            }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLElement).style.borderColor = GOLD;
+              (e.currentTarget as HTMLElement).style.color = GOLD;
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLElement).style.borderColor = "rgba(255,255,255,0.2)";
+              (e.currentTarget as HTMLElement).style.color = "rgba(255,255,255,0.7)";
+            }}
+          >
+            Узнать больше
+          </a>
+        </div>
+
+        {/* Статистика */}
+        <div style={{ display: "flex", gap: 64, marginTop: 80 }}>
+          {[["200+", "Каналов"], ["4", "Категории"], ["24/7", "Мониторинг"]].map(([n, l]) => (
+            <div key={l} style={{ textAlign: "center" }}>
+              <div style={{
+                fontSize: 32, fontWeight: 800, letterSpacing: -1,
+                background: `linear-gradient(135deg, ${WHITE}, ${GOLD})`,
+                WebkitBackgroundClip: "text",
+                WebkitTextFillColor: "transparent",
+                backgroundClip: "text",
+              }}>{n}</div>
+              <div style={{ fontSize: 10, letterSpacing: 3, textTransform: "uppercase", color: "rgba(255,255,255,0.35)", marginTop: 6 }}>{l}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Scroll indicator */}
+        <div style={{
+          position: "absolute", bottom: 32, left: "50%", transform: "translateX(-50%)",
+          display: "flex", flexDirection: "column", alignItems: "center", gap: 8,
+          color: "rgba(255,255,255,0.25)", fontSize: 10, letterSpacing: 3, textTransform: "uppercase",
+        }}>
+          <span>Scroll</span>
+          <div style={{ width: 1, height: 40, background: `linear-gradient(to bottom, rgba(201,169,110,0.6), transparent)` }} />
         </div>
       </section>
 
