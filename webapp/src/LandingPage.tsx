@@ -218,7 +218,11 @@ export function LandingPage() {
             fontSize: "clamp(36px, 4vw, 60px)",
             fontWeight: 800, lineHeight: 1.05,
             textTransform: "uppercase", letterSpacing: 2,
-            marginBottom: 28, color: BLACK,
+            marginBottom: 28,
+            background: "linear-gradient(135deg, #1a1a1a 0%, #a78bfa 50%, #60a5fa 100%)",
+            WebkitBackgroundClip: "text",
+            WebkitTextFillColor: "transparent",
+            backgroundClip: "text",
           }}>
             Первым узнавай<br />о&nbsp;кастингах
           </h1>
@@ -641,7 +645,7 @@ export function LandingPage() {
         {/* Bottom bar */}
         <div style={{ borderTop: "1px solid rgba(255,255,255,0.1)", paddingTop: 24, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", letterSpacing: 1 }}>
-            © {new Date().getFullYear()} Model Promo Agency. Все права защищены.
+            © {new Date().getFullYear()} Model Promo Agency. Все права защищены. &nbsp;·&nbsp; ИП Рябов Семён Кириллович
           </div>
           <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", letterSpacing: 1 }}>
             16+
