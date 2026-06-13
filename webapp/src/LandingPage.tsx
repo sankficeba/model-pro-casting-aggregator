@@ -14,11 +14,11 @@ const P = {
   hero:    "https://images.unsplash.com/photo-1469334031218-e382a71b716b?w=1600&q=90",
   girl1:   "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=800&q=85",
   girl2:   "https://images.unsplash.com/photo-1529139574466-a303027c1d8b?w=800&q=85",
-  girl3:   "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=800&q=85",
+  girl3:   "https://images.unsplash.com/photo-1524638431109-93d95c968f03?w=800&q=85",
   man1:    "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=800&q=85",
   man2:    "https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?w=800&q=85",
   event1:  "https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=800&q=85",
-  event2:  "https://images.unsplash.com/photo-1464366400600-7168b8af9bc3?w=800&q=85",
+  event2:  "https://images.unsplash.com/photo-1519671282429-b44660ead0a7?w=800&q=85",
   studio:  "https://images.unsplash.com/photo-1581044777550-4cfa60707c03?w=800&q=85",
   casting: "https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=800&q=85",
   shoot1:  "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=800&q=85",
@@ -550,32 +550,58 @@ export function LandingPage() {
       </section>
 
       {/* ══ FEATURES STRIP ═══════════════════════════════════════════════════ */}
-      <section style={{ background: CREAM, padding: "72px 48px" }}>
-        <div style={{ textAlign: "center", marginBottom: 52 }}>
-          <Label>Возможности</Label>
-          <h2 style={{ fontSize: "clamp(24px, 3vw, 40px)", fontWeight: 800, fontFamily: "Georgia, serif", margin: 0 }}>
-            Что внутри бота
-          </h2>
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 2, maxWidth: 1000, margin: "0 auto" }}>
-          {[
-            { icon: "🎯", title: "Умная фильтрация", desc: "ИИ сравнивает требования кастинга с твоими параметрами — рост, возраст, город, тип." },
-            { icon: "⭐", title: "Избранное", desc: "Сохраняй лучшие предложения чтобы вернуться к ним позже или поделиться." },
-            { icon: "🚫", title: "Чёрный список", desc: "Добавляй слова-исключения — бот перестанет присылать нежелательные объявления." },
-            { icon: "💌", title: "Готовый отклик", desc: "Одна кнопка — и персональный текст отклика готов по данным твоей анкеты." },
-            { icon: "📊", title: "Дайджест", desc: "Не хочешь получать уведомления сразу? Смотри все новинки одним списком командой /review." },
-            { icon: "🔔", title: "Мгновенные уведомления", desc: "Кастинг появился в канале → ты узнаёшь первым. Никаких задержек." },
-          ].map(({ icon, title, desc }) => (
-            <div key={title} style={{
-              padding: "36px 32px",
-              background: WHITE,
-              borderTop: `3px solid ${GOLD}`,
-            }}>
-              <div style={{ fontSize: 32, marginBottom: 16 }}>{icon}</div>
-              <div style={{ fontSize: 13, letterSpacing: 1, textTransform: "uppercase", fontWeight: 700, marginBottom: 12 }}>{title}</div>
-              <div style={{ fontSize: 13, lineHeight: 1.75, color: "#666" }}>{desc}</div>
+      <section style={{ background: "#111", padding: "88px 48px" }}>
+        <div style={{ maxWidth: 1140, margin: "0 auto" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 72, flexWrap: "wrap", gap: 20 }}>
+            <div>
+              <Label light>Возможности</Label>
+              <h2 style={{
+                fontSize: "clamp(28px, 4vw, 52px)", fontWeight: 800,
+                fontFamily: "Georgia, serif", textTransform: "uppercase",
+                letterSpacing: 1,
+                background: `linear-gradient(135deg, ${WHITE} 0%, ${GOLD} 100%)`,
+                WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text",
+                margin: 0,
+              }}>
+                Что внутри бота
+              </h2>
             </div>
-          ))}
+            <a href={APP_URL} target="_blank" rel="noopener noreferrer"
+              style={{ fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: GOLD, textDecoration: "none", borderBottom: `1px solid ${GOLD}`, paddingBottom: 2 }}>
+              Попробовать →
+            </a>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 80px" }}>
+            {[
+              { n: "01", title: "Умная фильтрация", desc: "ИИ анализирует каждый кастинг и сравнивает с твоими параметрами — рост, возраст, тип внешности, город." },
+              { n: "02", title: "Избранное", desc: "Сохраняй лучшие предложения одним нажатием, чтобы вернуться к ним позже или поделиться с коллегой." },
+              { n: "03", title: "Чёрный список", desc: "Добавляй слова-исключения — и бот автоматически перестанет присылать нежелательные объявления." },
+              { n: "04", title: "Готовый отклик", desc: "Одна кнопка — и персональный текст отклика сформирован по данным твоей анкеты. Остаётся только отправить." },
+              { n: "05", title: "Дайджест", desc: "Не хочешь получать уведомления в моменте? Командой /review смотри все новинки одним списком в удобное время." },
+              { n: "06", title: "Мгновенные уведомления", desc: "Кастинг появился в канале — ты узнаёшь первым. Бот работает круглосуточно без задержек." },
+            ].map(({ n, title, desc }) => (
+              <div key={n} style={{
+                borderTop: "1px solid rgba(255,255,255,0.08)",
+                padding: "40px 0",
+                display: "flex",
+                gap: 32,
+              }}>
+                <div style={{
+                  fontSize: 42, fontWeight: 800, fontFamily: "Georgia, serif",
+                  color: GOLD, opacity: 0.55, lineHeight: 1, flexShrink: 0,
+                  letterSpacing: -1,
+                }}>{n}</div>
+                <div>
+                  <div style={{
+                    fontSize: 13, letterSpacing: 2, textTransform: "uppercase",
+                    fontWeight: 700, color: WHITE, marginBottom: 14,
+                  }}>{title}</div>
+                  <div style={{ fontSize: 14, lineHeight: 1.8, color: "rgba(255,255,255,0.42)" }}>{desc}</div>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </section>
 
