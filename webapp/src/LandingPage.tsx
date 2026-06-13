@@ -310,8 +310,9 @@ export function LandingPage() {
           <h1 style={{
             fontFamily: SERIF, fontWeight: 900,
             fontSize: "clamp(72px, 15vw, 210px)",
-            lineHeight: 0.88, textTransform: "lowercase",
+            lineHeight: 1.05, textTransform: "lowercase",
             letterSpacing: "-0.03em",
+            paddingBottom: "0.15em",
             background: GRAD_TEXT,
             WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text",
             animation: "fadeUp 1s .1s ease both",
