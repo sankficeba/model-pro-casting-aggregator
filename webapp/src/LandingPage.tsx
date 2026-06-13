@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
-const BOT_USERNAME = "ModelsProAgency_bot";
+const BOT_USERNAME = "ModelProAgency_bot";
 const APP_URL = `https://t.me/${BOT_USERNAME}/app`;
 const BOT_URL = `https://t.me/${BOT_USERNAME}`;
 
