@@ -271,51 +271,67 @@ function Label({ children, light }: { children: React.ReactNode; light?: boolean
 const CLIP_PHOTOS = [P.h1, P.h2, P.h3, P.studio, P.event1, P.shoot2];
 
 function ClipTextHero() {
-  const [photoIdx, setPhotoIdx] = useState(0);
+  const [cur, setCur] = useState(0);
+  const [prev, setPrev] = useState<number | null>(null);
+  const [fading, setFading] = useState(false);
 
   useEffect(() => {
-    const id = setInterval(() => setPhotoIdx((i) => (i + 1) % CLIP_PHOTOS.length), 3200);
+    const id = setInterval(() => {
+      setCur((i) => {
+        const next = (i + 1) % CLIP_PHOTOS.length;
+        setPrev(i);
+        setFading(true);
+        setTimeout(() => { setPrev(null); setFading(false); }, 700);
+        return next;
+      });
+    }, 3400);
     return () => clearInterval(id);
   }, []);
 
+  const textStyle: React.CSSProperties = {
+    fontFamily: SERIF,
+    fontWeight: 900,
+    fontSize: "clamp(88px, 18vw, 260px)",
+    lineHeight: 0.84,
+    textTransform: "uppercase",
+    letterSpacing: "-0.02em",
+    margin: 0,
+    padding: "64px 5vw 72px",
+    backgroundSize: "cover",
+    backgroundPosition: "center top",
+    WebkitBackgroundClip: "text",
+    backgroundClip: "text",
+    WebkitTextFillColor: "transparent",
+    color: "transparent",
+    userSelect: "none",
+    position: "absolute",
+    inset: 0,
+  };
+
+  const TEXT = (<>Model<br />Pro<br /><em style={{ fontStyle: "italic", fontWeight: 400 }}>Agency</em></>);
+
   return (
     <section style={{ background: WHITE, overflow: "hidden", position: "relative" }}>
-      {/* photo strip behind text — fixed so it parallaxes through the letters */}
-      <div style={{
-        position: "absolute", inset: 0,
-        backgroundImage: `url(${CLIP_PHOTOS[photoIdx]})`,
-        backgroundSize: "cover",
-        backgroundPosition: "center",
-        backgroundAttachment: "fixed",
-        transition: "background-image 0.8s ease",
-        filter: "brightness(0.92) saturate(1.1)",
-      }} />
-
-      {/* White overlay outside text — makes text the "window" */}
       <div style={{ position: "relative", padding: "0 0 8px" }}>
-        <h2 style={{
-          fontFamily: SERIF,
-          fontWeight: 900,
-          fontSize: "clamp(88px, 18vw, 260px)",
-          lineHeight: 0.84,
-          textTransform: "uppercase",
-          letterSpacing: "-0.02em",
-          margin: 0,
-          padding: "64px 5vw 72px",
-          /* clip the background image through the text */
-          backgroundImage: `url(${CLIP_PHOTOS[photoIdx]})`,
-          backgroundSize: "cover",
-          backgroundPosition: "center",
-          backgroundAttachment: "fixed",
-          WebkitBackgroundClip: "text",
-          backgroundClip: "text",
-          WebkitTextFillColor: "transparent",
-          color: "transparent",
-          userSelect: "none",
-          transition: "background-image 0.8s ease",
-        }}>
-          Model<br />Pro<br /><em style={{ fontStyle: "italic", fontWeight: 400 }}>Agency</em>
-        </h2>
+        {/* size holder — invisible, just reserves space */}
+        <h2 style={{ ...textStyle, position: "relative", visibility: "hidden" }}>{TEXT}</h2>
+
+        {/* prev photo fades out */}
+        {prev !== null && (
+          <h2 aria-hidden style={{
+            ...textStyle,
+            backgroundImage: `url(${CLIP_PHOTOS[prev]})`,
+            opacity: fading ? 0 : 1,
+            transition: "opacity 0.7s ease",
+          }}>{TEXT}</h2>
+        )}
+
+        {/* current photo */}
+        <h2 aria-hidden style={{
+          ...textStyle,
+          backgroundImage: `url(${CLIP_PHOTOS[cur]})`,
+          opacity: 1,
+        }}>{TEXT}</h2>
 
         {/* Bottom strip info */}
         <div style={{
@@ -334,9 +350,9 @@ function ClipTextHero() {
         {/* Dots indicator */}
         <div style={{ position: "absolute", bottom: 32, left: "5vw", display: "flex", gap: 6 }}>
           {CLIP_PHOTOS.map((_, i) => (
-            <div key={i} onClick={() => setPhotoIdx(i)} style={{
-              width: i === photoIdx ? 24 : 6, height: 6,
-              borderRadius: 3, background: i === photoIdx ? GOLD : "rgba(0,0,0,0.18)",
+            <div key={i} onClick={() => setCur(i)} style={{
+              width: i === cur ? 24 : 6, height: 6,
+              borderRadius: 3, background: i === cur ? GOLD : "rgba(0,0,0,0.18)",
               transition: "all 0.3s", cursor: "pointer",
             }} />
           ))}
