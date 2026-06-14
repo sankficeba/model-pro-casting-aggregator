@@ -291,14 +291,15 @@ function ClipText() {
     <section style={{ background: WHITE, position: "relative", overflow: "hidden" }}>
       <div style={{ position: "relative" }}>
         <h2 style={{ ...base, position: "relative", visibility: "hidden" }}>{TEXT}</h2>
-        {/* prev: mounted at opacity:1, CSS animation fades it out, then onAnimationEnd removes it */}
+        {/* cur — bottom layer, always visible */}
+        <h2 aria-hidden style={{ ...base, backgroundImage: `url(${CLIP_PHOTOS[cur]})` }}>{TEXT}</h2>
+        {/* prev — top layer, fades out revealing cur beneath */}
         {prev !== null && (
           <h2 aria-hidden
             style={{ ...base, backgroundImage: `url(${CLIP_PHOTOS[prev]})`, animation: "clipFadeOut 0.85s ease forwards" }}
             onAnimationEnd={() => setPrev(null)}
           >{TEXT}</h2>
         )}
-        <h2 aria-hidden style={{ ...base, backgroundImage: `url(${CLIP_PHOTOS[cur]})` }}>{TEXT}</h2>
         {/* Dots */}
         <div style={{ position: "absolute", bottom: 24, left: "5vw", display: "flex", gap: 6 }}>
           {CLIP_PHOTOS.map((_, i) => (
