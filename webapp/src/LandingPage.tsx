@@ -27,7 +27,7 @@ const P = {
   event1: "https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=900&q=85",
   event2: "https://images.unsplash.com/photo-1529543544282-ea669407fca3?w=900&q=85",
   studio: "https://images.unsplash.com/photo-1581044777550-4cfa60707c03?w=900&q=85",
-  shoot1: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=900&q=85",
+  shoot1: "https://images.unsplash.com/photo-1574717024653-61fd2cf4d44d?w=900&q=85",
   shoot2: "https://images.unsplash.com/photo-1509631179647-0177331693ae?w=900&q=85",
 };
 
