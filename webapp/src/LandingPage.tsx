@@ -610,7 +610,7 @@ export function LandingPage() {
             fontSize: "clamp(40px, 8vw, 110px)",
             textTransform: "uppercase", color: WHITE, lineHeight: 1, letterSpacing: 4,
           }}>
-            Начни зарабатывать
+            Твой кастинг ждёт
           </h2>
           <div style={{ width: 60, height: 2, background: GOLD, margin: "28px auto" }} />
           <a href={APP_URL} target="_blank" rel="noopener noreferrer" className="pill-outline">
