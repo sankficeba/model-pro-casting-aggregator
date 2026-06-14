@@ -341,6 +341,21 @@ function ClipText() {
           ))}
         </div>
       </div>
+
+      {/* CTA strip */}
+      <div style={{
+        padding: "24px 5vw",
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        borderTop: "1px solid rgba(0,0,0,.07)",
+        flexWrap: "wrap", gap: 16,
+      }}>
+        <p style={{ fontSize: 13, color: "rgba(0,0,0,.38)", fontFamily: SANS, letterSpacing: 0.3, margin: 0 }}>
+          Агрегатор кастингов из 200+ Telegram-каналов — для моделей, актёров и event-персонала
+        </p>
+        <a href={APP_URL} target="_blank" rel="noopener noreferrer" className="pill" style={{ padding: "12px 28px", flexShrink: 0 }}>
+          <TgIcon /> Открыть бота
+        </a>
+      </div>
     </section>
   );
 }
