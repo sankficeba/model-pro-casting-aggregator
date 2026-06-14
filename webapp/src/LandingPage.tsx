@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 
 const BOT_USERNAME = "ModelProAgency_bot";
 const APP_URL = `https://t.me/${BOT_USERNAME}/app`;
@@ -56,6 +56,10 @@ function useGlobalStyles() {
         0%,28%  { opacity:1; }
         33%,95% { opacity:0; }
         100%    { opacity:1; }
+      }
+      @keyframes clipFadeOut {
+        from { opacity: 1; }
+        to   { opacity: 0; }
       }
 
       .mq-track  { display:flex; width:max-content; animation: mq  30s linear infinite; }
@@ -258,35 +262,16 @@ function FLink({ href, children }: { href: string; children: React.ReactNode }) 
 function ClipText() {
   const [cur, setCur] = useState(0);
   const [prev, setPrev] = useState<number | null>(null);
-  const [fading, setFading] = useState(false);
-  const fadeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const clearTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     const id = setInterval(() => {
-      // Mount prev at opacity:1 first, then trigger the CSS transition
       setCur((i) => {
         const next = (i + 1) % CLIP_PHOTOS.length;
         setPrev(i);
-        setFading(false);
         return next;
       });
-      if (fadeTimer.current) clearTimeout(fadeTimer.current);
-      if (clearTimer.current) clearTimeout(clearTimer.current);
-      // After React paints prev at opacity:1, start fade-out
-      fadeTimer.current = setTimeout(() => {
-        setFading(true);
-        clearTimer.current = setTimeout(() => {
-          setPrev(null);
-          setFading(false);
-        }, 750);
-      }, 60);
     }, 3600);
-    return () => {
-      clearInterval(id);
-      if (fadeTimer.current) clearTimeout(fadeTimer.current);
-      if (clearTimer.current) clearTimeout(clearTimer.current);
-    };
+    return () => clearInterval(id);
   }, []);
 
   const base: React.CSSProperties = {
@@ -306,8 +291,12 @@ function ClipText() {
     <section style={{ background: WHITE, position: "relative", overflow: "hidden" }}>
       <div style={{ position: "relative" }}>
         <h2 style={{ ...base, position: "relative", visibility: "hidden" }}>{TEXT}</h2>
+        {/* prev: mounted at opacity:1, CSS animation fades it out, then onAnimationEnd removes it */}
         {prev !== null && (
-          <h2 aria-hidden style={{ ...base, backgroundImage: `url(${CLIP_PHOTOS[prev]})`, opacity: fading ? 0 : 1, transition: "opacity .7s ease" }}>{TEXT}</h2>
+          <h2 aria-hidden
+            style={{ ...base, backgroundImage: `url(${CLIP_PHOTOS[prev]})`, animation: "clipFadeOut 0.85s ease forwards" }}
+            onAnimationEnd={() => setPrev(null)}
+          >{TEXT}</h2>
         )}
         <h2 aria-hidden style={{ ...base, backgroundImage: `url(${CLIP_PHOTOS[cur]})` }}>{TEXT}</h2>
         {/* Dots */}
