@@ -61,6 +61,35 @@ function useGlobalStyles() {
         from { opacity: 1; }
         to   { opacity: 0; }
       }
+      @keyframes menuSlideIn {
+        from { opacity: 0; transform: translateY(-12px); }
+        to   { opacity: 1; transform: translateY(0); }
+      }
+
+      .lp-hamburger {
+        display:none; flex-direction:column; justify-content:center; gap:5px;
+        background:none; border:none; cursor:pointer; padding:8px;
+        position:relative; z-index:310;
+      }
+      .lp-hamburger span {
+        display:block; width:22px; height:1.5px; border-radius:2px;
+        transition:transform .3s ease, opacity .3s ease, background .3s ease;
+      }
+      .lp-hamburger.closed span { background:#111; }
+      .lp-hamburger.open   span { background:#fff; }
+      .lp-hamburger.open span:nth-child(1) { transform:translateY(6.5px) rotate(45deg); }
+      .lp-hamburger.open span:nth-child(2) { opacity:0; transform:scaleX(0); }
+      .lp-hamburger.open span:nth-child(3) { transform:translateY(-6.5px) rotate(-45deg); }
+
+      .mob-menu-link {
+        background:none; border:none; cursor:pointer; width:100%; text-align:center;
+        font-family:${SERIF}; font-weight:900; text-transform:uppercase;
+        font-size:clamp(34px,10vw,52px); letter-spacing:0.02em;
+        color:#fff; padding:22px 0;
+        border-bottom:1px solid rgba(255,255,255,.07);
+        transition:color .2s;
+      }
+      .mob-menu-link:hover { color:${GOLD}; }
 
       .mq-track  { display:flex; width:max-content; animation: mq  30s linear infinite; }
       .mq-trackR { display:flex; width:max-content; animation: mqR 26s linear infinite; }
@@ -141,6 +170,7 @@ function useGlobalStyles() {
       @media(max-width:768px){
         .lp-nav { padding:0 20px !important; }
         .lp-nav-links { display:none; }
+        .lp-hamburger { display:flex; }
 
         .lp-section-pad   { padding:48px 20px !important; }
         .lp-section-pad-t { padding:48px 20px 0 !important; }
@@ -320,24 +350,30 @@ export function LandingPage() {
   useGlobalStyles();
   useReveal();
   const scrollY = useScrollY();
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  useEffect(() => {
+    document.body.style.overflow = menuOpen ? "hidden" : "";
+    return () => { document.body.style.overflow = ""; };
+  }, [menuOpen]);
 
   return (
     <div style={{ background: WHITE, fontFamily: SANS, color: BLACK, overflowX: "hidden" }}>
 
       {/* ══ NAV — minimal, always white ══════════════════════════════════════ */}
       <nav className="lp-nav" style={{
-        position: "fixed", top: 0, left: 0, right: 0, zIndex: 200,
+        position: "fixed", top: 0, left: 0, right: 0, zIndex: 300,
         height: 64,
-        background: scrollY > 60 ? "rgba(255,255,255,.97)" : WHITE,
-        borderBottom: "1px solid rgba(0,0,0,.07)",
+        background: menuOpen ? BLACK : (scrollY > 60 ? "rgba(255,255,255,.97)" : WHITE),
+        borderBottom: menuOpen ? "none" : "1px solid rgba(0,0,0,.07)",
         display: "flex", alignItems: "center", justifyContent: "space-between",
         padding: "0 48px",
-        transition: "box-shadow .3s",
-        boxShadow: scrollY > 60 ? "0 2px 20px rgba(0,0,0,.06)" : "none",
+        transition: "background .3s, box-shadow .3s",
+        boxShadow: (!menuOpen && scrollY > 60) ? "0 2px 20px rgba(0,0,0,.06)" : "none",
       }}>
-        <div onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+        <div onClick={() => { window.scrollTo({ top: 0, behavior: "smooth" }); setMenuOpen(false); }}
           style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: 10 }}>
-          <span style={{ fontFamily: SERIF, fontWeight: 700, fontSize: 18, letterSpacing: 1 }}>MP</span>
+          <span style={{ fontFamily: SERIF, fontWeight: 700, fontSize: 18, letterSpacing: 1, color: menuOpen ? WHITE : BLACK }}>MP</span>
           <span style={{ fontSize: 10, letterSpacing: 3, color: GOLD, fontWeight: 600, textTransform: "uppercase" }}>Agency</span>
         </div>
         <div className="lp-nav-links">
@@ -348,7 +384,45 @@ export function LandingPage() {
             <TgIcon /> Открыть бота
           </a>
         </div>
+        <button
+          className={`lp-hamburger ${menuOpen ? "open" : "closed"}`}
+          onClick={() => setMenuOpen(o => !o)}
+          aria-label={menuOpen ? "Закрыть меню" : "Открыть меню"}
+          aria-expanded={menuOpen}
+        >
+          <span /><span /><span />
+        </button>
       </nav>
+
+      {/* ══ MOBILE MENU OVERLAY ═══════════════════════════════════════════════ */}
+      {menuOpen && (
+        <div style={{
+          position: "fixed", inset: 0, zIndex: 250,
+          background: BLACK,
+          display: "flex", flexDirection: "column",
+          alignItems: "center", justifyContent: "center",
+          animation: "menuSlideIn 0.32s ease forwards",
+          paddingTop: 64,
+        }}>
+          <div style={{ width: "100%", maxWidth: 420, padding: "0 32px" }}>
+            {[
+              { l: "Кастинги",     id: "castings" },
+              { l: "Категории",    id: "categories" },
+              { l: "Как работает", id: "how" },
+            ].map(({ l, id }) => (
+              <button key={id} className="mob-menu-link" onClick={() => { scrollTo(id); setMenuOpen(false); }}>
+                {l}
+              </button>
+            ))}
+            <div style={{ marginTop: 48, display: "flex", justifyContent: "center" }}>
+              <a href={APP_URL} target="_blank" rel="noopener noreferrer" className="pill"
+                onClick={() => setMenuOpen(false)}>
+                <TgIcon /> Открыть бота
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ══ CLIP-TEXT — фото сквозь буквы, самый первый блок ══════════════ */}
       <div style={{ paddingTop: 64 }}>
