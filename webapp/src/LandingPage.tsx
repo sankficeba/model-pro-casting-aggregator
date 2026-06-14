@@ -123,6 +123,51 @@ function useGlobalStyles() {
         transition:color .2s;
       }
       .nav-btn:hover { color:${BLACK}; }
+
+      /* ── Responsive layout ───────────────────────────────────────────────── */
+      .lp-nav-links { display:flex; gap:32px; align-items:center; }
+      .lp-grid-3col { display:grid; grid-template-columns:1.2fr 1fr 1fr; gap:6px; }
+      .lp-split     { display:grid; grid-template-columns:55% 45%; }
+      .lp-split-r   { display:grid; grid-template-columns:45% 55%; }
+      .lp-grid-4col { display:grid; grid-template-columns:repeat(4,1fr); gap:6px; }
+      .lp-how-grid  { display:grid; grid-template-columns:repeat(4,1fr); gap:2px; }
+      .lp-feat-grid { display:grid; grid-template-columns:1fr 1fr; gap:0 80px; }
+      .lp-foot-grid { display:grid; grid-template-columns:200px 1fr 1fr 1fr; gap:48px; margin-bottom:56px; }
+
+      @media(max-width:768px){
+        .lp-nav { padding:0 20px !important; }
+        .lp-nav-links { display:none; }
+
+        .lp-section-pad   { padding:48px 20px !important; }
+        .lp-section-pad-t { padding:48px 20px 0 !important; }
+
+        .lp-grid-3col { grid-template-columns:1fr !important; }
+        .lp-grid-3col > a:first-child { grid-row:auto !important; aspect-ratio:16/9 !important; }
+
+        .lp-split   { grid-template-columns:1fr !important; }
+        .lp-split-r { grid-template-columns:1fr !important; }
+        .lp-split .photo-card,
+        .lp-split-r .photo-card { min-height:260px !important; }
+        .lp-split-r .photo-card { order:-1; }
+        .lp-split > div   { padding:40px 24px !important; }
+        .lp-split-r > div { padding:40px 24px !important; }
+
+        .lp-grid-4col { grid-template-columns:repeat(2,1fr) !important; }
+
+        .lp-how-grid { grid-template-columns:1fr 1fr !important; }
+        .lp-how-grid > div {
+          border-right:none !important;
+          border-bottom:1px solid rgba(255,255,255,.05);
+          padding:28px 20px !important;
+        }
+
+        .lp-feat-grid { grid-template-columns:1fr !important; gap:0 !important; }
+
+        .lp-foot-grid { grid-template-columns:1fr 1fr !important; gap:24px !important; }
+
+        .lp-hero-sub { flex-direction:column !important; align-items:flex-start !important; }
+        .lp-hero-sub-right { display:none; }
+      }
     `;
     document.head.appendChild(el);
     return () => { document.head.removeChild(el); };
@@ -214,17 +259,34 @@ function ClipText() {
   const [cur, setCur] = useState(0);
   const [prev, setPrev] = useState<number | null>(null);
   const [fading, setFading] = useState(false);
+  const fadeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const clearTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     const id = setInterval(() => {
+      // Mount prev at opacity:1 first, then trigger the CSS transition
       setCur((i) => {
         const next = (i + 1) % CLIP_PHOTOS.length;
-        setPrev(i); setFading(true);
-        setTimeout(() => { setPrev(null); setFading(false); }, 700);
+        setPrev(i);
+        setFading(false);
         return next;
       });
+      if (fadeTimer.current) clearTimeout(fadeTimer.current);
+      if (clearTimer.current) clearTimeout(clearTimer.current);
+      // After React paints prev at opacity:1, start fade-out
+      fadeTimer.current = setTimeout(() => {
+        setFading(true);
+        clearTimer.current = setTimeout(() => {
+          setPrev(null);
+          setFading(false);
+        }, 750);
+      }, 60);
     }, 3600);
-    return () => clearInterval(id);
+    return () => {
+      clearInterval(id);
+      if (fadeTimer.current) clearTimeout(fadeTimer.current);
+      if (clearTimer.current) clearTimeout(clearTimer.current);
+    };
   }, []);
 
   const base: React.CSSProperties = {
@@ -273,7 +335,7 @@ export function LandingPage() {
     <div style={{ background: WHITE, fontFamily: SANS, color: BLACK, overflowX: "hidden" }}>
 
       {/* ══ NAV — minimal, always white ══════════════════════════════════════ */}
-      <nav style={{
+      <nav className="lp-nav" style={{
         position: "fixed", top: 0, left: 0, right: 0, zIndex: 200,
         height: 64,
         background: scrollY > 60 ? "rgba(255,255,255,.97)" : WHITE,
@@ -288,7 +350,7 @@ export function LandingPage() {
           <span style={{ fontFamily: SERIF, fontWeight: 700, fontSize: 18, letterSpacing: 1 }}>MP</span>
           <span style={{ fontSize: 10, letterSpacing: 3, color: GOLD, fontWeight: 600, textTransform: "uppercase" }}>Agency</span>
         </div>
-        <div style={{ display: "flex", gap: 32, alignItems: "center" }}>
+        <div className="lp-nav-links">
           {[{ l: "Кастинги", id: "castings" }, { l: "Категории", id: "categories" }, { l: "Как работает", id: "how" }].map(({ l, id }) => (
             <button key={id} className="nav-btn" onClick={() => scrollTo(id)}>{l}</button>
           ))}
@@ -323,7 +385,7 @@ export function LandingPage() {
           </h1>
 
           {/* Subtitle row */}
-          <div style={{
+          <div className="lp-hero-sub" style={{
             display: "flex", justifyContent: "space-between", alignItems: "flex-end",
             marginTop: 52, flexWrap: "wrap", gap: 20,
             animation: "fadeUp 1s .35s ease both",
@@ -338,7 +400,7 @@ export function LandingPage() {
                 </a>
               </div>
             </div>
-            <div style={{ textAlign: "right" }}>
+            <div className="lp-hero-sub-right" style={{ textAlign: "right" }}>
               <p style={{ fontSize: 15, lineHeight: 1.75, color: "rgba(0,0,0,.35)", fontFamily: SANS }}>
                 для актёров и моделей<br />event-персонала · хелперов
               </p>
@@ -408,7 +470,7 @@ export function LandingPage() {
       <ClipText />
 
       {/* ══ EDITORIAL PHOTO GRID ════════════════════════════════════════════ */}
-      <section id="castings" style={{ padding: "80px 48px 0" }}>
+      <section id="castings" className="lp-section-pad-t" style={{ padding: "80px 48px 0" }}>
         <div className="reveal" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 36 }}>
           <div>
             <Lbl>Последние публикации</Lbl>
@@ -422,7 +484,7 @@ export function LandingPage() {
           </a>
         </div>
 
-        <div className="reveal" style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr 1fr", gap: 6 }}>
+        <div className="reveal lp-grid-3col">
           <a href={APP_URL} target="_blank" rel="noopener noreferrer"
             className="photo-card" style={{ gridRow: "1 / 3", aspectRatio: "3/4", textDecoration: "none" }}>
             <img src={P.girl1} alt="Актрисы" />
@@ -452,7 +514,7 @@ export function LandingPage() {
       </section>
 
       {/* ══ SPLIT: СТАТЬ УЧАСТНИКОМ ══════════════════════════════════════════ */}
-      <section style={{ display: "grid", gridTemplateColumns: "55% 45%", marginTop: 6 }}>
+      <section className="lp-split" style={{ marginTop: 6 }}>
         <a href={APP_URL} target="_blank" rel="noopener noreferrer"
           className="photo-card" style={{ minHeight: 580, textDecoration: "none" }}>
           <img src={P.studio} alt="Студия" style={{ height: "100%" }} />
@@ -494,7 +556,7 @@ export function LandingPage() {
       </div>
 
       {/* ══ SPLIT reverse: умный агрегатор ═══════════════════════════════════ */}
-      <section style={{ display: "grid", gridTemplateColumns: "45% 55%" }}>
+      <section className="lp-split-r">
         <div style={{ background: WHITE, padding: "72px 64px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
           <div className="reveal">
             <Lbl>Технологии</Lbl>
@@ -516,12 +578,12 @@ export function LandingPage() {
       </section>
 
       {/* ══ CATEGORIES ═══════════════════════════════════════════════════════ */}
-      <section id="categories" style={{ padding: "80px 48px 0" }}>
+      <section id="categories" className="lp-section-pad-t" style={{ padding: "80px 48px 0" }}>
         <div className="reveal" style={{ textAlign: "center", marginBottom: 48 }}>
           <Lbl>Для кого</Lbl>
           <h2 style={{ fontFamily: SERIF, fontWeight: 900, fontSize: "clamp(28px, 4vw, 52px)", lineHeight: 1 }}>Категории</h2>
         </div>
-        <div className="reveal" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 6 }}>
+        <div className="reveal lp-grid-4col">
           {[
             { src: P.girl1,  t: "Актрисы и модели",  s: "Кино · Реклама · Съёмки" },
             { src: P.man2,   t: "Актёры и модели",   s: "Мужское направление" },
@@ -542,7 +604,7 @@ export function LandingPage() {
       </section>
 
       {/* ══ HOW IT WORKS — dark ══════════════════════════════════════════════ */}
-      <section id="how" style={{ background: "#111", padding: "88px 48px", marginTop: 0 }}>
+      <section id="how" className="lp-section-pad" style={{ background: "#111", padding: "88px 48px", marginTop: 0 }}>
         <div style={{ maxWidth: 1140, margin: "0 auto" }}>
           <div className="reveal" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 64, flexWrap: "wrap", gap: 24 }}>
             <div>
@@ -558,7 +620,7 @@ export function LandingPage() {
               <TgIcon /> Начать сейчас
             </a>
           </div>
-          <div className="reveal" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 2 }}>
+          <div className="reveal lp-how-grid">
             {[
               { n: "01", t: "Открой бота",      d: "Найди @ModelProAgency_bot в Telegram и запусти командой /start." },
               { n: "02", t: "Заполни анкету",   d: "В Mini App укажи категорию, параметры, город. Занимает 2 минуты." },
@@ -583,7 +645,7 @@ export function LandingPage() {
       </section>
 
       {/* ══ FEATURES — numbered, dark ════════════════════════════════════════ */}
-      <section style={{ background: "#0d0d0d", padding: "80px 48px" }}>
+      <section className="lp-section-pad" style={{ background: "#0d0d0d", padding: "80px 48px" }}>
         <div style={{ maxWidth: 1140, margin: "0 auto" }}>
           <div className="reveal" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 60, flexWrap: "wrap", gap: 24 }}>
             <div>
@@ -601,7 +663,7 @@ export function LandingPage() {
               Попробовать →
             </a>
           </div>
-          <div className="reveal" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 80px" }}>
+          <div className="reveal lp-feat-grid">
             {[
               { n: "01", t: "Умная фильтрация",      d: "ИИ анализирует кастинг и сравнивает с твоими параметрами — рост, возраст, тип внешности, город." },
               { n: "02", t: "Избранное",              d: "Сохраняй лучшие предложения одним нажатием, чтобы вернуться позже." },
@@ -652,8 +714,8 @@ export function LandingPage() {
       </div>
 
       {/* ══ FOOTER ═══════════════════════════════════════════════════════════ */}
-      <footer style={{ background: "#0a0a0a", color: WHITE, padding: "72px 48px 32px" }}>
-        <div style={{ display: "grid", gridTemplateColumns: "200px 1fr 1fr 1fr", gap: 48, marginBottom: 56 }}>
+      <footer className="lp-section-pad" style={{ background: "#0a0a0a", color: WHITE, padding: "72px 48px 32px" }}>
+        <div className="lp-foot-grid">
           <div>
             <div style={{ marginBottom: 20 }}>
               <div style={{ fontFamily: SERIF, fontWeight: 700, fontSize: 20, letterSpacing: 1, color: WHITE }}>MP</div>
