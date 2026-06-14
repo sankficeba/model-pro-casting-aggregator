@@ -433,7 +433,7 @@ export function LandingPage() {
       <div style={{ position: "relative", height: 220, margin: "0", overflow: "hidden" }}>
         {/* Strip 1 — GOLD, tilted -3° */}
         <div style={{
-          position: "absolute", left: "-5%", right: "-5%", top: 18,
+          position: "absolute", left: "-5%", right: "-5%", top: 46,
           transform: "rotate(-2.8deg)", background: GOLD,
           padding: "16px 0", overflow: "hidden", zIndex: 2,
         }}>
@@ -441,7 +441,7 @@ export function LandingPage() {
         </div>
         {/* Strip 2 — BLACK, tilted +3° */}
         <div style={{
-          position: "absolute", left: "-5%", right: "-5%", top: 100,
+          position: "absolute", left: "-5%", right: "-5%", top: 120,
           transform: "rotate(2.8deg)", background: BLACK,
           padding: "16px 0", overflow: "hidden", zIndex: 1,
         }}>
