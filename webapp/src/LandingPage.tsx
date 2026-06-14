@@ -290,7 +290,7 @@ function ClipText() {
   return (
     <section style={{ background: WHITE, position: "relative", overflow: "hidden" }}>
       <div style={{ position: "relative" }}>
-        <h2 style={{ ...base, position: "relative", visibility: "hidden" }}>{TEXT}</h2>
+        <h1 style={{ ...base, position: "relative", visibility: "hidden" }}>{TEXT}</h1>
         {/* cur — bottom layer, always visible */}
         <h2 aria-hidden style={{ ...base, backgroundImage: `url(${CLIP_PHOTOS[cur]})` }}>{TEXT}</h2>
         {/* prev — top layer, fades out revealing cur beneath */}

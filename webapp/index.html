@@ -3,12 +3,56 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="theme-color" content="#0d1326" />
-    <title>ModelPro — Анкета</title>
-    <!-- Preconnect: открываем TCP+TLS к Telegram SDK в фоне, пока
-         парсится HTML. API/webapp — same-origin, отдельный preconnect
-         не нужен (но warmup-fetch в main.tsx даст cold-start hit на
-         первом запросе). -->
+    <meta name="theme-color" content="#ffffff" />
+    <title>Model Pro Agency — Агрегатор кастингов в Telegram</title>
+    <meta name="description" content="Находи кастинги для моделей, актёров и event-персонала в одном месте. Model Pro Agency — умный Telegram Mini App, который собирает объявления из 200+ каналов по 4 направлениям." />
+    <meta name="keywords" content="кастинги, модели, актёры, event персонал, агрегатор кастингов, telegram, model pro agency, кастинги сегодня" />
+    <link rel="canonical" href="https://modelpro.agency/" />
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://modelpro.agency/" />
+    <meta property="og:site_name" content="Model Pro Agency" />
+    <meta property="og:locale" content="ru_RU" />
+    <meta property="og:title" content="Model Pro Agency — Агрегатор кастингов в Telegram" />
+    <meta property="og:description" content="Находи кастинги для моделей, актёров и event-персонала в одном месте. 200+ каналов, уведомления 24/7." />
+    <meta property="og:image" content="https://images.unsplash.com/photo-1469334031218-e382a71b716b?w=1200&h=630&fit=crop&q=85" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Model Pro Agency — Агрегатор кастингов в Telegram" />
+    <meta name="twitter:description" content="Находи кастинги для моделей, актёров и event-персонала в одном месте. 200+ каналов, уведомления 24/7." />
+    <meta name="twitter:image" content="https://images.unsplash.com/photo-1469334031218-e382a71b716b?w=1200&h=630&fit=crop&q=85" />
+
+    <!-- Structured data -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "Organization",
+      "name": "Model Pro Agency",
+      "url": "https://modelpro.agency",
+      "description": "Агрегатор кастингов для моделей, актёров и event-персонала в Telegram",
+      "sameAs": ["https://t.me/ModelProAgency_bot"]
+    }
+    </script>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      "name": "Model Pro Agency",
+      "url": "https://modelpro.agency",
+      "description": "Умный агрегатор кастингов в Telegram — находи объявления для моделей, актёров и event-персонала",
+      "potentialAction": {
+        "@type": "SearchAction",
+        "target": "https://t.me/ModelProAgency_bot",
+        "query-input": "required name=search_term_string"
+      }
+    }
+    </script>
+
+    <!-- Preconnect: открываем TCP+TLS к Telegram SDK в фоне, пока парсится HTML -->
     <link rel="dns-prefetch" href="https://telegram.org" />
     <link rel="preconnect" href="https://telegram.org" crossorigin />
     <!-- Google Fonts -->
