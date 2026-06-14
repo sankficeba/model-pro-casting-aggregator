@@ -356,7 +356,7 @@ export function LandingPage() {
       </div>
 
       {/* ══ DIAGONAL MARQUEES — перекрещивающиеся как aroundbrand ═════════════ */}
-      <div style={{ position: "relative", height: 180, margin: "0", overflow: "hidden" }}>
+      <div style={{ position: "relative", height: 220, margin: "0", overflow: "hidden" }}>
         {/* Strip 1 — GOLD, tilted -3° */}
         <div style={{
           position: "absolute", left: "-5%", right: "-5%", top: 18,
@@ -367,7 +367,7 @@ export function LandingPage() {
         </div>
         {/* Strip 2 — BLACK, tilted +3° */}
         <div style={{
-          position: "absolute", left: "-5%", right: "-5%", top: 90,
+          position: "absolute", left: "-5%", right: "-5%", top: 100,
           transform: "rotate(2.8deg)", background: BLACK,
           padding: "16px 0", overflow: "hidden", zIndex: 1,
         }}>
