@@ -350,8 +350,13 @@ export function LandingPage() {
         </div>
       </nav>
 
+      {/* ══ CLIP-TEXT — фото сквозь буквы, самый первый блок ══════════════ */}
+      <div style={{ paddingTop: 64 }}>
+        <ClipText />
+      </div>
+
       {/* ══ HERO — белый, гигантский градиентный текст (aroundbrand-style) ══ */}
-      <section style={{ background: WHITE, paddingTop: 64, minHeight: "100vh", display: "flex", flexDirection: "column", justifyContent: "center", position: "relative", overflow: "hidden" }}>
+      <section style={{ background: WHITE, minHeight: "100vh", display: "flex", flexDirection: "column", justifyContent: "center", position: "relative", overflow: "hidden" }}>
         <div style={{ padding: "80px 5vw 0", position: "relative", zIndex: 1 }}>
           {/* Top micro-label */}
           <div style={{ fontSize: 11, letterSpacing: 4, textTransform: "uppercase", color: "rgba(0,0,0,.3)", fontFamily: SANS, marginBottom: 40, animation: "fadeUp .9s ease both" }}>
@@ -455,9 +460,6 @@ export function LandingPage() {
           <MqTrack items={["Telegram", "Mini App", "Model Pro", "Agency", "Casting"]} size={28} color={WHITE} reverse italic />
         </div>
       </div>
-
-      {/* ══ CLIP-TEXT — фото сквозь буквы ═══════════════════════════════════ */}
-      <ClipText />
 
       {/* ══ EDITORIAL PHOTO GRID ════════════════════════════════════════════ */}
       <section id="castings" className="lp-section-pad-t" style={{ padding: "80px 48px 0" }}>
