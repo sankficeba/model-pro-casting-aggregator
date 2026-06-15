@@ -93,7 +93,6 @@ function useGlobalStyles() {
 
       .mq-track  { display:flex; width:max-content; animation: mq  30s linear infinite; }
       .mq-trackR { display:flex; width:max-content; animation: mqR 26s linear infinite; }
-      .mq-track:hover, .mq-trackR:hover { animation-play-state: paused; }
 
       .photo-card { position:relative; overflow:hidden; display:block; }
       .photo-card img {
