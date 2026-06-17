@@ -2,18 +2,26 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
 import { LandingPage } from "./LandingPage";
+import { OfferPage, PrivacyPage, ContactsPage } from "./LegalPages";
 import "./index.css";
 
-// /app и /app/* → Telegram Mini App, иначе → лендинг для браузера.
-const isMiniApp = window.location.pathname === "/app" || window.location.pathname.startsWith("/app/");
+const path = window.location.pathname;
+const isMiniApp = path === "/app" || path.startsWith("/app/");
 
 if (isMiniApp) {
-  // Warmup HTTPS-соединения с API: лёгкий GET /api/health (без auth).
   fetch("/api/health").catch(() => {});
+}
+
+function Root() {
+  if (isMiniApp)       return <App />;
+  if (path === "/offer")    return <OfferPage />;
+  if (path === "/privacy")  return <PrivacyPage />;
+  if (path === "/contacts") return <ContactsPage />;
+  return <LandingPage />;
 }
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    {isMiniApp ? <App /> : <LandingPage />}
+    <Root />
   </React.StrictMode>
 );

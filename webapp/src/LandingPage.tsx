@@ -757,11 +757,22 @@ export function LandingPage() {
           </div>
         </div>
         <div style={{ height: 1, background: "rgba(255,255,255,.06)", marginBottom: 24 }} />
-        <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 12, alignItems: "center" }}>
           <div style={{ fontSize: 11, color: "rgba(255,255,255,.16)", fontFamily: SANS }}>
             © {new Date().getFullYear()} Model Promo Agency. Все права защищены. · ИП Рябов Семён Кириллович
           </div>
-          <div style={{ fontSize: 11, color: "rgba(255,255,255,.16)", fontFamily: SANS }}>16+</div>
+          <div style={{ display: "flex", gap: 20, alignItems: "center" }}>
+            {[
+              { label: "Оферта",              href: "/offer"    },
+              { label: "Конфиденциальность",  href: "/privacy"  },
+              { label: "Контакты",            href: "/contacts" },
+            ].map(({ label, href }) => (
+              <a key={href} href={href} style={{ fontSize: 11, color: "rgba(255,255,255,.25)", textDecoration: "none", fontFamily: SANS }}>
+                {label}
+              </a>
+            ))}
+            <span style={{ fontSize: 11, color: "rgba(255,255,255,.16)", fontFamily: SANS }}>16+</span>
+          </div>
         </div>
       </footer>
     </div>
