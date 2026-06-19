@@ -17,18 +17,18 @@ const GRAD_TEXT = `linear-gradient(145deg, #1a1208 0%, #5c3a1e 45%, ${GOLD} 100%
 const GRAD_WARM = `linear-gradient(135deg, #1a1208 0%, #6b3d1e 50%, ${GOLD} 100%)`;
 
 const P = {
-  h1:     "https://images.unsplash.com/photo-1469334031218-e382a71b716b?w=1400&q=90",
-  h2:     "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=1400&q=90",
-  h3:     "https://images.unsplash.com/photo-1529139574466-a303027c1d8b?w=1400&q=90",
-  girl1:  "https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=900&q=85",
-  girl2:  "https://images.unsplash.com/photo-1524638431109-93d95c968f03?w=900&q=85",
-  man1:   "https://images.unsplash.com/photo-1488161628813-04466f872be2?w=900&q=85",
-  man2:   "https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?w=900&q=85",
-  event1: "https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=900&q=85",
-  event2: "https://images.unsplash.com/photo-1529543544282-ea669407fca3?w=900&q=85",
-  studio: "https://images.unsplash.com/photo-1581044777550-4cfa60707c03?w=900&q=85",
-  shoot1: "https://images.unsplash.com/photo-1574717024653-61fd2cf4d44d?w=900&q=85",
-  shoot2: "https://images.unsplash.com/photo-1509631179647-0177331693ae?w=900&q=85",
+  h1:     "/photos/h1.jpg",
+  h2:     "/photos/h2.jpg",
+  h3:     "/photos/h3.jpg",
+  girl1:  "/photos/girl1.jpg",
+  girl2:  "/photos/girl2.jpg",
+  man1:   "/photos/man1.jpg",
+  man2:   "/photos/man2.jpg",
+  event1: "/photos/event1.jpg",
+  event2: "/photos/event2.jpg",
+  studio: "/photos/studio.jpg",
+  shoot1: "/photos/shoot1.jpg",
+  shoot2: "/photos/shoot2.jpg",
 };
 
 const CLIP_PHOTOS = [P.h1, P.h2, P.h3, P.studio, P.event1, P.shoot2];
@@ -365,14 +365,41 @@ export function LandingPage() {
   useReveal();
   const scrollY = useScrollY();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [vpnToast, setVpnToast] = useState(false);
 
   useEffect(() => {
     document.body.style.overflow = menuOpen ? "hidden" : "";
     return () => { document.body.style.overflow = ""; };
   }, [menuOpen]);
 
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      const a = (e.target as Element).closest("a");
+      if (a?.href?.includes("t.me")) {
+        setVpnToast(true);
+        setTimeout(() => setVpnToast(false), 5000);
+      }
+    };
+    document.addEventListener("click", handler);
+    return () => document.removeEventListener("click", handler);
+  }, []);
+
   return (
     <div style={{ background: WHITE, fontFamily: SANS, color: BLACK, overflowX: "hidden" }}>
+
+      {vpnToast && (
+        <div style={{
+          position: "fixed", bottom: 28, left: "50%", transform: "translateX(-50%)",
+          zIndex: 9999, background: "#1a1208", color: WHITE,
+          padding: "13px 22px", borderRadius: 14, fontSize: 14, fontFamily: SANS,
+          boxShadow: "0 6px 32px rgba(0,0,0,.45)", display: "flex",
+          alignItems: "center", gap: 10, whiteSpace: "nowrap",
+          maxWidth: "calc(100vw - 48px)", animation: "fadeUp .25s ease",
+        }}>
+          <span style={{ fontSize: 18 }}>🔒</span>
+          <span>Если Telegram не открылся — включите VPN</span>
+        </div>
+      )}
 
       {/* ══ NAV — minimal, always white ══════════════════════════════════════ */}
       <nav className="lp-nav" style={{
