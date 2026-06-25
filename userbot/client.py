@@ -1036,6 +1036,74 @@ class Userbot:
             except Exception as e:  # noqa: BLE001
                 logger.exception("retry-join loop error: {}", e)
 
+    async def send_original_media(
+        self,
+        bot: "Bot",
+        user_id: int,
+        tg_chat_id: int | None,
+        tg_chat_username: str | None,
+        tg_message_id: int,
+        reply_to_msg_id: int,
+    ) -> None:
+        """Скачать медиафайлы оригинального поста и отправить пользователю через бота."""
+        from telethon.tl.types import MessageMediaDocument, MessageMediaPhoto
+        from aiogram.types import BufferedInputFile, ReplyParameters
+
+        entity = tg_chat_username or tg_chat_id
+        if not entity:
+            logger.warning("send_original_media: нет entity для msg_id={}", tg_message_id)
+            return
+
+        try:
+            target = await self.client.get_messages(entity, ids=tg_message_id)
+            if not target or not target.media:
+                return
+
+            # Собираем все сообщения альбома (grouped_id), иначе — одно
+            to_send = [target]
+            grouped_id = getattr(target, "grouped_id", None)
+            if grouped_id:
+                sibling_ids = list(range(max(1, tg_message_id - 9), tg_message_id + 10))
+                siblings = await self.client.get_messages(entity, ids=sibling_ids)
+                to_send = [
+                    m for m in (siblings if isinstance(siblings, list) else [siblings])
+                    if m and getattr(m, "grouped_id", None) == grouped_id
+                ]
+
+            MAX_BYTES = 50 * 1024 * 1024  # лимит Bot API
+            reply_params = ReplyParameters(message_id=reply_to_msg_id)
+
+            for m in to_send:
+                if not m or not m.media:
+                    continue
+                if hasattr(m, "file") and m.file and m.file.size and m.file.size > MAX_BYTES:
+                    logger.info(
+                        "Медиа слишком большое ({:.1f} MB), пропускаем",
+                        m.file.size / 1024 / 1024,
+                    )
+                    continue
+
+                try:
+                    data = await self.client.download_media(m, bytes)
+                    if not data:
+                        continue
+                    fname = (m.file.name if m.file and m.file.name else "media")
+                    buf = BufferedInputFile(data, filename=fname)
+
+                    if isinstance(m.media, MessageMediaPhoto):
+                        await bot.send_photo(user_id, buf, reply_parameters=reply_params)
+                    elif isinstance(m.media, MessageMediaDocument):
+                        mime = getattr(m.document, "mime_type", "") or ""
+                        if mime.startswith("video/"):
+                            await bot.send_video(user_id, buf, reply_parameters=reply_params)
+                        else:
+                            await bot.send_document(user_id, buf, reply_parameters=reply_params)
+                except Exception as e:  # noqa: BLE001
+                    logger.warning("Ошибка отправки медиаitem user={}: {}", user_id, e)
+
+        except Exception as e:  # noqa: BLE001
+            logger.warning("send_original_media error user={}: {}", user_id, e)
+
     async def start(self) -> None:
         await self.client.start(phone=settings.tg_phone)
         self._entities = await self._resolve_channels()

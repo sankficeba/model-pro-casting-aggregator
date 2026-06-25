@@ -39,7 +39,7 @@ def actions_rows(*, message_id: int, is_favorited: bool) -> list[list[InlineKeyb
     return [
         [
             InlineKeyboardButton(
-                text="Оригинальное сообщение",
+                text="Оригинал",
                 callback_data=f"details:{message_id}",
                 icon_custom_emoji_id=EMOJI_DETAILS,
             ),

@@ -684,6 +684,20 @@ def build_dispatcher(
                         delete_btn if len(remaining) <= MAX else None,
                     )
                     remaining = remaining[MAX:]
+
+            # Медиафайлы оригинального поста — в фоне, не блокируем ответ
+            if userbot is not None and query.message is not None:
+                src = await repository.get_message_source_ids(msg_id)
+                if src is not None:
+                    tg_chat_id, tg_chat_username, tg_message_id = src
+                    asyncio.create_task(userbot.send_original_media(
+                        bot=bot,
+                        user_id=query.from_user.id,  # type: ignore[union-attr]
+                        tg_chat_id=tg_chat_id,
+                        tg_chat_username=tg_chat_username,
+                        tg_message_id=tg_message_id,
+                        reply_to_msg_id=query.message.message_id,
+                    ))
         except Exception:  # noqa: BLE001
             await query.answer(link or "Ошибка отправки.", show_alert=True)
 
@@ -814,5 +828,14 @@ async def run_bot(
     userbot: Userbot | None = None,
 ) -> None:
     dp = build_dispatcher(bot, llm=llm, userbot=userbot)
+
+    @dp.startup()
+    async def _on_startup() -> None:
+        for admin_id in settings.admin_ids:
+            try:
+                await bot.send_message(admin_id, "✅ Деплой успешно завершён")
+            except Exception as e:  # noqa: BLE001
+                logger.warning("Deploy notify failed for admin {}: {}", admin_id, e)
+
     logger.info("aiogram-бот запущен")
     await dp.start_polling(bot)

@@ -737,6 +737,19 @@ async def get_message_text(message_id: int) -> str | None:
         )).scalar_one_or_none()
 
 
+async def get_message_source_ids(
+    message_id: int,
+) -> tuple[int | None, str | None, int] | None:
+    """Вернуть (tg_chat_id, tg_chat_username, tg_message_id) для сообщения."""
+    async with AsyncSessionLocal() as session:
+        msg = (await session.execute(
+            select(Message).where(Message.id == message_id)
+        )).scalar_one_or_none()
+        if msg is None:
+            return None
+        return msg.tg_chat_id, msg.tg_chat_username, msg.tg_message_id
+
+
 async def get_channel_link_for_message(message_id: int) -> tuple[str | None, str | None]:
     """Для message_id вернуть (link, channel_label).
     Логика:
