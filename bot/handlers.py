@@ -671,33 +671,50 @@ def build_dispatcher(
             else:
                 full = header
 
-            if len(full) <= MAX:
-                await _send_chunk(full, delete_btn)
-            else:
-                # Заголовок + ссылки в первом сообщении, текст — во втором
-                if header:
-                    await _send_chunk(header, None)
-                remaining = text_block
-                while remaining:
-                    await _send_chunk(
-                        remaining[:MAX],
-                        delete_btn if len(remaining) <= MAX else None,
-                    )
-                    remaining = remaining[MAX:]
-
-            # Медиафайлы оригинального поста — в фоне, не блокируем ответ
+            # Пробуем отправить медиа вместе с текстом как подписью
+            media_sent = False
             if userbot is not None and query.message is not None:
                 src = await repository.get_message_source_ids(msg_id)
                 if src is not None:
                     tg_chat_id, tg_chat_username, tg_message_id = src
-                    asyncio.create_task(userbot.send_original_media(
+                    # Если полный текст влезает в caption (≤1024) — всё в одном сообщении.
+                    # Иначе caption = только заголовок, полный текст отправим следом.
+                    CAPTION_LIMIT = 1024
+                    caption = full if len(full) <= CAPTION_LIMIT else header
+                    media_sent = await userbot.send_original_media(
                         bot=bot,
                         user_id=query.from_user.id,  # type: ignore[union-attr]
                         tg_chat_id=tg_chat_id,
                         tg_chat_username=tg_chat_username,
                         tg_message_id=tg_message_id,
                         reply_to_msg_id=query.message.message_id,
-                    ))
+                        caption_html=caption,
+                        reply_markup=delete_btn if len(full) <= CAPTION_LIMIT else None,
+                    )
+                    # Если caption был укорочен — отправляем полный текст отдельно
+                    if media_sent and len(full) > CAPTION_LIMIT:
+                        remaining = full
+                        while remaining:
+                            await _send_chunk(
+                                remaining[:MAX],
+                                delete_btn if len(remaining) <= MAX else None,
+                            )
+                            remaining = remaining[MAX:]
+
+            if not media_sent:
+                # Нет медиа или userbot недоступен — отправляем только текст
+                if len(full) <= MAX:
+                    await _send_chunk(full, delete_btn)
+                else:
+                    if header:
+                        await _send_chunk(header, None)
+                    remaining = text_block
+                    while remaining:
+                        await _send_chunk(
+                            remaining[:MAX],
+                            delete_btn if len(remaining) <= MAX else None,
+                        )
+                        remaining = remaining[MAX:]
         except Exception:  # noqa: BLE001
             await query.answer(link or "Ошибка отправки.", show_alert=True)
 

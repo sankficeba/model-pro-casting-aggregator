@@ -1044,20 +1044,31 @@ class Userbot:
         tg_chat_username: str | None,
         tg_message_id: int,
         reply_to_msg_id: int,
-    ) -> None:
-        """Скачать медиафайлы оригинального поста и отправить пользователю через бота."""
+        caption_html: str | None = None,
+        reply_markup=None,
+    ) -> bool:
+        """Скачать медиафайлы оригинального поста и отправить через бота.
+
+        caption_html — текст для подписи к медиа (HTML, макс. 1024 символа).
+        Возвращает True если хотя бы один файл был отправлен.
+        """
         from telethon.tl.types import MessageMediaDocument, MessageMediaPhoto
-        from aiogram.types import BufferedInputFile, ReplyParameters
+        from aiogram.types import (
+            BufferedInputFile,
+            InputMediaDocument,
+            InputMediaPhoto,
+            InputMediaVideo,
+            ReplyParameters,
+        )
 
         entity = tg_chat_username or tg_chat_id
         if not entity:
-            logger.warning("send_original_media: нет entity для msg_id={}", tg_message_id)
-            return
+            return False
 
         try:
             target = await self.client.get_messages(entity, ids=tg_message_id)
             if not target or not target.media:
-                return
+                return False
 
             # Собираем все сообщения альбома (grouped_id), иначе — одно
             to_send = [target]
@@ -1070,36 +1081,69 @@ class Userbot:
                     if m and getattr(m, "grouped_id", None) == grouped_id
                 ]
 
-            MAX_BYTES = 50 * 1024 * 1024  # лимит Bot API
+            MAX_BYTES = 50 * 1024 * 1024
+            CAPTION_LIMIT = 1024
             reply_params = ReplyParameters(message_id=reply_to_msg_id)
+            cap = caption_html[:CAPTION_LIMIT] if caption_html else None
 
+            # Скачиваем все файлы
+            items: list[tuple[bytes, str, str]] = []  # (data, media_type, fname)
             for m in to_send:
                 if not m or not m.media:
                     continue
                 if hasattr(m, "file") and m.file and m.file.size and m.file.size > MAX_BYTES:
-                    logger.info(
-                        "Медиа слишком большое ({:.1f} MB), пропускаем",
-                        m.file.size / 1024 / 1024,
-                    )
+                    logger.info("Медиа слишком большое ({:.1f} MB), пропускаем",
+                                m.file.size / 1024 / 1024)
                     continue
-
                 try:
                     data = await self.client.download_media(m, bytes)
                     if not data:
                         continue
                     fname = (m.file.name if m.file and m.file.name else "media")
-                    buf = BufferedInputFile(data, filename=fname)
-
                     if isinstance(m.media, MessageMediaPhoto):
-                        await bot.send_photo(user_id, buf, reply_parameters=reply_params)
+                        items.append((data, "photo", fname or "photo.jpg"))
                     elif isinstance(m.media, MessageMediaDocument):
                         mime = getattr(m.document, "mime_type", "") or ""
-                        if mime.startswith("video/"):
-                            await bot.send_video(user_id, buf, reply_parameters=reply_params)
-                        else:
-                            await bot.send_document(user_id, buf, reply_parameters=reply_params)
+                        mtype = "video" if mime.startswith("video/") else "document"
+                        items.append((data, mtype, fname or "file"))
                 except Exception as e:  # noqa: BLE001
-                    logger.warning("Ошибка отправки медиаitem user={}: {}", user_id, e)
+                    logger.warning("Ошибка скачивания медиаitem: {}", e)
+
+            if not items:
+                return False
+
+            if len(items) == 1:
+                data, mtype, fname = items[0]
+                buf = BufferedInputFile(data, filename=fname)
+                kw = dict(reply_parameters=reply_params, caption=cap,
+                          parse_mode="HTML" if cap else None,
+                          reply_markup=reply_markup)
+                if mtype == "photo":
+                    await bot.send_photo(user_id, buf, **kw)
+                elif mtype == "video":
+                    await bot.send_video(user_id, buf, **kw)
+                else:
+                    await bot.send_document(user_id, buf, **kw)
+            else:
+                # Альбом — caption на первый элемент, reply_markup недоступен
+                tg_media = []
+                for i, (data, mtype, fname) in enumerate(items):
+                    buf = BufferedInputFile(data, filename=fname)
+                    item_cap = cap if i == 0 else None
+                    item_pm = "HTML" if (i == 0 and cap) else None
+                    if mtype == "photo":
+                        tg_media.append(InputMediaPhoto(media=buf, caption=item_cap, parse_mode=item_pm))
+                    elif mtype == "video":
+                        tg_media.append(InputMediaVideo(media=buf, caption=item_cap, parse_mode=item_pm))
+                    else:
+                        tg_media.append(InputMediaDocument(media=buf, caption=item_cap, parse_mode=item_pm))
+                await bot.send_media_group(user_id, media=tg_media, reply_parameters=reply_params)
+
+            return True
+
+        except Exception as e:  # noqa: BLE001
+            logger.warning("send_original_media error user={}: {}", user_id, e)
+            return False
 
         except Exception as e:  # noqa: BLE001
             logger.warning("send_original_media error user={}: {}", user_id, e)
