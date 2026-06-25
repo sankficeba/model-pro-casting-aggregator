@@ -729,6 +729,14 @@ async def get_message_permalink(message_id: int) -> str | None:
         return None
 
 
+async def get_message_text(message_id: int) -> str | None:
+    """Вернуть оригинальный текст сообщения из БД."""
+    async with AsyncSessionLocal() as session:
+        return (await session.execute(
+            select(Message.text).where(Message.id == message_id)
+        )).scalar_one_or_none()
+
+
 async def get_channel_link_for_message(message_id: int) -> tuple[str | None, str | None]:
     """Для message_id вернуть (link, channel_label).
     Логика:

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import html
 
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import Command, CommandStart
@@ -620,36 +621,71 @@ def build_dispatcher(
         except (ValueError, IndexError):
             await query.answer("Битая кнопка.", show_alert=True)
             return
+
         link, label = await repository.get_channel_link_for_message(msg_id)
-        if link:
-            # Для приватных также прикрепляем прямую ссылку на сам пост
-            # (t.me/c/<id>/<msg_id>) — invite ведёт только на канал.
-            msg_url = await repository.get_message_permalink(msg_id)
-            body = f"🔗 Источник: <b>{label}</b>\n{link}"
-            if msg_url and msg_url != link:
-                body += f"\n\n📩 Сообщение: {msg_url}"
-            try:
-                await query.answer()
-                await query.message.answer(  # type: ignore[union-attr]
-                    body,
-                    parse_mode="HTML",
-                    disable_web_page_preview=False,
-                    reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
-                        InlineKeyboardButton(
-                            text="Удалить",
-                            callback_data="delself:",
-                            icon_custom_emoji_id=keyboards.EMOJI_DELETE,
-                        ),
-                    ]]),
-                )
-            except Exception:  # noqa: BLE001
-                await query.answer(link, show_alert=True)
-        else:
+        msg_url = await repository.get_message_permalink(msg_id)
+        msg_text = await repository.get_message_text(msg_id)
+
+        header_parts: list[str] = []
+        if label:
+            source_line = f"🔗 Источник: <b>{label}</b>"
+            if link:
+                source_line += f"\n{link}"
+            header_parts.append(source_line)
+        if msg_url and msg_url != link:
+            header_parts.append(f"📩 Сообщение: {msg_url}")
+
+        if not header_parts and not msg_text:
             txt = (
                 f"У админа пока не указана ссылка на {label or 'этот канал'}. "
                 "Попроси добавить её."
             )
             await query.answer(txt, show_alert=True)
+            return
+
+        header = "\n\n".join(header_parts)
+        text_block = f"📋 Оригинальный текст:\n{html.escape(msg_text)}" if msg_text else ""
+
+        # Разбиваем на чанки если суммарно > 4096 символов (лимит Telegram)
+        MAX = 4096
+        delete_btn = InlineKeyboardMarkup(inline_keyboard=[[
+            InlineKeyboardButton(
+                text="Удалить",
+                callback_data="delself:",
+                icon_custom_emoji_id=keyboards.EMOJI_DELETE,
+            ),
+        ]])
+
+        async def _send_chunk(text: str, markup: InlineKeyboardMarkup | None) -> None:
+            await query.message.reply(  # type: ignore[union-attr]
+                text,
+                parse_mode="HTML",
+                disable_web_page_preview=True,
+                reply_markup=markup,
+            )
+
+        try:
+            await query.answer()
+            if text_block:
+                full = f"{header}\n\n{text_block}" if header else text_block
+            else:
+                full = header
+
+            if len(full) <= MAX:
+                await _send_chunk(full, delete_btn)
+            else:
+                # Заголовок + ссылки в первом сообщении, текст — во втором
+                if header:
+                    await _send_chunk(header, None)
+                remaining = text_block
+                while remaining:
+                    await _send_chunk(
+                        remaining[:MAX],
+                        delete_btn if len(remaining) <= MAX else None,
+                    )
+                    remaining = remaining[MAX:]
+        except Exception:  # noqa: BLE001
+            await query.answer(link or "Ошибка отправки.", show_alert=True)
 
     @dp.callback_query(F.data == "delself:")
     async def cb_del_self(query: CallbackQuery) -> None:
