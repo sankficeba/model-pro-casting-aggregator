@@ -29,6 +29,7 @@ import { CreativeForm } from "./forms/CreativeForm";
 import { EventForm } from "./forms/EventForm";
 import { GeneralForm } from "./forms/GeneralForm";
 import { AdminForm } from "./forms/AdminForm";
+import { useLang } from "./i18n";
 
 type Screen =
   | { kind: "loading" }
@@ -46,6 +47,7 @@ type Screen =
   | { kind: "admin" };
 
 export default function App() {
+  const { t } = useLang();
   const [screen, setScreen] = useState<Screen>({ kind: "loading" });
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -131,7 +133,7 @@ export default function App() {
         window.location.hash;
       window.history.replaceState({}, "", cleanUrl);
       setPaymentToast(
-        "✅ Оплата прошла. Подписка активирована!"
+        t("✅ Оплата прошла. Подписка активирована!", "✅ Payment successful. Subscription activated!")
       );
       refreshAfterPayment();
     } else {
@@ -143,7 +145,7 @@ export default function App() {
     if (screen.kind === "loading") {
       return (
         <div className="min-h-screen flex items-center justify-center text-slate-400 text-sm">
-          Загружаем…
+          {t("Загружаем…", "Loading…")}
         </div>
       );
     }
@@ -152,13 +154,15 @@ export default function App() {
       return (
         <div className="min-h-screen p-6 space-y-4">
           <h1 className="text-xl font-semibold text-red-400">
-            Не удалось загрузить
+            {t("Не удалось загрузить", "Failed to load")}
           </h1>
           <p className="text-sm text-slate-300 break-words">{screen.msg}</p>
           {!isInTelegram() && (
             <p className="text-xs text-slate-500">
-              Похоже, страница открыта вне Telegram — initData отсутствует,
-              бэкенд возвращает 401. Откройте Mini App из бота.
+              {t(
+                "Похоже, страница открыта вне Telegram — initData отсутствует, бэкенд возвращает 401. Откройте Mini App из бота.",
+                "Looks like the page was opened outside Telegram — initData is missing, the backend returns 401. Open the Mini App from the bot.",
+              )}
             </p>
           )}
         </div>
@@ -178,7 +182,7 @@ export default function App() {
         <CategorySurveyScreen
           excludeCategories={subscriptions.map((s) => s.category)}
           onDone={refreshMe}
-          title="Добавить категорию"
+          title={t("Добавить категорию", "Add category")}
         />
       );
     }
@@ -247,7 +251,7 @@ export default function App() {
               className="flex items-center gap-1 px-4 py-3 text-slate-400 hover:text-white"
             >
               <ChevronLeft className="w-5 h-5" />
-              Назад
+              {t("Назад", "Back")}
             </button>
           </div>
           <FormComponent onDone={refreshMe} />

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { ChevronLeft, Zap, Inbox, Moon, Sun, PlayCircle } from "lucide-react";
 import { api } from "../api";
 import { tg } from "../telegram";
+import { useLang } from "../i18n";
 import type { DeliverySettings } from "../types";
 
 interface Props {
@@ -19,6 +20,7 @@ const DEFAULT: DeliverySettings = {
 };
 
 export function DeliverySettingsScreen({ onBack }: Props) {
+  const { t } = useLang();
   const [settings, setSettings] = useState<DeliverySettings>(DEFAULT);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -77,7 +79,7 @@ export function DeliverySettingsScreen({ onBack }: Props) {
   };
 
   if (loading) {
-    return <div className="p-6 text-slate-400">Загрузка…</div>;
+    return <div className="p-6 text-slate-400">{t("Загрузка…", "Loading…")}</div>;
   }
 
   return (
@@ -88,16 +90,16 @@ export function DeliverySettingsScreen({ onBack }: Props) {
           className="flex items-center gap-1 px-4 py-3 text-slate-400 hover:text-white transition"
         >
           <ChevronLeft className="w-5 h-5" />
-          Назад
+          {t("Назад", "Back")}
         </button>
       </div>
 
       <div className="p-5 space-y-5">
-        <h1 className="text-2xl font-semibold">Доставка уведомлений</h1>
+        <h1 className="text-2xl font-semibold">{t("Доставка уведомлений", "Notification delivery")}</h1>
 
         {/* Mode picker */}
         <div className="space-y-3">
-          <h2 className="text-sm uppercase tracking-wider text-slate-500">Режим</h2>
+          <h2 className="text-sm uppercase tracking-wider text-slate-500">{t("Режим", "Mode")}</h2>
           <button
             onClick={() => persist({ ...settings, delivery_mode: "instant" })}
             className={`w-full p-4 rounded-card border text-left flex items-start gap-3 transition ${
@@ -108,9 +110,12 @@ export function DeliverySettingsScreen({ onBack }: Props) {
           >
             <Zap className="w-5 h-5 mt-0.5 text-accent shrink-0" />
             <div className="flex-1">
-              <div className="font-medium">Сразу</div>
+              <div className="font-medium">{t("Сразу", "Instant")}</div>
               <div className="text-xs text-slate-400 mt-0.5">
-                Уведомления приходят сразу, как только появляется подходящий кастинг.
+                {t(
+                  "Уведомления приходят сразу, как только появляется подходящий кастинг.",
+                  "Notifications arrive as soon as a matching casting appears.",
+                )}
               </div>
             </div>
           </button>
@@ -135,10 +140,12 @@ export function DeliverySettingsScreen({ onBack }: Props) {
           >
             <Inbox className="w-5 h-5 mt-0.5 text-accent shrink-0" />
             <div className="flex-1">
-              <div className="font-medium">Накопить и просмотреть</div>
+              <div className="font-medium">{t("Накопить и просмотреть", "Collect and review")}</div>
               <div className="text-xs text-slate-400 mt-0.5">
-                Объявления копятся, ты листаешь их по одному в чате с ботом
-                кнопкой «Далее».
+                {t(
+                  "Объявления копятся, ты листаешь их по одному в чате с ботом кнопкой «Далее».",
+                  "Postings pile up, and you flip through them one by one in the bot chat with a \"Next\" button.",
+                )}
               </div>
             </div>
           </button>
@@ -153,13 +160,21 @@ export function DeliverySettingsScreen({ onBack }: Props) {
                 <div className="flex-1">
                   <div className="font-medium">
                     {reviewing
-                      ? "Открываем…"
-                      : `Пролистать накопленные объявления${
-                          settings.pending_count > 0 ? ` (${settings.pending_count})` : ""
-                        }`}
+                      ? t("Открываем…", "Opening…")
+                      : t(
+                          `Пролистать накопленные объявления${
+                            settings.pending_count > 0 ? ` (${settings.pending_count})` : ""
+                          }`,
+                          `Browse collected postings${
+                            settings.pending_count > 0 ? ` (${settings.pending_count})` : ""
+                          }`,
+                        )}
                   </div>
                   <div className="text-xs text-slate-400 mt-0.5">
-                    Mini App закроется, и в чате с ботом начнут приходить накопленные кастинги.
+                    {t(
+                      "Mini App закроется, и в чате с ботом начнут приходить накопленные кастинги.",
+                      "The Mini App will close, and collected castings will start arriving in the bot chat.",
+                    )}
                   </div>
                 </div>
               </button>
@@ -168,7 +183,7 @@ export function DeliverySettingsScreen({ onBack }: Props) {
                   role="status"
                   className="rounded-card border border-red-500/60 bg-red-950/30 text-red-200 text-sm px-3 py-2 animate-fade-in-out"
                 >
-                  Пока что новых объявлений нет.
+                  {t("Пока что новых объявлений нет.", "There are no new postings yet.")}
                 </div>
               )}
             </>
@@ -181,14 +196,17 @@ export function DeliverySettingsScreen({ onBack }: Props) {
             <h2 className="text-sm uppercase tracking-wider text-slate-500">
               <span className="inline-flex items-center gap-1.5">
                 <Sun className="w-4 h-4" />
-                Ежедневное напоминание
+                {t("Ежедневное напоминание", "Daily reminder")}
               </span>
             </h2>
             <label className="flex items-center justify-between p-4 rounded-card border border-bg-card cursor-pointer">
               <div className="flex-1">
-                <div className="font-medium">Присылать сводку в указанное время</div>
+                <div className="font-medium">{t("Присылать сводку в указанное время", "Send a digest at a set time")}</div>
                 <div className="text-xs text-slate-400 mt-0.5">
-                  Каждый день в выбранный час придёт «За сегодня — N кастингов, посмотреть?».
+                  {t(
+                    "Каждый день в выбранный час придёт «За сегодня — N кастингов, посмотреть?».",
+                    'Every day at the chosen hour you\'ll get "Today — N castings, want to see them?".',
+                  )}
                 </div>
               </div>
               <input
@@ -203,7 +221,7 @@ export function DeliverySettingsScreen({ onBack }: Props) {
             {settings.digest_daily_enabled && (
               <div className="px-1">
                 <label className="block space-y-1">
-                  <span className="text-xs text-slate-400">Время (МСК)</span>
+                  <span className="text-xs text-slate-400">{t("Время (МСК)", "Time (MSK)")}</span>
                   <select
                     value={settings.digest_daily_hour}
                     onChange={(e) =>
@@ -229,15 +247,17 @@ export function DeliverySettingsScreen({ onBack }: Props) {
           <h2 className="text-sm uppercase tracking-wider text-slate-500">
             <span className="inline-flex items-center gap-1.5">
               <Moon className="w-4 h-4" />
-              Ночной режим
+              {t("Ночной режим", "Night mode")}
             </span>
           </h2>
           <label className="flex items-center justify-between p-4 rounded-card border border-bg-card cursor-pointer">
             <div className="flex-1">
-              <div className="font-medium">Не присылать уведомления ночью</div>
+              <div className="font-medium">{t("Не присылать уведомления ночью", "Don't send notifications at night")}</div>
               <div className="text-xs text-slate-400 mt-0.5">
-                В указанное время объявления копятся. Утром придёт одно сообщение
-                «За ночь — N кастингов» с кнопкой «Далее».
+                {t(
+                  "В указанное время объявления копятся. Утром придёт одно сообщение «За ночь — N кастингов» с кнопкой «Далее».",
+                  'Postings pile up during the set hours. In the morning you\'ll get one message "Overnight — N castings" with a "Next" button.',
+                )}
               </div>
             </div>
             <input
@@ -252,7 +272,7 @@ export function DeliverySettingsScreen({ onBack }: Props) {
           {settings.night_mode_enabled && (
             <div className="grid grid-cols-2 gap-3 px-1">
               <label className="block space-y-1">
-                <span className="text-xs text-slate-400">С (МСК)</span>
+                <span className="text-xs text-slate-400">{t("С (МСК)", "From (MSK)")}</span>
                 <select
                   value={settings.night_start_hour}
                   onChange={(e) =>
@@ -266,7 +286,7 @@ export function DeliverySettingsScreen({ onBack }: Props) {
                 </select>
               </label>
               <label className="block space-y-1">
-                <span className="text-xs text-slate-400">До (МСК)</span>
+                <span className="text-xs text-slate-400">{t("До (МСК)", "To (MSK)")}</span>
                 <select
                   value={settings.night_end_hour}
                   onChange={(e) =>
@@ -289,10 +309,10 @@ export function DeliverySettingsScreen({ onBack }: Props) {
           </div>
         )}
         {savedToast && !error && (
-          <div className="text-xs text-emerald-400">Сохранено</div>
+          <div className="text-xs text-emerald-400">{t("Сохранено", "Saved")}</div>
         )}
         {saving && !savedToast && (
-          <div className="text-xs text-slate-500">Сохраняем…</div>
+          <div className="text-xs text-slate-500">{t("Сохраняем…", "Saving…")}</div>
         )}
       </div>
     </div>

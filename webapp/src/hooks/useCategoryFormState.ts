@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import type { CategoryCode, Refs } from "../types";
 import { useSuggestionsRefresh } from "../contexts/SuggestionsContext";
+import { useLang } from "../i18n";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type Data = Record<string, any>;
@@ -31,6 +32,7 @@ export function useCategoryFormState({
   onDone,
   initial = {},
 }: Options): State {
+  const { t } = useLang();
   const [data, setData] = useState<Data>(initial);
   const [refs, setRefs] = useState<Refs | null>(null);
   const [loading, setLoading] = useState(true);
@@ -73,7 +75,7 @@ export function useCategoryFormState({
   const finish = async () => {
     const missing = validate(data);
     if (missing.length > 0) {
-      setError("Заполни обязательные поля: " + missing.join(", "));
+      setError(t("Заполни обязательные поля: ", "Fill in the required fields: ") + missing.join(", "));
       return;
     }
     setSaving(true);

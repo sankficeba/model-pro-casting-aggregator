@@ -17,7 +17,8 @@ from loguru import logger
 from sqlalchemy import select
 
 from api import profile_repo
-from bot import keyboards
+from bot import i18n, keyboards
+from bot.i18n import Lang, t
 from bot.response import compose_response
 from config import settings
 from db import matching, repository
@@ -26,14 +27,24 @@ from db.session import AsyncSessionLocal
 from llm.base import LLMProvider
 from userbot.client import Userbot, _vacancy_title
 
-HELP_TEXT_USER = (
-    "<b>Команды:</b>\n"
-    "/start — приветствие\n"
-    "/review — посмотреть накопленные объявления (digest)\n"
-    "/help — помощь"
-)
 
-HELP_TEXT_ADMIN = HELP_TEXT_USER + (
+def _help_text_user(lang: Lang) -> str:
+    return t(
+        lang,
+        "<b>Команды:</b>\n"
+        "/start — приветствие\n"
+        "/review — посмотреть накопленные объявления (digest)\n"
+        "/language — сменить язык\n"
+        "/help — помощь",
+        "<b>Commands:</b>\n"
+        "/start — welcome message\n"
+        "/review — view accumulated postings (digest)\n"
+        "/language — change language\n"
+        "/help — help",
+    )
+
+# Админ-команды остаются на русском — интерфейс только для владельца бота.
+HELP_TEXT_ADMIN_TAIL = (
     "\n\n<b>Админ:</b>\n"
     "/channels — список каналов\n"
     "/addchannel @username — добавить канал\n"
@@ -97,37 +108,56 @@ async def _process_admin_broadcast(
         parse_mode="HTML",
     )
 
-GREETING = (
-    "<b>Добро пожаловать в Model Promo Agency!</b> 👋\n\n"
-    "Мы рады видеть тебя в нашей команде. Это не просто бот, а мощный "
-    "агрегатор вакансий: мы в реальном времени анализируем огромную сеть "
-    "каналов и агентств, чтобы ты получал уведомления о кастингах и работе "
-    "самым первым! 🚀\n\n"
-    "<b>Кого мы ищем?</b>\n"
-    "У нас открыт набор на следующие направления:\n\n"
-    "🛠 <b>Разнорабочие:</b> хелперы, клининг, грузчики.\n"
-    "🎉 <b>Event-персонал:</b> хостес, промо-модели, аниматоры.\n"
-    "📸 <b>Творческие позиции:</b> актёры и модели.\n"
-    "💻 <b>Администрирование:</b> операторы регистрации, супервайзеры.\n\n"
-    "<b>Как начать зарабатывать?</b>\n"
-    "Чтобы не пропускать лучшие предложения и настроить уведомления, "
-    "открой Mini App рядом с полем ввода и заполни короткую анкету — "
-    "там можно выбрать интересующие тебя категории."
-)
+def _greeting(lang: Lang) -> str:
+    return t(
+        lang,
+        "<b>Добро пожаловать в Model Promo Agency!</b> 👋\n\n"
+        "Мы рады видеть тебя в нашей команде. Это не просто бот, а мощный "
+        "агрегатор вакансий: мы в реальном времени анализируем огромную сеть "
+        "каналов и агентств, чтобы ты получал уведомления о кастингах и работе "
+        "самым первым! 🚀\n\n"
+        "<b>Кого мы ищем?</b>\n"
+        "У нас открыт набор на следующие направления:\n\n"
+        "🛠 <b>Разнорабочие:</b> хелперы, клининг, грузчики.\n"
+        "🎉 <b>Event-персонал:</b> хостес, промо-модели, аниматоры.\n"
+        "📸 <b>Творческие позиции:</b> актёры и модели.\n"
+        "💻 <b>Администрирование:</b> операторы регистрации, супервайзеры.\n\n"
+        "<b>Как начать зарабатывать?</b>\n"
+        "Чтобы не пропускать лучшие предложения и настроить уведомления, "
+        "открой Mini App рядом с полем ввода и заполни короткую анкету — "
+        "там можно выбрать интересующие тебя категории.",
+        "<b>Welcome to Model Promo Agency!</b> 👋\n\n"
+        "We're glad to have you on the team. This isn't just a bot — it's a "
+        "powerful job aggregator: we analyze a huge network of channels and "
+        "agencies in real time so you're the first to hear about castings and "
+        "gigs! 🚀\n\n"
+        "<b>Who are we looking for?</b>\n"
+        "We're currently recruiting for the following areas:\n\n"
+        "🛠 <b>General labor:</b> helpers, cleaning, loaders.\n"
+        "🎉 <b>Event staff:</b> hostesses, promo models, animators.\n"
+        "📸 <b>Creative positions:</b> actors and models.\n"
+        "💻 <b>Administration:</b> registration operators, supervisors.\n\n"
+        "<b>How to start earning?</b>\n"
+        "To never miss the best offers and set up notifications, open the "
+        "Mini App next to the text field and fill out a short profile — "
+        "you can pick the categories you're interested in there.",
+    )
 
 
 def _is_admin(user_id: int | None) -> bool:
     return user_id is not None and user_id in settings.admin_ids
 
 
-def _help_for(user_id: int | None) -> str:
-    return HELP_TEXT_ADMIN if _is_admin(user_id) else HELP_TEXT_USER
+def _help_for(user_id: int | None, lang: Lang) -> str:
+    base = _help_text_user(lang)
+    return base + HELP_TEXT_ADMIN_TAIL if _is_admin(user_id) else base
 
 
 async def _build_digest_message(
     user_id: int,
     message_id: int,
     matched_vacancy_ids: list[int],
+    lang: Lang = "ru",
 ) -> tuple[str, InlineKeyboardMarkup] | None:
     """Загрузить message+vacancies и собрать digest-уведомление с кнопками
     Отклик/Следующее. Возвращает None если canonical исчез."""
@@ -177,28 +207,31 @@ async def _build_digest_message(
         chat_username=canon_msg.tg_chat_username,
         effective_category=eff_cat,
         invite_link=fallback_link,
+        lang=lang,
     )
 
     pending_left = await repository.count_pending(user_id)
-    text += f"\n\n<i>Осталось нерассмотренных: {pending_left}</i>"
+    text += "\n\n<i>" + t(
+        lang, f"Осталось нерассмотренных: {pending_left}", f"Left to review: {pending_left}"
+    ) + "</i>"
 
     kb_buttons: list[list[InlineKeyboardButton]] = []
     for i in matched_idxs:
         v = canon_vacancies[i]
-        title = _vacancy_title(vac_extractions[i])
+        title = _vacancy_title(vac_extractions[i], lang)
         kb_buttons.append([
             InlineKeyboardButton(
-                text=f"Сгенерировать отклик: {title}"[:64],
+                text=t(lang, f"Сгенерировать отклик: {title}", f"Generate response: {title}")[:64],
                 callback_data=f"respond:{v.id}",
                 icon_custom_emoji_id=keyboards.EMOJI_RESPOND,
             )
         ])
     fav_state = await repository.is_favorited(user_id, canonical_id)
-    kb_buttons += keyboards.actions_rows(message_id=canonical_id, is_favorited=fav_state)
+    kb_buttons += keyboards.actions_rows(message_id=canonical_id, is_favorited=fav_state, lang=lang)
     if pending_left > 0:
         kb_buttons.append([
             InlineKeyboardButton(
-                text="следующая вакансия",
+                text=t(lang, "следующая вакансия", "next posting"),
                 callback_data="digest:next",
                 icon_custom_emoji_id=keyboards.EMOJI_NEXT,
             )
@@ -206,7 +239,7 @@ async def _build_digest_message(
     return text, InlineKeyboardMarkup(inline_keyboard=kb_buttons)
 
 
-async def _send_next_pending(bot: Bot, user_id: int) -> bool:
+async def _send_next_pending(bot: Bot, user_id: int, lang: Lang = "ru") -> bool:
     """Извлечь следующее pending и отправить юзеру. Возвращает True если
     что-то отправлено, False если очередь пуста (или canonical исчез)."""
     while True:
@@ -226,7 +259,7 @@ async def _send_next_pending(bot: Bot, user_id: int) -> bool:
             # Уже было — попробуем следующее
             continue
         built = await _build_digest_message(
-            user_id, item["message_id"], item["matched_vacancy_ids"]
+            user_id, item["message_id"], item["matched_vacancy_ids"], lang,
         )
         if built is None:
             continue
@@ -285,6 +318,7 @@ def build_dispatcher(
 
     @dp.message(CommandStart())
     async def cmd_start(message: Message) -> None:
+        lang = await i18n.get_lang(message.from_user.id, message.from_user.language_code)
         await repository.upsert_user(
             message.from_user.id,
             username=message.from_user.username,
@@ -304,36 +338,74 @@ def build_dispatcher(
             # Если только что стартовали trial — сообщим об этом.
             status = await repository.get_subscription_status(message.from_user.id)
             if status["is_active"]:
-                trial_note = (
-                    f"\n\n🎁 <b>Пробный период активирован</b> — "
+                trial_note = "\n\n" + t(
+                    lang,
+                    f"🎁 <b>Пробный период активирован</b> — "
                     f"бесплатно на {settings.subscription_trial_days} дней "
-                    f"(до {active_until.strftime('%d.%m.%Y')})."
+                    f"(до {active_until.strftime('%d.%m.%Y')}).",
+                    f"🎁 <b>Trial period activated</b> — "
+                    f"free for {settings.subscription_trial_days} days "
+                    f"(until {active_until.strftime('%m/%d/%Y')}).",
                 )
         await message.answer(
-            GREETING + trial_note + "\n\n" + _help_for(message.from_user.id),
+            _greeting(lang) + trial_note + "\n\n" + _help_for(message.from_user.id, lang),
             parse_mode="HTML",
             reply_markup=ReplyKeyboardRemove(),
         )
 
     @dp.message(Command("help"))
     async def cmd_help(message: Message) -> None:
-        await message.answer(_help_for(message.from_user.id), parse_mode="HTML")
+        lang = await i18n.get_lang(message.from_user.id, message.from_user.language_code)
+        await message.answer(_help_for(message.from_user.id, lang), parse_mode="HTML")
+
+    @dp.message(Command("language"))
+    async def cmd_language(message: Message) -> None:
+        lang = await i18n.get_lang(message.from_user.id, message.from_user.language_code)
+        kb = InlineKeyboardMarkup(inline_keyboard=[[
+            InlineKeyboardButton(text="🇷🇺 Русский", callback_data="lang:set:ru"),
+            InlineKeyboardButton(text="🇬🇧 English", callback_data="lang:set:en"),
+        ]])
+        await message.answer(
+            t(lang, "Выбери язык интерфейса бота:", "Choose the bot's interface language:"),
+            reply_markup=kb,
+        )
+
+    @dp.callback_query(F.data.startswith("lang:set:"))
+    async def cb_language_set(query: CallbackQuery) -> None:
+        if not query.from_user:
+            return
+        new_lang = (query.data or "").split(":", 2)[2]
+        if new_lang not in ("ru", "en"):
+            await query.answer()
+            return
+        await repository.set_user_language(query.from_user.id, new_lang)
+        try:
+            await query.message.edit_text(  # type: ignore[union-attr]
+                t(new_lang, "Готово — язык переключён на русский.", "Done — language switched to English.")
+            )
+        except Exception:  # noqa: BLE001
+            pass
+        await query.answer()
 
     @dp.message(Command("review"))
     async def cmd_review(message: Message) -> None:
         """Начать рассматривать накопленные объявления (digest mode)."""
-        sent = await _send_next_pending(bot, message.from_user.id)
+        lang = await i18n.get_lang(message.from_user.id, message.from_user.language_code)
+        sent = await _send_next_pending(bot, message.from_user.id, lang)
         if not sent:
-            await message.answer("Пока что новых объявлений нет.")
+            await message.answer(t(lang, "Пока что новых объявлений нет.", "No new postings yet."))
 
     @dp.callback_query(F.data == "digest:next")
     async def cb_digest_next(query: CallbackQuery) -> None:
         if not query.from_user:
             return
-        sent = await _send_next_pending(bot, query.from_user.id)
+        lang = await i18n.get_lang(query.from_user.id, query.from_user.language_code)
+        sent = await _send_next_pending(bot, query.from_user.id, lang)
         if not sent:
             try:
-                await query.message.answer("Пока что новых объявлений нет.")  # type: ignore[union-attr]
+                await query.message.answer(  # type: ignore[union-attr]
+                    t(lang, "Пока что новых объявлений нет.", "No new postings yet.")
+                )
             except Exception:  # noqa: BLE001
                 pass
         await query.answer()
@@ -448,8 +520,9 @@ def build_dispatcher(
     @dp.message(Command("cancel"))
     async def cmd_cancel(message: Message) -> None:
         if not _is_admin(message.from_user.id):
+            lang = await i18n.get_lang(message.from_user.id, message.from_user.language_code)
             await message.answer(
-                "Нечего отменять. " + _help_for(message.from_user.id),
+                t(lang, "Нечего отменять. ", "Nothing to cancel. ") + _help_for(message.from_user.id, lang),
                 parse_mode="HTML",
             )
             return
@@ -568,17 +641,21 @@ def build_dispatcher(
     @dp.callback_query(F.data.startswith("respond:"))
     async def cb_respond(query: CallbackQuery) -> None:
         # callback_data: "respond:<vacancy_id>"
+        lang = await i18n.get_lang(
+            query.from_user.id if query.from_user else 0,
+            query.from_user.language_code if query.from_user else None,
+        )
         try:
             vacancy_id = int((query.data or "").split(":", 1)[1])
         except (ValueError, IndexError):
-            await query.answer("Некорректные данные кнопки.", show_alert=True)
+            await query.answer(t(lang, "Некорректные данные кнопки.", "Invalid button data."), show_alert=True)
             return
 
         user_id = query.from_user.id if query.from_user else 0
 
         loaded = await repository.get_vacancy_with_message(vacancy_id)
         if loaded is None:
-            await query.answer("Вакансия не найдена.", show_alert=True)
+            await query.answer(t(lang, "Вакансия не найдена.", "Posting not found."), show_alert=True)
             return
         vacancy, message_row = loaded
 
@@ -586,7 +663,11 @@ def build_dispatcher(
         rp = await repository.get_response_profile(user_id, category)
         if rp is None:
             await query.answer(
-                "Сначала заполни анкету в Mini App — без неё нечего вставлять в отклик.",
+                t(
+                    lang,
+                    "Сначала заполни анкету в Mini App — без неё нечего вставлять в отклик.",
+                    "Fill out your profile in the Mini App first — there's nothing to put in a response without it.",
+                ),
                 show_alert=True,
             )
             return
@@ -602,24 +683,35 @@ def build_dispatcher(
         body = escape(text)
         try:
             await query.message.answer(  # type: ignore[union-attr]
-                f"<b>Готовый отклик</b> — нажми и удерживай, чтобы скопировать:\n\n<pre>{body}</pre>",
+                t(
+                    lang,
+                    f"<b>Готовый отклик</b> — нажми и удерживай, чтобы скопировать:\n\n<pre>{body}</pre>",
+                    f"<b>Response ready</b> — tap and hold to copy:\n\n<pre>{body}</pre>",
+                ),
                 parse_mode="HTML",
                 disable_web_page_preview=True,
             )
             await query.answer()
         except Exception as e:  # noqa: BLE001
             logger.warning("Не удалось отправить отклик user={}: {}", user_id, e)
-            await query.answer("Не получилось отправить отклик. Попробуй ещё раз.", show_alert=True)
+            await query.answer(
+                t(lang, "Не получилось отправить отклик. Попробуй ещё раз.", "Couldn't send the response. Please try again."),
+                show_alert=True,
+            )
 
     # ---------- Inline-кнопки под уведомлением: Подробнее / Удалить / Избранное ----------
 
     @dp.callback_query(F.data.startswith("details:"))
     async def cb_details(query: CallbackQuery) -> None:
         # callback_data: "details:<message_db_id>"
+        lang = await i18n.get_lang(
+            query.from_user.id if query.from_user else 0,
+            query.from_user.language_code if query.from_user else None,
+        )
         try:
             msg_id = int((query.data or "").split(":", 1)[1])
         except (ValueError, IndexError):
-            await query.answer("Битая кнопка.", show_alert=True)
+            await query.answer(t(lang, "Битая кнопка.", "Broken button."), show_alert=True)
             return
 
         link, label = await repository.get_channel_link_for_message(msg_id)
@@ -628,29 +720,34 @@ def build_dispatcher(
 
         header_parts: list[str] = []
         if label:
-            source_line = f"🔗 Источник: <b>{label}</b>"
+            source_line = t(lang, "🔗 Источник: ", "🔗 Source: ") + f"<b>{label}</b>"
             if link:
                 source_line += f"\n{link}"
             header_parts.append(source_line)
         if msg_url and msg_url != link:
-            header_parts.append(f"📩 Сообщение: {msg_url}")
+            header_parts.append(t(lang, "📩 Сообщение: ", "📩 Message: ") + msg_url)
 
         if not header_parts and not msg_text:
-            txt = (
-                f"У админа пока не указана ссылка на {label or 'этот канал'}. "
-                "Попроси добавить её."
+            channel_ref = label or t(lang, "этот канал", "this channel")
+            txt = t(
+                lang,
+                f"У админа пока не указана ссылка на {channel_ref}. Попроси добавить её.",
+                f"The admin hasn't set a link for {channel_ref} yet. Ask them to add it.",
             )
             await query.answer(txt, show_alert=True)
             return
 
         header = "\n\n".join(header_parts)
-        text_block = f"📋 Оригинальный текст:\n{html.escape(msg_text)}" if msg_text else ""
+        text_block = (
+            t(lang, "📋 Оригинальный текст:\n", "📋 Original text:\n") + html.escape(msg_text)
+            if msg_text else ""
+        )
 
         # Разбиваем на чанки если суммарно > 4096 символов (лимит Telegram)
         MAX = 4096
         delete_btn = InlineKeyboardMarkup(inline_keyboard=[[
             InlineKeyboardButton(
-                text="Удалить",
+                text=t(lang, "Удалить", "Delete"),
                 callback_data="delself:",
                 icon_custom_emoji_id=keyboards.EMOJI_DELETE,
             ),
@@ -716,11 +813,15 @@ def build_dispatcher(
                         )
                         remaining = remaining[MAX:]
         except Exception:  # noqa: BLE001
-            await query.answer(link or "Ошибка отправки.", show_alert=True)
+            await query.answer(link or t(lang, "Ошибка отправки.", "Failed to send."), show_alert=True)
 
     @dp.callback_query(F.data == "delself:")
     async def cb_del_self(query: CallbackQuery) -> None:
         """Удалить из чата само сообщение, на котором висит кнопка."""
+        lang = await i18n.get_lang(
+            query.from_user.id if query.from_user else 0,
+            query.from_user.language_code if query.from_user else None,
+        )
         try:
             await query.message.delete()  # type: ignore[union-attr]
         except Exception:  # noqa: BLE001
@@ -728,37 +829,41 @@ def build_dispatcher(
                 await query.message.edit_reply_markup(reply_markup=None)  # type: ignore[union-attr]
             except Exception:  # noqa: BLE001
                 pass
-        await query.answer("Удалено.")
+        await query.answer(t(lang, "Удалено.", "Deleted."))
 
     @dp.callback_query(F.data.startswith("fav:"))
     async def cb_fav(query: CallbackQuery) -> None:
         """callback_data: 'fav:add:<msg_id>' / 'fav:rm:<msg_id>'."""
+        lang = await i18n.get_lang(
+            query.from_user.id if query.from_user else 0,
+            query.from_user.language_code if query.from_user else None,
+        )
         parts = (query.data or "").split(":", 2)
         if len(parts) < 3:
-            await query.answer("Битая кнопка.", show_alert=True)
+            await query.answer(t(lang, "Битая кнопка.", "Broken button."), show_alert=True)
             return
         action = parts[1]
         try:
             msg_id = int(parts[2])
         except ValueError:
-            await query.answer("Битая кнопка.", show_alert=True)
+            await query.answer(t(lang, "Битая кнопка.", "Broken button."), show_alert=True)
             return
         user_id = query.from_user.id if query.from_user else 0
         if not user_id:
-            await query.answer("Не удалось определить юзера.", show_alert=True)
+            await query.answer(t(lang, "Не удалось определить юзера.", "Couldn't identify the user."), show_alert=True)
             return
 
         if action == "add":
             matched_ids = await repository.get_matched_vacancy_ids(user_id, msg_id)
             await repository.add_favorite(user_id, msg_id, matched_ids)
             new_state = True
-            popup = "Добавлено в избранное ⭐"
+            popup = t(lang, "Добавлено в избранное ⭐", "Added to favorites ⭐")
         elif action == "rm":
             await repository.remove_favorite(user_id, msg_id)
             new_state = False
-            popup = "Убрано из избранного"
+            popup = t(lang, "Убрано из избранного", "Removed from favorites")
         else:
-            await query.answer("Неизвестное действие.", show_alert=True)
+            await query.answer(t(lang, "Неизвестное действие.", "Unknown action."), show_alert=True)
             return
 
         # Перерисовать клавиатуру: подменяем ТОЛЬКО ряд с fav-кнопкой,
@@ -770,7 +875,7 @@ def build_dispatcher(
                 old_rows = list(msg.reply_markup.inline_keyboard)
                 # Свежий fav-ряд (одиночный).
                 fav_row = keyboards.actions_rows(
-                    message_id=msg_id, is_favorited=new_state,
+                    message_id=msg_id, is_favorited=new_state, lang=lang,
                 )[-1]
                 new_rows: list = []
                 for row in old_rows:
@@ -831,8 +936,13 @@ def build_dispatcher(
                 await _process_admin_broadcast(bot, message, pending)
                 return
         if message.text:
+            lang = await i18n.get_lang(
+                from_user.id if from_user else 0,
+                from_user.language_code if from_user else None,
+            )
             await message.answer(
-                "Не понял. " + _help_for(from_user.id if from_user else None),
+                t(lang, "Не понял. ", "Didn't understand. ")
+                + _help_for(from_user.id if from_user else None, lang),
                 parse_mode="HTML",
             )
 

@@ -23,27 +23,55 @@ from telethon.tl.functions.messages import (
 )
 
 from api.reference_data import all_refs
+from bot.i18n import Lang, get_lang, t
 from config import settings
 from db import matching, repository
 from db.dedup import text_hash
 from llm.base import LLMBillingError, LLMProvider
 from models.schemas import PostExtraction, VacancyExtraction
 
-_REFS = all_refs()
+_REFS = all_refs("ru")
+_REFS_EN = all_refs("en")
 _PROJECT_LABELS = {it["code"]: it["label"] for it in _REFS["project_types"]}
+_PROJECT_LABELS_EN = {it["code"]: it["label"] for it in _REFS_EN["project_types"]}
 _ROLE_LABELS = {it["code"]: it["label"] for it in _REFS["role_types"]}
+_ROLE_LABELS_EN = {it["code"]: it["label"] for it in _REFS_EN["role_types"]}
 _WORK_TYPE_LABELS = {
     it["code"]: it["label"]
     for ref_key in ("work_types_event", "work_types_general", "work_types_admin")
     for it in _REFS[ref_key]
 }
+_WORK_TYPE_LABELS_EN = {
+    it["code"]: it["label"]
+    for ref_key in ("work_types_event", "work_types_general", "work_types_admin")
+    for it in _REFS_EN[ref_key]
+}
 
-# Per-category эмодзи (fallback unicode) + русское название для шапки.
+
+def _project_labels(lang: Lang) -> dict[str, str]:
+    return _PROJECT_LABELS_EN if lang == "en" else _PROJECT_LABELS
+
+
+def _role_labels(lang: Lang) -> dict[str, str]:
+    return _ROLE_LABELS_EN if lang == "en" else _ROLE_LABELS
+
+
+def _work_type_labels(lang: Lang) -> dict[str, str]:
+    return _WORK_TYPE_LABELS_EN if lang == "en" else _WORK_TYPE_LABELS
+
+
+# Per-category эмодзи (fallback unicode) + название для шапки.
 _CATEGORY_HEADERS = {
     "creative": ("🎬", "Творческие позиции"),
     "event":    ("🎉", "Event-персонал"),
     "general":  ("🛠", "Разнорабочие"),
     "admin":    ("🌟", "Администрирование"),
+}
+_CATEGORY_HEADERS_EN = {
+    "creative": ("🎬", "Creative positions"),
+    "event":    ("🎉", "Event staff"),
+    "general":  ("🛠", "General labor"),
+    "admin":    ("🌟", "Administration"),
 }
 
 # Premium custom-emoji IDs per category для inline-рендера в HTML тег
@@ -101,23 +129,24 @@ def _labels(codes: list[str], mapping: dict[str, str]) -> str:
     return ", ".join(mapping.get(c, c) for c in codes)
 
 
-def _format_age(v: VacancyExtraction) -> str:
+def _format_age(v: VacancyExtraction, lang: Lang = "ru") -> str:
     if v.age_min is not None and v.age_max is not None:
         return f"{v.age_min}" if v.age_min == v.age_max else f"{v.age_min}–{v.age_max}"
     if v.age_min is not None:
-        return f"от {v.age_min}"
+        return t(lang, f"от {v.age_min}", f"from {v.age_min}")
     if v.age_max is not None:
-        return f"до {v.age_max}"
+        return t(lang, f"до {v.age_max}", f"up to {v.age_max}")
     return "—"
 
 
-def _vacancy_title(v: VacancyExtraction) -> str:
-    """role_label если есть → русский label из справочника → 'Роль'."""
+def _vacancy_title(v: VacancyExtraction, lang: Lang = "ru") -> str:
+    """role_label если есть (как извлёк LLM, обычно на русском — исходный
+    пост тоже русский) → label из справочника на нужном языке → fallback."""
     if v.role_label:
         return v.role_label
     if v.role_types:
-        return _ROLE_LABELS.get(v.role_types[0], v.role_types[0])
-    return "Роль"
+        return _role_labels(lang).get(v.role_types[0], v.role_types[0])
+    return t(lang, "Роль", "Role")
 
 
 class Userbot:
@@ -407,12 +436,18 @@ class Userbot:
         chat_username: str | None,
         effective_category: str | None = None,
         invite_link: str | None = None,
+        lang: Lang = "ru",
     ) -> str:
         """Карточка для пользователя. Перечисляет только подошедшие вакансии.
 
         `invite_link` — fallback URL для приватных каналов: если у канала нет
         username (приватка), но есть admin-выставленная invite-ссылка, ставим
         её в «Открыть сообщение» — лучше чем ничего.
+
+        Заголовки/лейблы переводятся через `lang`. Свободный текст поста
+        (`post.summary`, `vacancy.description`, `role_label`, `post.city`) —
+        как извлёк LLM из исходного канала, канал русскоязычный, поэтому эти
+        поля остаются на русском независимо от `lang`.
         """
         link = ""
         if chat_username:
@@ -421,9 +456,8 @@ class Userbot:
             link = invite_link
 
         eff_cat = effective_category or post.category or "creative"
-        emoji, cat_label = _CATEGORY_HEADERS.get(
-            eff_cat, ("🎬", "Творческие позиции"),
-        )
+        headers = _CATEGORY_HEADERS_EN if lang == "en" else _CATEGORY_HEADERS
+        emoji, cat_label = headers.get(eff_cat, headers["creative"])
         # Premium-эмодзи в шапке — per-category. Если для категории нет
         # premium-id, fallback к обычному unicode.
         header_premium_id = _PREMIUM_CATEGORY_EMOJI_ID.get(eff_cat)
@@ -434,7 +468,9 @@ class Userbot:
         # Для creative показываем project_types; для остальных — work_types
         # из подошедших вакансий (всё равно они одной категории).
         if eff_cat == "creative":
-            meta_left = f"Тип проекта: {_labels(list(post.project_types), _PROJECT_LABELS)}"
+            meta_left = t(lang, "Тип проекта: ", "Project type: ") + _labels(
+                list(post.project_types), _project_labels(lang),
+            )
         else:
             shown_work_types: list[str] = []
             seen: set[str] = set()
@@ -443,7 +479,9 @@ class Userbot:
                     if code not in seen:
                         seen.add(code)
                         shown_work_types.append(code)
-            meta_left = f"Должности: {_labels(shown_work_types, _WORK_TYPE_LABELS)}"
+            meta_left = t(lang, "Должности: ", "Positions: ") + _labels(
+                shown_work_types, _work_type_labels(lang),
+            )
 
         # Дата съёмки/смены — собираем из shooting_date матчнутых вакансий.
         shooting_dates: list[str] = []
@@ -467,8 +505,8 @@ class Userbot:
         # Упрощённая эвристика — если строка содержит «:» или «утром/днём/
         # вечером/ночью» считаем что есть время.
         time_markers = (":", "утром", "днём", "днем", "вечером", "ночью", "ночная", "утра", "дня", "вечера")
-        has_time = any(any(t in d.lower() for t in time_markers) for d in shooting_dates)
-        label = "Дата и время" if has_time else "Дата"
+        has_time = any(any(m in d.lower() for m in time_markers) for d in shooting_dates)
+        label = t(lang, "Дата и время", "Date and time") if has_time else t(lang, "Дата", "Date")
         date_line = (
             f"{_premium_emoji(_PREMIUM_DATE_EMOJI_ID, '🗓')} "
             f"<b>{label}:</b> {joined_date}"
@@ -476,35 +514,37 @@ class Userbot:
         )
 
         lines: list[str] = [
-            f"<b>{header_emoji_html} Подходящая вакансия — {cat_label}</b>",
+            f"<b>{header_emoji_html} " + t(lang, "Подходящая вакансия — ", "Matching posting — ") + f"{cat_label}</b>",
         ]
         if date_line:
             lines.append("")
             lines.append(date_line)
         lines.append("")
-        lines.append(f"{meta_left} | Город: {post.city or '—'}")
-        lines.append(f"<b>Подходящие роли ({len(matched_idxs)}):</b>")
+        city_label = t(lang, "Город", "City")
+        lines.append(f"{meta_left} | {city_label}: {post.city or '—'}")
+        lines.append("<b>" + t(lang, f"Подходящие роли ({len(matched_idxs)}):", f"Matching roles ({len(matched_idxs)}):") + "</b>")
         for idx in matched_idxs:
             v = vacancies[idx]
-            gender_ru = {"male": "м", "female": "ж"}.get(v.gender or "", "—")
-            rate_str = f"{v.rate} ₽" if v.rate is not None else "ставка не указана"
+            gender_label = {"male": t(lang, "м", "m"), "female": t(lang, "ж", "f")}.get(v.gender or "", "—")
+            rate_str = f"{v.rate} ₽" if v.rate is not None else t(lang, "ставка не указана", "rate not specified")
             extras: list[str] = []
             if v.height_min is not None or v.height_max is not None:
                 lo = v.height_min if v.height_min is not None else ""
                 hi = v.height_max if v.height_max is not None else ""
+                height_word = t(lang, "рост", "height")
                 if lo and hi and lo != hi:
-                    extras.append(f"рост {lo}–{hi} см")
+                    extras.append(f"{height_word} {lo}–{hi} см" if lang == "ru" else f"{height_word} {lo}–{hi} cm")
                 elif lo and hi and lo == hi:
-                    extras.append(f"рост {lo} см")
+                    extras.append(f"{height_word} {lo} см" if lang == "ru" else f"{height_word} {lo} cm")
                 elif lo:
-                    extras.append(f"рост от {lo} см")
+                    extras.append(t(lang, f"рост от {lo} см", f"height from {lo} cm"))
                 elif hi:
-                    extras.append(f"рост до {hi} см")
+                    extras.append(t(lang, f"рост до {hi} см", f"height up to {hi} cm"))
             if v.ethnicity:
                 extras.append(", ".join(v.ethnicity))
             extras_str = (" · " + " · ".join(extras)) if extras else ""
             lines.append(
-                f"• <b>{_vacancy_title(v)}</b> — {_format_age(v)}, {gender_ru}, {rate_str}{extras_str}"
+                f"• <b>{_vacancy_title(v, lang)}</b> — {_format_age(v, lang)}, {gender_label}, {rate_str}{extras_str}"
             )
 
         # Body: предпочитаем описания матчнутых вакансий — они конкретны
@@ -526,7 +566,7 @@ class Userbot:
             lines.append("")
             lines.append(body)
         if link:
-            lines.append(f"\n<a href=\"{link}\">Открыть сообщение</a>")
+            lines.append(f"\n<a href=\"{link}\">" + t(lang, "Открыть сообщение", "Open post") + "</a>")
         return "\n".join(lines)
 
     async def _process_canonical(
@@ -639,26 +679,30 @@ class Userbot:
             fallback_link = None
             if not chat_username:
                 fallback_link = await repository.get_message_permalink(message_db_id)
+            # Live push — нет живого Update с language_code, только явный
+            # оверрайд из /language (или ru по умолчанию).
+            user_lang = await get_lang(user_id, None)
             notification_text = self._format_notification(
                 post=post, vacancies=vacancies,
                 matched_idxs=hit_idxs,
                 message=message, chat_username=chat_username,
                 effective_category=eff_cat,
                 invite_link=fallback_link,
+                lang=user_lang,
             )
 
             from bot.keyboards import EMOJI_RESPOND, actions_rows
             kb_buttons: list[list[InlineKeyboardButton]] = []
             for i, db_id in zip(hit_idxs, matched_db_ids):
-                title = _vacancy_title(vacancies[i])
+                title = _vacancy_title(vacancies[i], user_lang)
                 kb_buttons.append([
                     InlineKeyboardButton(
-                        text=f"Сгенерировать отклик: {title}"[:64],
+                        text=t(user_lang, f"Сгенерировать отклик: {title}", f"Generate response: {title}")[:64],
                         callback_data=f"respond:{db_id}",
                         icon_custom_emoji_id=EMOJI_RESPOND,
                     )
                 ])
-            kb_buttons += actions_rows(message_id=message_db_id, is_favorited=False)
+            kb_buttons += actions_rows(message_id=message_db_id, is_favorited=False, lang=user_lang)
             reply_markup = InlineKeyboardMarkup(inline_keyboard=kb_buttons)
 
             try:

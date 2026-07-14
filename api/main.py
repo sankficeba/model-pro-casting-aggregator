@@ -188,9 +188,9 @@ async def me(user: TelegramUser = Depends(current_user)) -> dict:
 
 
 @app.get("/api/refs")
-async def refs() -> dict:
+async def refs(lang: str = "ru") -> dict:
     """Все справочники одним запросом — фронт кеширует на сессию."""
-    return all_refs()
+    return all_refs("en" if lang == "en" else "ru")
 
 
 @app.get("/api/profile", response_model=ProfileResponse)
@@ -437,6 +437,7 @@ async def digest_start(
     from aiogram.client.default import DefaultBotProperties
     from aiogram.enums import ParseMode
 
+    from bot import i18n
     from bot.handlers import _send_next_pending
 
     bot = Bot(
@@ -444,7 +445,8 @@ async def digest_start(
         default=DefaultBotProperties(parse_mode=ParseMode.HTML),
     )
     try:
-        sent = await _send_next_pending(bot, user.id)
+        lang = await i18n.get_lang(user.id, user.language_code)
+        sent = await _send_next_pending(bot, user.id, lang)
     finally:
         await bot.session.close()
     remaining = await repo.count_pending(user.id)

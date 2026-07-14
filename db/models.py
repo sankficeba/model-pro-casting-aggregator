@@ -117,6 +117,11 @@ class User(Base):
         DateTime(timezone=True), nullable=True
     )
 
+    # Явный оверрайд языка интерфейса бота ('ru'/'en'), выставляется командой
+    # /language. NULL = не выбирал — используем auto-detect по
+    # from_user.language_code на каждом сообщении.
+    language: Mapped[Optional[str]] = mapped_column(String(8), nullable=True)
+
     filters: Mapped[list["Filter"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )

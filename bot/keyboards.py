@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from aiogram.types import InlineKeyboardButton
 
+from bot.i18n import Lang, t
+
 # Premium custom-emoji icons для inline-кнопок (Bot API 9.4 +
 # `icon_custom_emoji_id`). У владельца бота должен быть подключён
 # Telegram Premium, иначе клиенты молча пропустят поле и покажут
@@ -15,7 +17,9 @@ EMOJI_FAV_REMOVE = "5465665476971471368"  # ❌
 EMOJI_NEXT = "5404546954183059646"  # ▶️
 
 
-def actions_rows(*, message_id: int, is_favorited: bool) -> list[list[InlineKeyboardButton]]:
+def actions_rows(
+    *, message_id: int, is_favorited: bool, lang: Lang = "ru",
+) -> list[list[InlineKeyboardButton]]:
     """3 кнопки под каждым кастинг-уведомлением: ссылка на канал,
     удалить сообщение, добавить/убрать из избранного.
 
@@ -25,13 +29,13 @@ def actions_rows(*, message_id: int, is_favorited: bool) -> list[list[InlineKeyb
     """
     fav_btn = (
         InlineKeyboardButton(
-            text="Удалить из избранного",
+            text=t(lang, "Удалить из избранного", "Remove from favorites"),
             callback_data=f"fav:rm:{message_id}",
             icon_custom_emoji_id=EMOJI_FAV_REMOVE,
         )
         if is_favorited
         else InlineKeyboardButton(
-            text="Добавить в избранное",
+            text=t(lang, "Добавить в избранное", "Add to favorites"),
             callback_data=f"fav:add:{message_id}",
             icon_custom_emoji_id=EMOJI_FAV_ADD,
         )
@@ -39,12 +43,12 @@ def actions_rows(*, message_id: int, is_favorited: bool) -> list[list[InlineKeyb
     return [
         [
             InlineKeyboardButton(
-                text="Оригинал",
+                text=t(lang, "Оригинал", "Original"),
                 callback_data=f"details:{message_id}",
                 icon_custom_emoji_id=EMOJI_DETAILS,
             ),
             InlineKeyboardButton(
-                text="Удалить",
+                text=t(lang, "Удалить", "Delete"),
                 callback_data="delself:",
                 icon_custom_emoji_id=EMOJI_DELETE,
             ),

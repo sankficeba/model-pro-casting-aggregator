@@ -11,7 +11,9 @@ interface SafeAreaInset {
 
 interface TelegramWebApp {
   initData: string;
-  initDataUnsafe: { user?: { id: number; username?: string } };
+  initDataUnsafe: {
+    user?: { id: number; username?: string; language_code?: string };
+  };
   version?: string;
   ready: () => void;
   expand: () => void;

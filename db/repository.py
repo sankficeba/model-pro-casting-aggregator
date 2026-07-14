@@ -2201,6 +2201,25 @@ async def mark_user_bot_chat_active(user_id: int) -> bool:
         return True
 
 
+async def get_user_language(user_id: int) -> Optional[str]:
+    """Явный оверрайд языка (/language), если юзер его выставлял. None —
+    используем auto-detect по from_user.language_code."""
+    async with AsyncSessionLocal() as session:
+        res = await session.execute(select(User.language).where(User.id == user_id))
+        row = res.first()
+        return row[0] if row else None
+
+
+async def set_user_language(user_id: int, language: str) -> None:
+    """Сохранить явный выбор языка интерфейса бота ('ru'/'en')."""
+    async with AsyncSessionLocal() as session:
+        await upsert_user_in_session(session, user_id)
+        await session.execute(
+            update(User).where(User.id == user_id).values(language=language)
+        )
+        await session.commit()
+
+
 def is_bot_chat_dead_error(text: str) -> bool:
     """True если текст ошибки Telegram Bot API указывает на отсутствие
     активного чата (chat not found / blocked / deactivated)."""

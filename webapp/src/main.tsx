@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client";
 import App from "./App";
 import { LandingPage } from "./LandingPage";
 import { OfferPage, PrivacyPage, ContactsPage } from "./LegalPages";
+import { LangProvider } from "./i18n";
 import "./index.css";
 
 const path = window.location.pathname;
@@ -22,6 +23,8 @@ function Root() {
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <Root />
+    <LangProvider>
+      <Root />
+    </LangProvider>
   </React.StrictMode>
 );

@@ -1,16 +1,17 @@
 import { useEffect, useState } from "react";
 import { ChevronLeft, Crown, CheckCircle2, Clock, Sparkles } from "lucide-react";
 import { api } from "../api";
+import { useLang } from "../i18n";
 import type { SubscriptionPlan, SubscriptionStatus } from "../types";
 
 interface Props {
   onBack: () => void;
 }
 
-const formatDate = (iso: string | null): string => {
+const formatDate = (iso: string | null, lang: "ru" | "en"): string => {
   if (!iso) return "—";
   const d = new Date(iso);
-  return d.toLocaleDateString("ru-RU", {
+  return d.toLocaleDateString(lang === "en" ? "en-US" : "ru-RU", {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
@@ -36,14 +37,28 @@ const BADGE_STYLES: Record<string, { ring: string; chip: string; chipText: strin
   },
 };
 
-function planMonthlyHint(plan: SubscriptionPlan): string | null {
+function planMonthlyHint(plan: SubscriptionPlan, lang: "ru" | "en"): string | null {
   if (plan.days < 60) return null;
   const months = Math.round(plan.days / 30);
   const perMonth = Math.round(plan.price_rub / months);
-  return `≈ ${perMonth} ₽/мес`;
+  return lang === "en" ? `≈ ${perMonth} RUB/mo` : `≈ ${perMonth} ₽/мес`;
+}
+
+function pluralizeDaysRu(n: number): string {
+  const lastTwo = n % 100;
+  if (lastTwo >= 11 && lastTwo <= 14) return "дней";
+  const last = n % 10;
+  if (last === 1) return "день";
+  if (last >= 2 && last <= 4) return "дня";
+  return "дней";
+}
+
+function dayLabel(n: number, lang: "ru" | "en"): string {
+  return lang === "en" ? `day${n === 1 ? "" : "s"}` : pluralizeDaysRu(n);
 }
 
 export function SubscriptionScreen({ onBack }: Props) {
+  const { t, lang } = useLang();
   const [status, setStatus] = useState<SubscriptionStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -82,7 +97,7 @@ export function SubscriptionScreen({ onBack }: Props) {
   };
 
   if (loading) {
-    return <div className="p-6 text-slate-400">Загрузка…</div>;
+    return <div className="p-6 text-slate-400">{t("Загрузка…", "Loading…")}</div>;
   }
 
   return (
@@ -93,14 +108,14 @@ export function SubscriptionScreen({ onBack }: Props) {
           className="flex items-center gap-1 px-4 py-3 text-slate-400 hover:text-white transition"
         >
           <ChevronLeft className="w-5 h-5" />
-          Назад
+          {t("Назад", "Back")}
         </button>
       </div>
 
       <div className="p-5 space-y-5">
         <h1 className="text-2xl font-semibold inline-flex items-center gap-2">
           <Crown className="w-6 h-6 text-accent" />
-          Подписка
+          {t("Подписка", "Subscription")}
         </h1>
 
         {status && (
@@ -115,17 +130,23 @@ export function SubscriptionScreen({ onBack }: Props) {
               <>
                 <div className="inline-flex items-center gap-1.5 text-sm text-accent">
                   <CheckCircle2 className="w-4 h-4" />
-                  Активна
+                  {t("Активна", "Active")}
                 </div>
                 <div className="mt-2 text-2xl font-semibold">
-                  до {formatDate(status.active_until)}
+                  {t("до", "until")} {formatDate(status.active_until, lang)}
                 </div>
                 <div className="text-sm text-slate-400 mt-0.5">
-                  Осталось {status.days_left} {pluralizeDays(status.days_left)}
+                  {t(
+                    `Осталось ${status.days_left} ${dayLabel(status.days_left, lang)}`,
+                    `${status.days_left} ${dayLabel(status.days_left, lang)} left`,
+                  )}
                 </div>
                 {status.trial_started_at && (
                   <div className="text-xs text-slate-500 mt-2">
-                    Пробный период активирован {formatDate(status.trial_started_at)}.
+                    {t(
+                      `Пробный период активирован ${formatDate(status.trial_started_at, lang)}.`,
+                      `Trial period activated ${formatDate(status.trial_started_at, lang)}.`,
+                    )}
                   </div>
                 )}
               </>
@@ -133,11 +154,13 @@ export function SubscriptionScreen({ onBack }: Props) {
               <>
                 <div className="inline-flex items-center gap-1.5 text-sm text-red-300">
                   <Clock className="w-4 h-4" />
-                  Не активна
+                  {t("Не активна", "Not active")}
                 </div>
                 <div className="mt-2 text-base text-slate-200">
-                  Уведомления приходят в режиме «1 в день», пока подписка
-                  не продлена.
+                  {t(
+                    "Уведомления приходят в режиме «1 в день», пока подписка не продлена.",
+                    "Notifications arrive in \"1 per day\" mode until the subscription is renewed.",
+                  )}
                 </div>
               </>
             )}
@@ -147,13 +170,13 @@ export function SubscriptionScreen({ onBack }: Props) {
         {status && (
           <>
             <div className="text-xs uppercase tracking-wider text-slate-500 px-1">
-              Выберите тариф
+              {t("Выберите тариф", "Choose a plan")}
             </div>
             <div className="space-y-3">
               {status.plans.map((plan) => {
                 const isSelected = selectedPlan?.code === plan.code;
                 const styles = plan.badge ? BADGE_STYLES[plan.badge] : null;
-                const monthly = planMonthlyHint(plan);
+                const monthly = planMonthlyHint(plan, lang);
                 return (
                   <button
                     key={plan.code}
@@ -184,7 +207,7 @@ export function SubscriptionScreen({ onBack }: Props) {
                         <div className="font-medium">{plan.label}</div>
                         {plan.discount_pct > 0 && (
                           <div className="text-xs text-emerald-300 mt-0.5">
-                            Скидка {plan.discount_pct}%
+                            {t("Скидка", "Discount")} {plan.discount_pct}%
                           </div>
                         )}
                         {monthly && (
@@ -196,7 +219,7 @@ export function SubscriptionScreen({ onBack }: Props) {
                           {plan.price_rub} ₽
                         </div>
                         <div className="text-[11px] text-slate-500 mt-0.5">
-                          за {plan.days} {pluralizeDays(plan.days)}
+                          {t("за", "for")} {plan.days} {dayLabel(plan.days, lang)}
                         </div>
                       </div>
                     </div>
@@ -212,7 +235,7 @@ export function SubscriptionScreen({ onBack }: Props) {
                             : "border-slate-500"
                         }`}
                       />
-                      {isSelected ? "Выбрано" : "Выбрать"}
+                      {isSelected ? t("Выбрано", "Selected") : t("Выбрать", "Select")}
                     </div>
                   </button>
                 );
@@ -221,7 +244,10 @@ export function SubscriptionScreen({ onBack }: Props) {
 
             {!status.payments_configured && (
               <div className="rounded-card bg-amber-950/40 border border-amber-900 px-3 py-2 text-xs text-amber-200">
-                Платёжная система ещё не настроена администратором.
+                {t(
+                  "Платёжная система ещё не настроена администратором.",
+                  "The payment system hasn't been set up by the admin yet.",
+                )}
               </div>
             )}
 
@@ -239,27 +265,23 @@ export function SubscriptionScreen({ onBack }: Props) {
               className="w-full rounded-card bg-accent text-bg font-medium py-3 transition disabled:opacity-50 hover:opacity-90"
             >
               {checkoutPending
-                ? "Открываем оплату…"
+                ? t("Открываем оплату…", "Opening payment…")
                 : selectedPlan
-                  ? `${status.is_active ? "Продлить" : "Оплатить"} за ${selectedPlan.price_rub} ₽`
-                  : "Выберите тариф"}
+                  ? t(
+                      `${status.is_active ? "Продлить" : "Оплатить"} за ${selectedPlan.price_rub} ₽`,
+                      `${status.is_active ? "Renew" : "Pay"} ${selectedPlan.price_rub} RUB`,
+                    )
+                  : t("Выберите тариф", "Choose a plan")}
             </button>
             <div className="text-[11px] text-slate-500 text-center">
-              Оплата через ЮKassa. После успешного платежа подписка продлевается
-              автоматически.
+              {t(
+                "Оплата через ЮKassa. После успешного платежа подписка продлевается автоматически.",
+                "Payment via YooKassa. After a successful payment, the subscription renews automatically.",
+              )}
             </div>
           </>
         )}
       </div>
     </div>
   );
-}
-
-function pluralizeDays(n: number): string {
-  const lastTwo = n % 100;
-  if (lastTwo >= 11 && lastTwo <= 14) return "дней";
-  const last = n % 10;
-  if (last === 1) return "день";
-  if (last >= 2 && last <= 4) return "дня";
-  return "дней";
 }

@@ -24,42 +24,59 @@ import type {
 
 const BASE = "/api";
 
-// ===== Перевод ошибок API в короткие русские сообщения =====
+// ===== Текущий язык интерфейса, синхронизируется из i18n.tsx =====
+// api.ts — обычный модуль (не React), поэтому язык хранится тут в
+// переменной, а не в контексте. LangProvider вызывает setApiLang()
+// синхронно при загрузке модуля и при каждом переключении.
+type ApiLang = "ru" | "en";
+let currentLang: ApiLang = "ru";
+export function setApiLang(lang: ApiLang): void {
+  currentLang = lang;
+}
 
-const FIELD_LABELS: Record<string, string> = {
-  full_name: "ФИО",
-  gender: "Пол",
-  city: "Город",
-  ready_for_travel: "Командировки",
-  actual_age: "Возраст",
-  play_age_min: "Игровой возраст (от)",
-  play_age_max: "Игровой возраст (до)",
-  project_types: "Типы проектов",
-  role_types: "Типы ролей",
-  min_rate: "Минимальная ставка",
-  height_cm: "Рост",
-  clothing_size: "Размер одежды",
-  shoe_size: "Размер обуви",
-  ethnicity: "Этнос",
-  body_type: "Телосложение",
-  hair_color: "Цвет волос",
-  hair_length: "Длина волос",
-  has_experience: "Опыт",
-  education: "Образование",
-  tax_status: "Налоговый статус",
-  eye_color: "Цвет глаз",
-  marks: "Приметы",
-  skills_sport: "Спорт",
-  skills_dance: "Танцы",
-  skills_vocal: "Вокал",
-  skills_instruments: "Инструменты",
-  portfolio_url: "Портфолио",
-  video_url: "Видеовизитка",
-  professional_url: "Проф. ресурс",
-  phone: "Телефон",
-  vk_url: "VK",
-  email: "Email",
+// ===== Перевод ошибок API в короткие сообщения =====
+
+const FIELD_LABELS: Record<string, [string, string]> = {
+  full_name: ["ФИО", "Full name"],
+  gender: ["Пол", "Gender"],
+  city: ["Город", "City"],
+  ready_for_travel: ["Командировки", "Travel"],
+  actual_age: ["Возраст", "Age"],
+  play_age_min: ["Игровой возраст (от)", "Playing age (from)"],
+  play_age_max: ["Игровой возраст (до)", "Playing age (to)"],
+  project_types: ["Типы проектов", "Project types"],
+  role_types: ["Типы ролей", "Role types"],
+  min_rate: ["Минимальная ставка", "Minimum rate"],
+  height_cm: ["Рост", "Height"],
+  clothing_size: ["Размер одежды", "Clothing size"],
+  shoe_size: ["Размер обуви", "Shoe size"],
+  ethnicity: ["Этнос", "Ethnicity"],
+  body_type: ["Телосложение", "Body type"],
+  hair_color: ["Цвет волос", "Hair color"],
+  hair_length: ["Длина волос", "Hair length"],
+  has_experience: ["Опыт", "Experience"],
+  education: ["Образование", "Education"],
+  tax_status: ["Налоговый статус", "Tax status"],
+  eye_color: ["Цвет глаз", "Eye color"],
+  marks: ["Приметы", "Distinguishing marks"],
+  skills_sport: ["Спорт", "Sport"],
+  skills_dance: ["Танцы", "Dance"],
+  skills_vocal: ["Вокал", "Vocal"],
+  skills_instruments: ["Инструменты", "Instruments"],
+  portfolio_url: ["Портфолио", "Portfolio"],
+  video_url: ["Видеовизитка", "Video reel"],
+  professional_url: ["Проф. ресурс", "Professional profile"],
+  phone: ["Телефон", "Phone"],
+  vk_url: ["VK", "VK"],
+  email: ["Email", "Email"],
 };
+
+function fieldLabel(fieldKey: string | number | undefined): string {
+  if (typeof fieldKey !== "string") return currentLang === "en" ? "Field" : "Поле";
+  const pair = FIELD_LABELS[fieldKey];
+  if (!pair) return fieldKey;
+  return currentLang === "en" ? pair[1] : pair[0];
+}
 
 interface PydanticError {
   type: string;
@@ -70,50 +87,55 @@ interface PydanticError {
 
 function humanizeOne(err: PydanticError): string {
   const fieldKey = err.loc.filter((x) => x !== "body").pop();
-  const label =
-    typeof fieldKey === "string" ? FIELD_LABELS[fieldKey] ?? fieldKey : "Поле";
+  const label = fieldLabel(fieldKey);
   const ctx = err.ctx ?? {};
+  const en = currentLang === "en";
 
   switch (err.type) {
     case "greater_than_equal":
-      return `${label}: минимум ${ctx.ge}`;
+      return en ? `${label}: minimum ${ctx.ge}` : `${label}: минимум ${ctx.ge}`;
     case "less_than_equal":
-      return `${label}: максимум ${ctx.le}`;
+      return en ? `${label}: maximum ${ctx.le}` : `${label}: максимум ${ctx.le}`;
     case "greater_than":
-      return `${label}: больше ${ctx.gt}`;
+      return en ? `${label}: greater than ${ctx.gt}` : `${label}: больше ${ctx.gt}`;
     case "less_than":
-      return `${label}: меньше ${ctx.lt}`;
+      return en ? `${label}: less than ${ctx.lt}` : `${label}: меньше ${ctx.lt}`;
     case "string_too_long":
-      return `${label}: слишком длинное значение`;
+      return en ? `${label}: value too long` : `${label}: слишком длинное значение`;
     case "string_too_short":
-      return `${label}: слишком короткое значение`;
+      return en ? `${label}: value too short` : `${label}: слишком короткое значение`;
     case "missing":
-      return `${label}: обязательное поле`;
+      return en ? `${label}: required field` : `${label}: обязательное поле`;
     case "int_parsing":
     case "int_type":
     case "float_parsing":
-      return `${label}: должно быть числом`;
+      return en ? `${label}: must be a number` : `${label}: должно быть числом`;
     case "value_error":
       // Pydantic email-валидация и кастомные validator'ы
-      if (fieldKey === "email") return "Некорректный email";
-      return `${label}: некорректное значение`;
+      if (fieldKey === "email") return en ? "Invalid email" : "Некорректный email";
+      return en ? `${label}: invalid value` : `${label}: некорректное значение`;
     case "literal_error":
     case "enum":
-      return `${label}: недопустимое значение`;
+      return en ? `${label}: invalid value` : `${label}: недопустимое значение`;
     case "url_parsing":
     case "url_type":
-      return `${label}: неверный формат ссылки`;
+      return en ? `${label}: invalid link format` : `${label}: неверный формат ссылки`;
     default:
-      return `${label}: ${err.msg || "ошибка"}`;
+      return en ? `${label}: ${err.msg || "error"}` : `${label}: ${err.msg || "ошибка"}`;
   }
 }
 
 function humanizeApiError(status: number, body: string): string {
+  const en = currentLang === "en";
   if (status === 401) {
-    return "Сессия Telegram устарела — закройте Mini App и откройте заново.";
+    return en
+      ? "Telegram session expired — close the Mini App and reopen it."
+      : "Сессия Telegram устарела — закройте Mini App и откройте заново.";
   }
   if (status >= 500) {
-    return "Сервер временно недоступен. Попробуйте через минуту.";
+    return en
+      ? "The server is temporarily unavailable. Please try again in a minute."
+      : "Сервер временно недоступен. Попробуйте через минуту.";
   }
   // Pydantic 422 / FastAPI validation
   try {
@@ -128,7 +150,7 @@ function humanizeApiError(status: number, body: string): string {
   } catch {
     /* not JSON */
   }
-  return body?.trim() ? body : `Ошибка ${status}`;
+  return body?.trim() ? body : (en ? `Error ${status}` : `Ошибка ${status}`);
 }
 
 // ===== HTTP =====
@@ -149,7 +171,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const api = {
   getMe: () => request<MeResponse>("/me"),
-  getRefs: () => request<Refs>("/refs"),
+  getRefs: () => request<Refs>(`/refs?lang=${currentLang}`),
   getProfile: () => request<Profile>("/profile"),
   updateProfile: (data: Profile) =>
     request<Profile>("/profile", { method: "PUT", body: JSON.stringify(data) }),

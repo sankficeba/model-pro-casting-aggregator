@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useLang } from "./i18n";
 
 const BOT_USERNAME = "ModelProAgency_bot";
 const APP_URL = `https://t.me/${BOT_USERNAME}/app`;
@@ -289,6 +290,7 @@ function FLink({ href, children }: { href: string; children: React.ReactNode }) 
 
 // ── Clip-text cycling photos ──────────────────────────────────────────────────
 function ClipText() {
+  const { t } = useLang();
   const [cur, setCur] = useState(0);
   const [prev, setPrev] = useState<number | null>(null);
 
@@ -349,10 +351,10 @@ function ClipText() {
         flexWrap: "wrap", gap: 16,
       }}>
         <p style={{ fontSize: 13, color: "rgba(0,0,0,.38)", fontFamily: SANS, letterSpacing: 0.3, margin: 0 }}>
-          Агрегатор кастингов из 200+ Telegram-каналов — для моделей, актёров и event-персонала
+          {t("Агрегатор кастингов из 200+ Telegram-каналов — для моделей, актёров и event-персонала", "An aggregator of castings from 200+ Telegram channels — for models, actors and event staff")}
         </p>
         <a href={APP_URL} target="_blank" rel="noopener noreferrer" className="pill" style={{ padding: "12px 28px", flexShrink: 0 }}>
-          <TgIcon /> Открыть бота
+          <TgIcon /> {t("Открыть бота", "Open the bot")}
         </a>
       </div>
     </section>
@@ -361,6 +363,7 @@ function ClipText() {
 
 // ═══════════════════════════════════════════════════════════════════════════════
 export function LandingPage() {
+  const { t, lang, setLang } = useLang();
   useGlobalStyles();
   useReveal();
   const scrollY = useScrollY();
@@ -397,7 +400,7 @@ export function LandingPage() {
           maxWidth: "calc(100vw - 48px)", animation: "fadeUp .25s ease",
         }}>
           <span style={{ fontSize: 18 }}>🔒</span>
-          <span>Если Telegram не открылся — включите VPN</span>
+          <span>{t("Если Telegram не открылся — включите VPN", "If Telegram didn't open — turn on a VPN")}</span>
         </div>
       )}
 
@@ -418,17 +421,20 @@ export function LandingPage() {
           <span style={{ fontSize: 10, letterSpacing: 3, color: GOLD, fontWeight: 600, textTransform: "uppercase" }}>Agency</span>
         </div>
         <div className="lp-nav-links">
-          {[{ l: "Кастинги", id: "castings" }, { l: "Категории", id: "categories" }, { l: "Как работает", id: "how" }].map(({ l, id }) => (
+          {[{ l: t("Кастинги", "Castings"), id: "castings" }, { l: t("Категории", "Categories"), id: "categories" }, { l: t("Как работает", "How it works"), id: "how" }].map(({ l, id }) => (
             <button key={id} className="nav-btn" onClick={() => scrollTo(id)}>{l}</button>
           ))}
+          <button onClick={() => setLang(lang === "ru" ? "en" : "ru")} className="nav-btn" style={{ fontWeight: 600 }}>
+            {lang === "ru" ? "EN" : "RU"}
+          </button>
           <a href={APP_URL} target="_blank" rel="noopener noreferrer" className="pill" style={{ padding: "10px 24px" }}>
-            <TgIcon /> Открыть бота
+            <TgIcon /> {t("Открыть бота", "Open the bot")}
           </a>
         </div>
         <button
           className={`lp-hamburger ${menuOpen ? "open" : "closed"}`}
           onClick={() => setMenuOpen(o => !o)}
-          aria-label={menuOpen ? "Закрыть меню" : "Открыть меню"}
+          aria-label={menuOpen ? t("Закрыть меню", "Close menu") : t("Открыть меню", "Open menu")}
           aria-expanded={menuOpen}
         >
           <span /><span /><span />
@@ -447,18 +453,30 @@ export function LandingPage() {
         }}>
           <div style={{ width: "100%", maxWidth: 420, padding: "0 32px" }}>
             {[
-              { l: "Кастинги",     id: "castings" },
-              { l: "Категории",    id: "categories" },
-              { l: "Как работает", id: "how" },
+              { l: t("Кастинги", "Castings"),         id: "castings" },
+              { l: t("Категории", "Categories"),      id: "categories" },
+              { l: t("Как работает", "How it works"), id: "how" },
             ].map(({ l, id }) => (
               <button key={id} className="mob-menu-link" onClick={() => { scrollTo(id); setMenuOpen(false); }}>
                 {l}
               </button>
             ))}
-            <div style={{ marginTop: 48, display: "flex", justifyContent: "center" }}>
+            <div style={{ marginTop: 32, display: "flex", justifyContent: "center" }}>
+              <button
+                onClick={() => setLang(lang === "ru" ? "en" : "ru")}
+                style={{
+                  background: "none", border: "1px solid rgba(255,255,255,.3)", borderRadius: 100,
+                  color: WHITE, padding: "8px 20px", fontSize: 12, letterSpacing: 2,
+                  textTransform: "uppercase", fontWeight: 600, fontFamily: SANS, cursor: "pointer",
+                }}
+              >
+                {lang === "ru" ? "EN" : "RU"}
+              </button>
+            </div>
+            <div style={{ marginTop: 24, display: "flex", justifyContent: "center" }}>
               <a href={APP_URL} target="_blank" rel="noopener noreferrer" className="pill"
                 onClick={() => setMenuOpen(false)}>
-                <TgIcon /> Открыть бота
+                <TgIcon /> {t("Открыть бота", "Open the bot")}
               </a>
             </div>
           </div>
@@ -478,7 +496,7 @@ export function LandingPage() {
           transform: "rotate(-2.8deg)", background: GOLD,
           padding: "16px 0", overflow: "hidden", zIndex: 2,
         }}>
-          <MqTrack items={["Кастинги", "Актёры и Модели", "Event", "Хелперы", "Реклама"]} size={28} color={BLACK} />
+          <MqTrack items={[t("Кастинги", "Castings"), t("Актёры и Модели", "Actors & Models"), "Event", t("Хелперы", "Helpers"), t("Реклама", "Ads")]} size={28} color={BLACK} />
         </div>
         {/* Strip 2 — BLACK, tilted +3° */}
         <div style={{
@@ -494,38 +512,38 @@ export function LandingPage() {
       <section id="castings" className="lp-section-pad-t" style={{ padding: "80px 48px 0" }}>
         <div className="reveal" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 36 }}>
           <div>
-            <Lbl>Последние публикации</Lbl>
+            <Lbl>{t("Последние публикации", "Latest listings")}</Lbl>
             <h2 style={{ fontFamily: SERIF, fontWeight: 900, fontSize: "clamp(28px, 4vw, 52px)", lineHeight: 1 }}>
-              Кастинги<br /><em style={{ fontWeight: 400, color: "rgba(0,0,0,.4)", fontSize: "0.75em" }}>сегодня</em>
+              {t("Кастинги", "Castings")}<br /><em style={{ fontWeight: 400, color: "rgba(0,0,0,.4)", fontSize: "0.75em" }}>{t("сегодня", "today")}</em>
             </h2>
           </div>
           <a href={APP_URL} target="_blank" rel="noopener noreferrer"
             style={{ fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: GOLD, textDecoration: "none", borderBottom: `1px solid ${GOLD}`, paddingBottom: 3, fontFamily: SANS }}>
-            Смотреть все →
+            {t("Смотреть все →", "See all →")}
           </a>
         </div>
 
         <div className="reveal lp-grid-3col">
           <a href={APP_URL} target="_blank" rel="noopener noreferrer"
             className="photo-card" style={{ gridRow: "1 / 3", aspectRatio: "3/4", textDecoration: "none" }}>
-            <img src={P.girl1} alt="Актрисы" />
+            <img src={P.girl1} alt={t("Актрисы", "Actresses")} />
             <div className="ov">
-              <div style={{ fontFamily: SERIF, fontSize: 20, fontWeight: 700, color: WHITE, textTransform: "uppercase", letterSpacing: 1 }}>Актрисы и модели</div>
-              <div style={{ fontSize: 11, color: "rgba(255,255,255,.5)", letterSpacing: 1, marginTop: 4 }}>Кино · Реклама · Съёмки</div>
+              <div style={{ fontFamily: SERIF, fontSize: 20, fontWeight: 700, color: WHITE, textTransform: "uppercase", letterSpacing: 1 }}>{t("Актрисы и модели", "Actresses & models")}</div>
+              <div style={{ fontSize: 11, color: "rgba(255,255,255,.5)", letterSpacing: 1, marginTop: 4 }}>{t("Кино · Реклама · Съёмки", "Film · Ads · Photoshoots")}</div>
               <div className="bar" />
             </div>
           </a>
           {[
-            { src: P.shoot2, t: "Реклама",  s: "Москва" },
-            { src: P.event1, t: "Event",    s: "Хостес · Промо" },
-            { src: P.man1,   t: "Мужское",  s: "Fashion" },
-            { src: P.shoot1, t: "Съёмки",   s: "Студия" },
-          ].map(({ src, t, s }) => (
-            <a key={t} href={APP_URL} target="_blank" rel="noopener noreferrer"
+            { src: P.shoot2, t: t("Реклама", "Ads"),   s: t("Москва", "Moscow") },
+            { src: P.event1, t: "Event",               s: t("Хостес · Промо", "Hostess · Promo") },
+            { src: P.man1,   t: t("Мужское", "Menswear"), s: "Fashion" },
+            { src: P.shoot1, t: t("Съёмки", "Shoots"), s: t("Студия", "Studio") },
+          ].map(({ src, t: label, s }) => (
+            <a key={label} href={APP_URL} target="_blank" rel="noopener noreferrer"
               className="photo-card" style={{ textDecoration: "none", aspectRatio: "4/3" }}>
-              <img src={src} alt={t} />
+              <img src={src} alt={label} />
               <div className="ov">
-                <div style={{ fontFamily: SERIF, fontSize: 15, fontWeight: 700, color: WHITE, textTransform: "uppercase", letterSpacing: 1 }}>{t}</div>
+                <div style={{ fontFamily: SERIF, fontSize: 15, fontWeight: 700, color: WHITE, textTransform: "uppercase", letterSpacing: 1 }}>{label}</div>
                 <div style={{ fontSize: 10, color: "rgba(255,255,255,.45)", letterSpacing: 1, marginTop: 2 }}>{s}</div>
                 <div className="bar" />
               </div>
@@ -538,23 +556,30 @@ export function LandingPage() {
       <section className="lp-split" style={{ marginTop: 6 }}>
         <a href={APP_URL} target="_blank" rel="noopener noreferrer"
           className="photo-card" style={{ minHeight: 580, textDecoration: "none" }}>
-          <img src={P.studio} alt="Студия" style={{ height: "100%" }} />
+          <img src={P.studio} alt={t("Студия", "Studio")} style={{ height: "100%" }} />
         </a>
         <div style={{ background: CREAM, padding: "72px 64px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
           <div className="reveal">
             <Lbl>Telegram Mini App</Lbl>
             <h2 style={{ fontFamily: SERIF, fontWeight: 900, fontSize: "clamp(28px, 3vw, 46px)", lineHeight: 1.05, textTransform: "uppercase", marginBottom: 24 }}>
-              Стать<br />участником
+              {t("Стать", "Become")}<br />{t("участником", "a member")}
             </h2>
             <p style={{ fontSize: 15, lineHeight: 1.85, color: "#555", marginBottom: 32, maxWidth: 360, fontFamily: SANS }}>
-              Заполни анкету в Mini App — укажи категорию, параметры и город.
-              Бот начнёт присылать только подходящие кастинги из 200+ каналов.
+              {t(
+                "Заполни анкету в Mini App — укажи категорию, параметры и город. Бот начнёт присылать только подходящие кастинги из 200+ каналов.",
+                "Fill out your profile in the Mini App — pick a category, parameters and city. The bot will start sending only castings that match, from 200+ channels."
+              )}
             </p>
             <a href={APP_URL} target="_blank" rel="noopener noreferrer" className="pill">
-              <TgIcon /> Заполнить анкету
+              <TgIcon /> {t("Заполнить анкету", "Fill out profile")}
             </a>
             <div style={{ marginTop: 36, display: "flex", flexDirection: "column", gap: 14 }}>
-              {["Актёры и модели", "Event-персонал", "Хелперы и разнорабочие", "Административный персонал"].map((item) => (
+              {[
+                t("Актёры и модели", "Actors & models"),
+                t("Event-персонал", "Event staff"),
+                t("Хелперы и разнорабочие", "Helpers & laborers"),
+                t("Административный персонал", "Administrative staff"),
+              ].map((item) => (
                 <div key={item} style={{ display: "flex", alignItems: "center", gap: 12, fontFamily: SANS }}>
                   <div style={{ width: 18, height: 1, background: GOLD, flexShrink: 0 }} />
                   <span style={{ fontSize: 13, color: "#444" }}>{item}</span>
@@ -572,7 +597,7 @@ export function LandingPage() {
           transform: "rotate(-1.5deg)", background: "#1a1208",
           padding: "14px 0", overflow: "hidden",
         }}>
-          <MqTrack items={["Стать участником", "Получать кастинги", "Подать анкету", "Model Pro Agency"]} size={22} color={GOLD} italic />
+          <MqTrack items={[t("Стать участником", "Become a member"), t("Получать кастинги", "Get castings"), t("Подать анкету", "Submit profile"), "Model Pro Agency"]} size={22} color={GOLD} italic />
         </div>
       </div>
 
@@ -580,42 +605,45 @@ export function LandingPage() {
       <section className="lp-split-r">
         <div style={{ background: WHITE, padding: "72px 64px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
           <div className="reveal">
-            <Lbl>Технологии</Lbl>
+            <Lbl>{t("Технологии", "Technology")}</Lbl>
             <h2 style={{ fontFamily: SERIF, fontWeight: 900, fontSize: "clamp(28px, 3vw, 46px)", lineHeight: 1.05, textTransform: "uppercase", marginBottom: 24 }}>
-              Умный<br />агрегатор
+              {t("Умный", "Smart")}<br />{t("агрегатор", "aggregator")}
             </h2>
             <p style={{ fontSize: 15, lineHeight: 1.85, color: "#555", marginBottom: 32, maxWidth: 360, fontFamily: SANS }}>
-              ИИ анализирует каждое объявление, сравнивает с твоей анкетой и присылает уведомление раньше всех — только то, что подходит.
+              {t(
+                "ИИ анализирует каждое объявление, сравнивает с твоей анкетой и присылает уведомление раньше всех — только то, что подходит.",
+                "AI analyzes every listing, compares it against your profile, and notifies you before anyone else — only what actually fits."
+              )}
             </p>
             <a href={APP_URL} target="_blank" rel="noopener noreferrer" className="pill-dark">
-              Попробовать →
+              {t("Попробовать →", "Try it →")}
             </a>
           </div>
         </div>
         <a href={APP_URL} target="_blank" rel="noopener noreferrer"
           className="photo-card" style={{ minHeight: 500, textDecoration: "none" }}>
-          <img src={P.girl2} alt="Модель" style={{ height: "100%" }} />
+          <img src={P.girl2} alt={t("Модель", "Model")} style={{ height: "100%" }} />
         </a>
       </section>
 
       {/* ══ CATEGORIES ═══════════════════════════════════════════════════════ */}
       <section id="categories" className="lp-section-pad-t" style={{ padding: "80px 48px 0" }}>
         <div className="reveal" style={{ textAlign: "center", marginBottom: 48 }}>
-          <Lbl>Для кого</Lbl>
-          <h2 style={{ fontFamily: SERIF, fontWeight: 900, fontSize: "clamp(28px, 4vw, 52px)", lineHeight: 1 }}>Категории</h2>
+          <Lbl>{t("Для кого", "Who it's for")}</Lbl>
+          <h2 style={{ fontFamily: SERIF, fontWeight: 900, fontSize: "clamp(28px, 4vw, 52px)", lineHeight: 1 }}>{t("Категории", "Categories")}</h2>
         </div>
         <div className="reveal lp-grid-4col">
           {[
-            { src: P.girl1,  t: "Актрисы и модели",  s: "Кино · Реклама · Съёмки" },
-            { src: P.man2,   t: "Актёры и модели",   s: "Мужское направление" },
-            { src: P.event2, t: "Event-персонал",    s: "Хостес · Промо · Event" },
-            { src: P.girl2,  t: "Разнорабочие",      s: "Хелперы · Клининг" },
-          ].map(({ src, t, s }) => (
-            <a key={t} href={APP_URL} target="_blank" rel="noopener noreferrer"
+            { src: P.girl1,  t: t("Актрисы и модели", "Actresses & models"), s: t("Кино · Реклама · Съёмки", "Film · Ads · Photoshoots") },
+            { src: P.man2,   t: t("Актёры и модели", "Actors & models"),     s: t("Мужское направление", "Menswear direction") },
+            { src: P.event2, t: t("Event-персонал", "Event staff"),         s: t("Хостес · Промо · Event", "Hostess · Promo · Events") },
+            { src: P.girl2,  t: t("Разнорабочие", "General labor"),         s: t("Хелперы · Клининг", "Helpers · Cleaning") },
+          ].map(({ src, t: label, s }) => (
+            <a key={label} href={APP_URL} target="_blank" rel="noopener noreferrer"
               className="photo-card" style={{ textDecoration: "none", aspectRatio: "2/3" }}>
-              <img src={src} alt={t} />
+              <img src={src} alt={label} />
               <div className="ov">
-                <div style={{ fontFamily: SERIF, fontSize: 17, fontWeight: 700, color: WHITE, textTransform: "uppercase", letterSpacing: 1 }}>{t}</div>
+                <div style={{ fontFamily: SERIF, fontSize: 17, fontWeight: 700, color: WHITE, textTransform: "uppercase", letterSpacing: 1 }}>{label}</div>
                 <div style={{ fontSize: 10, color: "rgba(255,255,255,.45)", letterSpacing: 1, marginTop: 4 }}>{s}</div>
                 <div className="bar" />
               </div>
@@ -629,25 +657,25 @@ export function LandingPage() {
         <div style={{ maxWidth: 1140, margin: "0 auto" }}>
           <div className="reveal" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 64, flexWrap: "wrap", gap: 24 }}>
             <div>
-              <Lbl light>Инструкция</Lbl>
+              <Lbl light>{t("Инструкция", "Instructions")}</Lbl>
               <h2 style={{
                 fontFamily: SERIF, fontWeight: 900, fontSize: "clamp(32px, 4.5vw, 60px)",
                 textTransform: "uppercase", color: WHITE, lineHeight: 1,
               }}>
-                Как это<br /><em style={{ fontWeight: 400, background: GRAD_TEXT, WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text" }}>работает</em>
+                {t("Как это", "How it")}<br /><em style={{ fontWeight: 400, background: GRAD_TEXT, WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text" }}>{t("работает", "works")}</em>
               </h2>
             </div>
             <a href={APP_URL} target="_blank" rel="noopener noreferrer" className="pill">
-              <TgIcon /> Начать сейчас
+              <TgIcon /> {t("Начать сейчас", "Start now")}
             </a>
           </div>
           <div className="reveal lp-how-grid">
             {[
-              { n: "01", t: "Открой бота",      d: "Найди @ModelProAgency_bot в Telegram и запусти командой /start." },
-              { n: "02", t: "Заполни анкету",   d: "В Mini App укажи категорию, параметры, город. Занимает 2 минуты." },
-              { n: "03", t: "Получай кастинги", d: "Бот мониторит 200+ каналов и присылает только подходящие предложения." },
-              { n: "04", t: "Отправь отклик",   d: "Кнопка «Сгенерировать» готовит текст по твоей анкете — копируй и отправляй." },
-            ].map(({ n, t, d }, i, arr) => (
+              { n: "01", t: t("Открой бота", "Open the bot"),      d: t("Найди @ModelProAgency_bot в Telegram и запусти командой /start.", "Find @ModelProAgency_bot on Telegram and launch it with the /start command.") },
+              { n: "02", t: t("Заполни анкету", "Fill out profile"), d: t("В Mini App укажи категорию, параметры, город. Занимает 2 минуты.", "In the Mini App, specify your category, parameters and city. Takes 2 minutes.") },
+              { n: "03", t: t("Получай кастинги", "Get castings"),  d: t("Бот мониторит 200+ каналов и присылает только подходящие предложения.", "The bot monitors 200+ channels and sends only offers that match you.") },
+              { n: "04", t: t("Отправь отклик", "Send a reply"),    d: t("Кнопка «Сгенерировать» готовит текст по твоей анкете — копируй и отправляй.", "The “Generate” button drafts a reply from your profile — copy it and send.") },
+            ].map(({ n, t: label, d }, i, arr) => (
               <div key={n} style={{
                 padding: "40px 32px",
                 background: "rgba(255,255,255,.025)",
@@ -657,7 +685,7 @@ export function LandingPage() {
                   fontFamily: SERIF, fontSize: 52, fontWeight: 900, lineHeight: 1, marginBottom: 24,
                   background: GRAD_TEXT, WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text",
                 }}>{n}</div>
-                <div style={{ fontSize: 11, letterSpacing: 2, textTransform: "uppercase", fontWeight: 700, color: WHITE, marginBottom: 14, fontFamily: SANS }}>{t}</div>
+                <div style={{ fontSize: 11, letterSpacing: 2, textTransform: "uppercase", fontWeight: 700, color: WHITE, marginBottom: 14, fontFamily: SANS }}>{label}</div>
                 <div style={{ fontSize: 13, lineHeight: 1.8, color: "rgba(255,255,255,.4)", fontFamily: SANS }}>{d}</div>
               </div>
             ))}
@@ -670,29 +698,29 @@ export function LandingPage() {
         <div style={{ maxWidth: 1140, margin: "0 auto" }}>
           <div className="reveal" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 60, flexWrap: "wrap", gap: 24 }}>
             <div>
-              <Lbl light>Возможности</Lbl>
+              <Lbl light>{t("Возможности", "Features")}</Lbl>
               <h2 style={{
                 fontFamily: SERIF, fontWeight: 900, fontSize: "clamp(28px, 4vw, 52px)",
                 textTransform: "uppercase", lineHeight: 1,
                 background: GRAD_TEXT, WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text",
               }}>
-                Что внутри<br />бота
+                {t("Что внутри", "What's inside")}<br />{t("бота", "the bot")}
               </h2>
             </div>
             <a href={APP_URL} target="_blank" rel="noopener noreferrer"
               style={{ fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: GOLD, textDecoration: "none", borderBottom: `1px solid ${GOLD}`, paddingBottom: 2, fontFamily: SANS }}>
-              Попробовать →
+              {t("Попробовать →", "Try it →")}
             </a>
           </div>
           <div className="reveal lp-feat-grid">
             {[
-              { n: "01", t: "Умная фильтрация",      d: "ИИ анализирует кастинг и сравнивает с твоими параметрами — рост, возраст, тип внешности, город." },
-              { n: "02", t: "Избранное",              d: "Сохраняй лучшие предложения одним нажатием, чтобы вернуться позже." },
-              { n: "03", t: "Чёрный список",          d: "Добавляй слова-исключения — бот перестанет присылать нежелательное." },
-              { n: "04", t: "Готовый отклик",         d: "Одна кнопка — и персональный текст отклика сформирован по данным анкеты." },
-              { n: "05", t: "Дайджест",               d: "Не хочешь уведомления сразу? /review покажет все новинки одним списком." },
-              { n: "06", t: "Уведомления 24/7",       d: "Кастинг появился в канале — ты узнаёшь первым. Без задержек." },
-            ].map(({ n, t, d }) => (
+              { n: "01", t: t("Умная фильтрация", "Smart filtering"), d: t("ИИ анализирует кастинг и сравнивает с твоими параметрами — рост, возраст, тип внешности, город.", "AI analyzes each casting and compares it against your parameters — height, age, look, city.") },
+              { n: "02", t: t("Избранное", "Favorites"),               d: t("Сохраняй лучшие предложения одним нажатием, чтобы вернуться позже.", "Save the best offers with one tap, so you can come back to them later.") },
+              { n: "03", t: t("Чёрный список", "Blocklist"),           d: t("Добавляй слова-исключения — бот перестанет присылать нежелательное.", "Add exclusion words — the bot will stop sending anything you don't want.") },
+              { n: "04", t: t("Готовый отклик", "Ready-made reply"),   d: t("Одна кнопка — и персональный текст отклика сформирован по данным анкеты.", "One button generates a personal reply text drawn from your profile data.") },
+              { n: "05", t: t("Дайджест", "Digest"),                   d: t("Не хочешь уведомления сразу? /review покажет все новинки одним списком.", "Don't want instant notifications? /review shows all the new listings in one list.") },
+              { n: "06", t: t("Уведомления 24/7", "24/7 alerts"),      d: t("Кастинг появился в канале — ты узнаёшь первым. Без задержек.", "A casting appears in a channel — you find out first. No delays.") },
+            ].map(({ n, t: label, d }) => (
               <div key={n} style={{ borderTop: "1px solid rgba(255,255,255,.07)", padding: "36px 0", display: "flex", gap: 28 }}>
                 <div style={{
                   fontFamily: SERIF, fontSize: 40, fontWeight: 900, lineHeight: 1, flexShrink: 0,
@@ -700,7 +728,7 @@ export function LandingPage() {
                   opacity: 0.7,
                 }}>{n}</div>
                 <div>
-                  <div style={{ fontSize: 11, letterSpacing: 2, textTransform: "uppercase", fontWeight: 700, color: WHITE, marginBottom: 12, fontFamily: SANS }}>{t}</div>
+                  <div style={{ fontSize: 11, letterSpacing: 2, textTransform: "uppercase", fontWeight: 700, color: WHITE, marginBottom: 12, fontFamily: SANS }}>{label}</div>
                   <div style={{ fontSize: 13, lineHeight: 1.8, color: "rgba(255,255,255,.38)", fontFamily: SANS }}>{d}</div>
                 </div>
               </div>
@@ -725,11 +753,11 @@ export function LandingPage() {
             fontSize: "clamp(40px, 8vw, 110px)",
             textTransform: "uppercase", color: WHITE, lineHeight: 1, letterSpacing: 4,
           }}>
-            Твой кастинг ждёт
+            {t("Твой кастинг ждёт", "Your casting awaits")}
           </h2>
           <div style={{ width: 60, height: 2, background: GOLD, margin: "28px auto" }} />
           <a href={APP_URL} target="_blank" rel="noopener noreferrer" className="pill-outline">
-            <TgIcon /> Открыть в Telegram
+            <TgIcon /> {t("Открыть в Telegram", "Open in Telegram")}
           </a>
         </div>
       </div>
@@ -738,13 +766,22 @@ export function LandingPage() {
       <div style={{ background: "#0a0a0a", padding: "0 48px 48px" }}>
         <div style={{ borderTop: "1px solid rgba(255,255,255,.05)", paddingTop: 36, maxWidth: 1140, margin: "0 auto" }}>
           <p style={{ fontSize: 12, lineHeight: 2, color: "rgba(255,255,255,.18)", fontFamily: SANS, maxWidth: 860 }}>
-            Model Pro Agency — агрегатор кастингов для моделей, актёров и event-персонала в Москве и по всей России.
+            {t(
+              `Model Pro Agency — агрегатор кастингов для моделей, актёров и event-персонала в Москве и по всей России.
             Сервис автоматически мониторит объявления из 200+ Telegram-каналов: кастинги для моделей,
             кастинги для актёров без опыта, вакансии хостес и промо-моделей, работа на мероприятиях,
             выставках и презентациях. Кастинги 2026 — актуальная база обновляется ежедневно.
             Подходит тем, кто ищет работу моделью, хочет попасть на официальный кастинг, найти вакансии
             event-персонала или промо-акции. Умная фильтрация подбирает только релевантные предложения
-            по вашим параметрам — росту, возрасту, типу внешности и городу.
+            по вашим параметрам — росту, возрасту, типу внешности и городу.`,
+              `Model Pro Agency is a casting aggregator for models, actors and event staff in Moscow and across Russia.
+            The service automatically monitors listings from 200+ Telegram channels: castings for models,
+            castings for actors with no experience, hostess and promo-model vacancies, work at events,
+            exhibitions and presentations. Castings 2026 — an up-to-date database updated daily.
+            Ideal for anyone looking for modeling work, aiming for an official casting, or seeking
+            event-staff vacancies or promo campaigns. Smart filtering surfaces only the offers relevant
+            to your parameters — height, age, look and city.`
+            )}
           </p>
         </div>
       </div>
@@ -762,37 +799,37 @@ export function LandingPage() {
             </div>
           </div>
           <div>
-            <div style={{ fontSize: 9, letterSpacing: 4, textTransform: "uppercase", color: GOLD, marginBottom: 24, fontFamily: SANS }}>Категории</div>
-            {["Актёры и модели", "Event-персонал", "Разнорабочие", "Администрирование"].map((l) => (
+            <div style={{ fontSize: 9, letterSpacing: 4, textTransform: "uppercase", color: GOLD, marginBottom: 24, fontFamily: SANS }}>{t("Категории", "Categories")}</div>
+            {[t("Актёры и модели", "Actors & models"), t("Event-персонал", "Event staff"), t("Разнорабочие", "General labor"), t("Администрирование", "Administration")].map((l) => (
               <FLink key={l} href={APP_URL}>{l}</FLink>
             ))}
           </div>
           <div>
             <div style={{ fontSize: 9, letterSpacing: 4, textTransform: "uppercase", color: GOLD, marginBottom: 24, fontFamily: SANS }}>Telegram</div>
-            <FLink href={BOT_URL}>Открыть бота</FLink>
+            <FLink href={BOT_URL}>{t("Открыть бота", "Open the bot")}</FLink>
             <FLink href={APP_URL}>Mini App</FLink>
             <FLink href={BOT_URL}>@{BOT_USERNAME}</FLink>
           </div>
           <div>
-            <div style={{ fontSize: 9, letterSpacing: 4, textTransform: "uppercase", color: GOLD, marginBottom: 24, fontFamily: SANS }}>Начать</div>
+            <div style={{ fontSize: 9, letterSpacing: 4, textTransform: "uppercase", color: GOLD, marginBottom: 24, fontFamily: SANS }}>{t("Начать", "Get started")}</div>
             <p style={{ fontSize: 13, color: "rgba(255,255,255,.3)", lineHeight: 1.8, marginBottom: 24, fontFamily: SANS }}>
-              Запусти бота и заполни анкету — кастинги придут сами.
+              {t("Запусти бота и заполни анкету — кастинги придут сами.", "Launch the bot and fill out your profile — castings will come to you.")}
             </p>
             <a href={APP_URL} target="_blank" rel="noopener noreferrer" className="pill" style={{ padding: "12px 24px" }}>
-              <TgIcon /> Открыть
+              <TgIcon /> {t("Открыть", "Open")}
             </a>
           </div>
         </div>
         <div style={{ height: 1, background: "rgba(255,255,255,.06)", marginBottom: 24 }} />
         <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 12, alignItems: "center" }}>
           <div style={{ fontSize: 11, color: "rgba(255,255,255,.16)", fontFamily: SANS }}>
-            © {new Date().getFullYear()} Model Promo Agency. Все права защищены. · ИП Рябов Семён Кириллович
+            © {new Date().getFullYear()} Model Promo Agency. {t("Все права защищены", "All rights reserved")}. · {t("ИП Рябов Семён Кириллович", "Individual Entrepreneur Semyon Kirillovich Ryabov")}
           </div>
           <div style={{ display: "flex", gap: 20, alignItems: "center" }}>
             {[
-              { label: "Оферта",              href: "/offer"    },
-              { label: "Конфиденциальность",  href: "/privacy"  },
-              { label: "Контакты",            href: "/contacts" },
+              { label: t("Оферта", "Offer"),                     href: "/offer"    },
+              { label: t("Конфиденциальность", "Privacy"),       href: "/privacy"  },
+              { label: t("Контакты", "Contacts"),                href: "/contacts" },
             ].map(({ label, href }) => (
               <a key={href} href={href} style={{ fontSize: 11, color: "rgba(255,255,255,.25)", textDecoration: "none", fontFamily: SANS }}>
                 {label}

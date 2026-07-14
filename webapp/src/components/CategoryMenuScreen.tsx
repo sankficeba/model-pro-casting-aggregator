@@ -2,7 +2,8 @@ import { useState } from "react";
 import { CheckCircle2, AlertCircle, ShieldCheck, Plus, Ban, Megaphone, Bell, BellOff, Bookmark, LifeBuoy } from "lucide-react";
 import { api } from "../api";
 import type { CategoryCode, Subscription } from "../types";
-import { CATEGORY_LABELS } from "../types";
+import { CATEGORY_LABELS, CATEGORY_LABELS_EN } from "../types";
+import { useLang } from "../i18n";
 
 interface Props {
   subscriptions: Subscription[];
@@ -31,6 +32,7 @@ export function CategoryMenuScreen({
   isAdmin,
   onChange,
 }: Props) {
+  const { t, lang, setLang } = useLang();
   const [pending, setPending] = useState<CategoryCode | null>(null);
   const canAdd = subscriptions.length < 4;
 
@@ -47,18 +49,27 @@ export function CategoryMenuScreen({
 
   return (
     <div className="min-h-screen p-5 space-y-4">
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-semibold">Мои направления</h1>
-        {isAdmin && (
+      <div className="flex justify-between items-center gap-2">
+        <h1 className="text-2xl font-semibold">{t("Мои направления", "My categories")}</h1>
+        <div className="flex items-center gap-1.5 shrink-0">
           <button
-            onClick={onAdmin}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-card text-xs text-accent hover:bg-accent/10 transition"
-            title="Админка"
+            onClick={() => setLang(lang === "ru" ? "en" : "ru")}
+            className="px-2.5 py-1.5 rounded-card text-xs font-medium border border-bg-card text-slate-300 hover:border-accent hover:text-accent transition"
+            title={t("Сменить язык", "Switch language")}
           >
-            <ShieldCheck className="w-4 h-4" />
-            Админка
+            {lang === "ru" ? "EN" : "RU"}
           </button>
-        )}
+          {isAdmin && (
+            <button
+              onClick={onAdmin}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-card text-xs text-accent hover:bg-accent/10 transition"
+              title={t("Админка", "Admin panel")}
+            >
+              <ShieldCheck className="w-4 h-4" />
+              {t("Админка", "Admin")}
+            </button>
+          )}
+        </div>
       </div>
       <div className="space-y-3">
         {subscriptions.map((s) => {
@@ -84,17 +95,17 @@ export function CategoryMenuScreen({
                       ? "text-accent hover:bg-accent/10"
                       : "text-slate-500 hover:text-slate-300 hover:bg-bg-card"
                   } ${isPending ? "opacity-50" : ""}`}
-                  aria-label={s.enabled ? "Выключить уведомления" : "Включить уведомления"}
-                  title={s.enabled ? "Уведомления включены" : "Уведомления выключены"}
+                  aria-label={s.enabled ? t("Выключить уведомления", "Turn off notifications") : t("Включить уведомления", "Turn on notifications")}
+                  title={s.enabled ? t("Уведомления включены", "Notifications on") : t("Уведомления выключены", "Notifications off")}
                 >
                   {s.enabled ? <Bell className="w-5 h-5" /> : <BellOff className="w-5 h-5" />}
                 </button>
-                <span className="font-medium flex-1 min-w-0">{CATEGORY_LABELS[s.category]}</span>
+                <span className="font-medium flex-1 min-w-0">{t(CATEGORY_LABELS[s.category], CATEGORY_LABELS_EN[s.category])}</span>
                 <span className="flex items-center gap-1.5 text-sm text-slate-400">
                   {isComplete ? (
                     <>
                       <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                      <span>Заполнена</span>
+                      <span>{t("Заполнена", "Completed")}</span>
                     </>
                   ) : (
                     <>
@@ -120,7 +131,7 @@ export function CategoryMenuScreen({
           className="w-full py-3 rounded-card border-2 border-dashed border-bg-card text-slate-400 hover:border-accent hover:text-accent transition flex items-center justify-center gap-2"
         >
           <Plus className="w-4 h-4" />
-          Добавить категорию
+          {t("Добавить категорию", "Add category")}
         </button>
       )}
 
@@ -130,35 +141,35 @@ export function CategoryMenuScreen({
           className="w-full py-3 rounded-card border border-bg-card text-slate-300 hover:border-accent hover:text-accent transition flex items-center justify-center gap-2"
         >
           <Bookmark className="w-4 h-4" />
-          Избранные вакансии
+          {t("Избранные вакансии", "Favorite postings")}
         </button>
         <button
           onClick={onDelivery}
           className="w-full py-3 rounded-card border border-bg-card text-slate-300 hover:border-accent hover:text-accent transition flex items-center justify-center gap-2"
         >
           <Bell className="w-4 h-4" />
-          Доставка уведомлений
+          {t("Доставка уведомлений", "Notification delivery")}
         </button>
         <button
           onClick={onBlacklist}
           className="w-full py-3 rounded-card border border-bg-card text-slate-300 hover:border-accent hover:text-accent transition flex items-center justify-center gap-2"
         >
           <Ban className="w-4 h-4" />
-          Чёрный список слов
+          {t("Чёрный список слов", "Blocked words")}
         </button>
         <button
           onClick={onSuggestChannel}
           className="w-full py-3 rounded-card border border-bg-card text-slate-300 hover:border-accent hover:text-accent transition flex items-center justify-center gap-2"
         >
           <Megaphone className="w-4 h-4" />
-          Предложить канал
+          {t("Предложить канал", "Suggest a channel")}
         </button>
         <button
           onClick={onReportProblem}
           className="w-full py-3 rounded-card border border-bg-card text-slate-300 hover:border-accent hover:text-accent transition flex items-center justify-center gap-2"
         >
           <LifeBuoy className="w-4 h-4" />
-          Сообщить о проблеме
+          {t("Сообщить о проблеме", "Report a problem")}
         </button>
       </div>
     </div>

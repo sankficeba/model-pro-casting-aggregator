@@ -260,11 +260,25 @@ export const CATEGORY_LABELS: Record<CategoryCode, string> = {
   admin: "Администрирование",
 };
 
+export const CATEGORY_LABELS_EN: Record<CategoryCode, string> = {
+  creative: "Creative positions",
+  event: "Event staff",
+  general: "General labor",
+  admin: "Administration",
+};
+
 export const CATEGORY_DESCRIPTIONS: Record<CategoryCode, string> = {
   creative: "Актёры, модели",
   event: "Хостес, промо-модели, аниматоры",
   general: "Хелперы, клининг, грузчики",
   admin: "Операторы регистрации, супервайзеры",
+};
+
+export const CATEGORY_DESCRIPTIONS_EN: Record<CategoryCode, string> = {
+  creative: "Actors, models",
+  event: "Hostesses, promo models, animators",
+  general: "Helpers, cleaning, loaders",
+  admin: "Registration operators, supervisors",
 };
 
 export const EMPTY_PROFILE: Profile = {

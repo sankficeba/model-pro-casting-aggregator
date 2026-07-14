@@ -1,7 +1,13 @@
 import { useState } from "react";
 import { api } from "../api";
+import { useLang } from "../i18n";
 import type { CategoryCode } from "../types";
-import { CATEGORY_DESCRIPTIONS, CATEGORY_LABELS } from "../types";
+import {
+  CATEGORY_DESCRIPTIONS,
+  CATEGORY_DESCRIPTIONS_EN,
+  CATEGORY_LABELS,
+  CATEGORY_LABELS_EN,
+} from "../types";
 
 const ALL_CATEGORIES: CategoryCode[] = ["creative", "event", "general", "admin"];
 
@@ -14,8 +20,10 @@ interface Props {
 export function CategorySurveyScreen({
   onDone,
   excludeCategories = [],
-  title = "Какие направления интересуют?",
+  title,
 }: Props) {
+  const { t } = useLang();
+  const displayTitle = title ?? t("Какие направления интересуют?", "Which categories interest you?");
   const [selected, setSelected] = useState<Set<CategoryCode>>(new Set());
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -44,9 +52,12 @@ export function CategorySurveyScreen({
 
   return (
     <div className="min-h-screen p-5 space-y-4">
-      <h1 className="text-2xl font-semibold">{title}</h1>
+      <h1 className="text-2xl font-semibold">{displayTitle}</h1>
       <p className="text-sm text-slate-400">
-        Выбери одно или несколько — для каждого заполнишь свою анкету.
+        {t(
+          "Выбери одно или несколько — для каждого заполнишь свою анкету.",
+          "Pick one or more — you'll fill out a separate form for each.",
+        )}
       </p>
       <div className="space-y-3">
         {visible.map((c) => (
@@ -65,9 +76,9 @@ export function CategorySurveyScreen({
               className="mt-1 w-5 h-5 accent-accent"
             />
             <div className="flex-1">
-              <div className="font-medium">{CATEGORY_LABELS[c]}</div>
+              <div className="font-medium">{t(CATEGORY_LABELS[c], CATEGORY_LABELS_EN[c])}</div>
               <div className="text-xs text-slate-400 mt-0.5">
-                {CATEGORY_DESCRIPTIONS[c]}
+                {t(CATEGORY_DESCRIPTIONS[c], CATEGORY_DESCRIPTIONS_EN[c])}
               </div>
             </div>
           </label>
@@ -83,7 +94,7 @@ export function CategorySurveyScreen({
         disabled={selected.size === 0 || submitting}
         className="w-full py-3 rounded-card bg-accent text-white font-medium disabled:opacity-50"
       >
-        {submitting ? "Сохраняем…" : "Продолжить"}
+        {submitting ? t("Сохраняем…", "Saving…") : t("Продолжить", "Continue")}
       </button>
     </div>
   );
