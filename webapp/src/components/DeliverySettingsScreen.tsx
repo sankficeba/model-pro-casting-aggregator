@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ChevronLeft, Zap, Inbox, Moon, Sun, PlayCircle } from "lucide-react";
+import { ChevronLeft, Zap, Inbox, Moon, Sun, PlayCircle, Trash2 } from "lucide-react";
 import { api } from "../api";
 import { tg } from "../telegram";
 import { useLang } from "../i18n";
@@ -28,6 +28,8 @@ export function DeliverySettingsScreen({ onBack }: Props) {
   const [savedToast, setSavedToast] = useState(false);
   const [reviewing, setReviewing] = useState(false);
   const [emptyQueue, setEmptyQueue] = useState(false);
+  const [clearing, setClearing] = useState(false);
+  const [confirmingClear, setConfirmingClear] = useState(false);
 
   useEffect(() => {
     if (!emptyQueue) return;
@@ -53,6 +55,30 @@ export function DeliverySettingsScreen({ onBack }: Props) {
       setReviewing(false);
     }
   };
+
+  const clearQueue = async () => {
+    if (!confirmingClear) {
+      setConfirmingClear(true);
+      return;
+    }
+    setClearing(true);
+    setError(null);
+    setConfirmingClear(false);
+    try {
+      await api.clearDigestQueue();
+      setSettings((s) => ({ ...s, pending_count: 0 }));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setClearing(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!confirmingClear) return;
+    const handle = setTimeout(() => setConfirmingClear(false), 4000);
+    return () => clearTimeout(handle);
+  }, [confirmingClear]);
 
   useEffect(() => {
     api
@@ -186,6 +212,32 @@ export function DeliverySettingsScreen({ onBack }: Props) {
                   {t("Пока что новых объявлений нет.", "There are no new postings yet.")}
                 </div>
               )}
+              <button
+                onClick={clearQueue}
+                disabled={clearing || settings.pending_count === 0}
+                className={`w-full p-4 rounded-card border text-left flex items-center gap-3 transition disabled:opacity-40 ${
+                  confirmingClear
+                    ? "border-red-500 bg-red-950/30"
+                    : "border-bg-card hover:border-red-500/40"
+                }`}
+              >
+                <Trash2 className="w-5 h-5 text-red-400 shrink-0" />
+                <div className="flex-1">
+                  <div className="font-medium">
+                    {clearing
+                      ? t("Очищаем…", "Clearing…")
+                      : confirmingClear
+                        ? t("Точно очистить? Нажмите ещё раз", "Sure? Tap again to confirm")
+                        : t("Очистить накопленные сообщения", "Clear accumulated messages")}
+                  </div>
+                  <div className="text-xs text-slate-400 mt-0.5">
+                    {t(
+                      "Все накопленные объявления будут удалены без отправки.",
+                      "All collected postings will be deleted without sending.",
+                    )}
+                  </div>
+                </div>
+              </button>
             </>
           )}
         </div>

@@ -188,6 +188,10 @@ export interface DigestStartResponse {
   remaining: number;
 }
 
+export interface DigestClearResponse {
+  cleared: number;
+}
+
 export interface SubscriptionPlan {
   code: string;
   days: number;

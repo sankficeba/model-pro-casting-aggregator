@@ -20,6 +20,7 @@ from api.schemas import (
     CreativeProfileSchema,
     DeliverySettingsResponse,
     DeliverySettingsUpdate,
+    DigestClearResponse,
     DigestStartResponse,
     EventProfileSchema,
     FavoriteItem,
@@ -451,6 +452,16 @@ async def digest_start(
         await bot.session.close()
     remaining = await repo.count_pending(user.id)
     return DigestStartResponse(sent=sent, remaining=remaining)
+
+
+@app.post("/api/digest/clear", response_model=DigestClearResponse)
+async def digest_clear(
+    user: TelegramUser = Depends(current_user),
+) -> DigestClearResponse:
+    """Кнопка «Очистить накопленные» в Mini App: удаляет всю pending-очередь
+    юзера без отправки уведомлений."""
+    cleared = await repo.clear_pending(user.id)
+    return DigestClearResponse(cleared=cleared)
 
 
 # ---------- Subscription / payments ----------

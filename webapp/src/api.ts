@@ -8,6 +8,7 @@ import type {
   BroadcastStartResponse,
   CategoryCode,
   DeliverySettings,
+  DigestClearResponse,
   DigestStartResponse,
   FavoriteShowResponse,
   FavoritesList,
@@ -232,6 +233,11 @@ export const api = {
     }),
   startDigestReview: () =>
     request<DigestStartResponse>("/digest/start", {
+      method: "POST",
+      body: "{}",
+    }),
+  clearDigestQueue: () =>
+    request<DigestClearResponse>("/digest/clear", {
       method: "POST",
       body: "{}",
     }),

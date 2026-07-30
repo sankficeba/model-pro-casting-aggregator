@@ -388,6 +388,10 @@ class DigestStartResponse(BaseModel):
     remaining: int
 
 
+class DigestClearResponse(BaseModel):
+    cleared: int
+
+
 # ---------- subscription ----------
 
 

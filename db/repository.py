@@ -1475,6 +1475,19 @@ async def count_pending(user_id: int) -> int:
         return int(res.scalar() or 0)
 
 
+async def clear_pending(user_id: int) -> int:
+    """Удаляет все pending-записи юзера (кнопка «Очистить накопленные»
+    в Mini App). Возвращает число удалённых строк."""
+    from sqlalchemy import delete as sa_delete
+
+    async with AsyncSessionLocal() as session:
+        res = await session.execute(
+            sa_delete(PendingNotification).where(PendingNotification.user_id == user_id)
+        )
+        await session.commit()
+        return int(res.rowcount or 0)
+
+
 async def mark_for_llm_retry(message_id: int) -> None:
     """Помечает сообщение для повторного LLM-вызова (нехватка баланса)."""
     async with AsyncSessionLocal() as session:
