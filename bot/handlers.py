@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import html
+from pathlib import Path
 
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import Command, CommandStart
@@ -958,6 +959,16 @@ async def run_bot(
 
     @dp.startup()
     async def _on_startup() -> None:
+        # Маркер живёт в writable-слое контейнера (не в volume), поэтому
+        # переживает рестарты того же контейнера (restart: unless-stopped),
+        # но исчезает при настоящем редеплое (новый контейнер из нового
+        # образа). Так уведомление шлётся один раз за деплой, а не на
+        # каждый рестарт после сетевого сбоя/краша.
+        deploy_marker = Path("/tmp/.deploy_notified")
+        if deploy_marker.exists():
+            logger.info("aiogram-бот запущен (рестарт того же контейнера, уведомление о деплое пропущено)")
+            return
+        deploy_marker.touch()
         for admin_id in settings.admin_ids:
             try:
                 await bot.send_message(admin_id, "✅ Деплой успешно завершён")

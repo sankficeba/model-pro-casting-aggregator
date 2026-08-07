@@ -1193,7 +1193,22 @@ class Userbot:
             logger.warning("send_original_media error user={}: {}", user_id, e)
 
     async def start(self) -> None:
-        await self.client.start(phone=settings.tg_phone)
+        # Ретраим временные сетевые сбои (DNS/маршрутизация до Telegram)
+        # здесь, а не даём им всплыть в asyncio.gather в main() — иначе
+        # падает весь процесс (и aiogram-бот тоже), Docker его перезапускает,
+        # и это выглядит как бесконечный "деплой" каждые ~30 секунд.
+        delay = 5.0
+        while True:
+            try:
+                await self.client.start(phone=settings.tg_phone)
+                break
+            except (ConnectionError, OSError) as e:
+                logger.warning(
+                    "Userbot: не удалось подключиться к Telegram ({}), повтор через {:.0f}s",
+                    e, delay,
+                )
+                await asyncio.sleep(delay)
+                delay = min(delay * 2, 120.0)
         self._entities = await self._resolve_channels()
         if not self._entities:
             logger.warning(
