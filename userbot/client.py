@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -169,6 +170,10 @@ class Userbot:
         # unsubscribe_channel дёргают _rebind_handler).
         self._entities: list = []
         self._handler_func = None
+        # Дебаунс для алерта "пополните баланс LLM" — при разряженном
+        # балансе LLMBillingError сыпется на каждое сообщение (десятки в
+        # минуту), а слать админам нужно не чаще раза в час.
+        self._last_llm_billing_alert = 0.0
 
     async def _resolve_one(self, row) -> object | None:  # noqa: ANN001
         """Резолвит ОДИН Channel-row → Telethon entity (best-effort).
@@ -781,6 +786,24 @@ class Userbot:
             chat_username=chat_username,
         )
 
+    async def _alert_admins_llm_billing(self) -> None:
+        """Шлёт админам «пополните баланс LLM», но не чаще раза в час —
+        при разряженном балансе LLMBillingError сыпется на каждое
+        сообщение, и без дебаунса это был бы спам."""
+        now = time.monotonic()
+        if now - self._last_llm_billing_alert < 3600:
+            return
+        self._last_llm_billing_alert = now
+        for admin_id in settings.admin_ids:
+            try:
+                await self.bot.send_message(
+                    admin_id,
+                    "⚠️ Баланс LLM (OpenAI) исчерпан — обработка кастингов остановлена. "
+                    "Пополните баланс, накопленные сообщения переобработаются автоматически.",
+                )
+            except Exception as e:  # noqa: BLE001
+                logger.warning("LLM billing alert failed for admin {}: {}", admin_id, e)
+
     async def _handle_message(self, event, origin: str = "push"):
         text = (event.message.message or "").strip()
         if not text:
@@ -823,6 +846,7 @@ class Userbot:
             logger.warning(
                 "LLM billing error — сохраняем msg_id={} для retry", event.message.id
             )
+            await self._alert_admins_llm_billing()
             message_db_id, _ = await repository.insert_message_with_vacancies(
                 tg_chat_id=chat_id,
                 tg_chat_username=chat_username,
@@ -890,6 +914,7 @@ class Userbot:
                         post = await self.llm.extract(text)
                     except LLMBillingError:
                         logger.debug("LLM retry: баланс ещё не пополнен, прерываем")
+                        await self._alert_admins_llm_billing()
                         break
                     vacancy_ids = await repository.apply_llm_retry(msg_id, post)
                     if post.is_casting and vacancy_ids:
