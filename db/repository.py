@@ -1499,6 +1499,22 @@ async def mark_for_llm_retry(message_id: int) -> None:
         await session.commit()
 
 
+async def discard_stale_llm_retry(max_age_hours: int) -> int:
+    """Сбрасывает llm_retry_needed для сообщений старше max_age_hours БЕЗ
+    вызова LLM — кастинг такой давности уже неактуален (смена прошла),
+    отправлять по нему уведомления нет смысла. Возвращает число сброшенных."""
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=max_age_hours)
+    async with AsyncSessionLocal() as session:
+        res = await session.execute(
+            update(Message)
+            .where(Message.llm_retry_needed.is_(True))
+            .where(Message.received_at < cutoff)
+            .values(llm_retry_needed=False)
+        )
+        await session.commit()
+        return int(res.rowcount or 0)
+
+
 async def get_messages_for_llm_retry(limit: int = 50) -> list[tuple[int, str, str | None, str | None, int]]:
     """Сообщения с llm_retry_needed=True, порциями по `limit`.
     Возвращает [(id, text, text_hash, tg_chat_username, tg_message_id)]."""

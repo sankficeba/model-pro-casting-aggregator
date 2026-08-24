@@ -32,6 +32,10 @@ class Settings(BaseSettings):
     ollama_base_url: str = Field("http://localhost:11434", alias="OLLAMA_BASE_URL")
     ollama_model: str = Field("llama3.1", alias="OLLAMA_MODEL")
 
+    # Сообщения старше этого возраста при LLM-ретрае отбрасываются без
+    # вызова LLM и без уведомлений — кастинг уже неактуален.
+    llm_retry_max_age_hours: int = Field(48, alias="LLM_RETRY_MAX_AGE_HOURS")
+
     # PostgreSQL
     # Можно задать одной строкой DATABASE_URL ИЛИ пятью POSTGRES_* — они склеятся.
     database_url: str | None = Field(None, alias="DATABASE_URL")

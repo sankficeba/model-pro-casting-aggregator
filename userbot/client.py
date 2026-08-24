@@ -905,6 +905,14 @@ class Userbot:
         while True:
             try:
                 await asyncio.sleep(300)
+                discarded = await repository.discard_stale_llm_retry(
+                    settings.llm_retry_max_age_hours
+                )
+                if discarded:
+                    logger.info(
+                        "LLM retry: отброшено {} устаревших сообщений (старше {}ч)",
+                        discarded, settings.llm_retry_max_age_hours,
+                    )
                 pending = await repository.get_messages_for_llm_retry()
                 if not pending:
                     continue
