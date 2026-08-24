@@ -1,7 +1,7 @@
 """LLM-провайдер на базе OpenAI-совместимого API."""
 from __future__ import annotations
 
-from openai import AsyncOpenAI, RateLimitError
+from openai import APIStatusError, AsyncOpenAI, RateLimitError
 
 from llm.base import LLMBillingError, LLMProvider
 
@@ -24,4 +24,11 @@ class OpenAIProvider(LLMProvider):
             )
         except RateLimitError as e:
             raise LLMBillingError(str(e)) from e
+        except APIStatusError as e:
+            # DeepSeek (и другие OpenAI-совместимые провайдеры) отдают 402
+            # Insufficient Balance вместо 429 — тоже billing-ошибка, должна
+            # уйти в retry-очередь, а не потеряться как обычный сбой.
+            if e.status_code == 402:
+                raise LLMBillingError(str(e)) from e
+            raise
         return resp.choices[0].message.content or "{}"
