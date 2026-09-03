@@ -3,8 +3,9 @@
 Бэкенд Telegram-бота, который вычитывает кастинговые каналы, извлекает из
 постов структурированные вакансии через LLM и рассылает их только тем
 пользователям, кому они подходят по анкете. Живёт как
-[@ModelProAgency_bot](https://t.me/ModelProAgency_bot) с Mini App на
-modelpro.agency.
+[@ModelProAgency_bot](https://t.me/ModelProAgency_bot) с Mini App. Сайт бота,
+[modelpro.agency](https://modelpro.agency), там же есть информация о
+проекте.
 
 Кастинги публикуются россыпью Telegram-каналов, без единого формата и без
 фильтрации по городу, полу, возрасту, ставке. Один и тот же пост форвардится
