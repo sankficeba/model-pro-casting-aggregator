@@ -251,6 +251,13 @@ export const api = {
       body: JSON.stringify({ plan_code: planCode ?? null }),
     }),
 
+  // Язык (общий с ботом)
+  setLanguage: (language: ApiLang) =>
+    request<{ language: ApiLang }>("/me/language", {
+      method: "PUT",
+      body: JSON.stringify({ language }),
+    }),
+
   // Favorites
   listFavorites: () => request<FavoritesList>("/favorites"),
   getFavoritesSettings: () =>

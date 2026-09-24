@@ -79,6 +79,8 @@ export interface MeResponse {
   /** false = у юзера НЕТ активного чата с ботом (не нажимал /start
    *  или заблокировал бота). Mini App показывает плашку-инструкцию. */
   bot_chat_active?: boolean;
+  /** Явный выбор языка (общий с ботом: /language). null — не выбирал. */
+  language?: "ru" | "en" | null;
 }
 
 export interface AdminStats {

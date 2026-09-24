@@ -132,6 +132,23 @@ export function closeApp() {
   tg?.close();
 }
 
+/** Открыть внешнюю ссылку (например, оплату ЮKassa) во внешнем браузере
+ *  через Telegram. Внутри WebView Telegram переход через location.href на
+ *  чужой домен не работает (или ломает редиректы в банковские приложения/СБП).
+ *  Возвращает true, если ссылку открыл Telegram. Вне Telegram — false,
+ *  вызывающий сам делает обычный переход. */
+export function openExternalLink(url: string): boolean {
+  if (tg?.openLink) {
+    try {
+      tg.openLink(url);
+      return true;
+    } catch {
+      /* fallback */
+    }
+  }
+  return false;
+}
+
 /** Открыть Telegram-ссылку (t.me/...) НЕ закрывая Mini App.
  *  Вне Telegram — обычный window.open. */
 export function openTelegramLink(url: string): void {

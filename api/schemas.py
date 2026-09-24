@@ -392,6 +392,10 @@ class DigestClearResponse(BaseModel):
     cleared: int
 
 
+class LanguageUpdate(BaseModel):
+    language: Literal["ru", "en"]
+
+
 # ---------- subscription ----------
 
 

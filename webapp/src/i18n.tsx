@@ -9,8 +9,8 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { tg } from "./telegram";
-import { setApiLang } from "./api";
+import { isInTelegram, tg } from "./telegram";
+import { api, setApiLang } from "./api";
 
 export type Lang = "ru" | "en";
 
@@ -32,6 +32,8 @@ setApiLang(initialLang);
 interface LangContextValue {
   lang: Lang;
   setLang: (l: Lang) => void;
+  /** Синхронизация с users.language из /api/me (общий язык с ботом). */
+  syncWithServer: (serverLang: Lang | null | undefined) => void;
   t: (ru: string, en: string) => string;
 }
 
@@ -40,16 +42,47 @@ const LangContext = createContext<LangContextValue | null>(null);
 export function LangProvider({ children }: { children: ReactNode }) {
   const [lang, setLangState] = useState<Lang>(initialLang);
 
-  const setLang = (l: Lang) => {
+  const applyLang = (l: Lang) => {
     setLangState(l);
-    localStorage.setItem(STORAGE_KEY, l);
+    try {
+      localStorage.setItem(STORAGE_KEY, l);
+    } catch {
+      /* storage недоступен — язык всё равно применится на сессию */
+    }
     setApiLang(l);
+  };
+
+  // Ручное переключение: в Mini App сохраняем выбор и на сервере, чтобы бот
+  // говорил на том же языке. На лендинге initData нет — только localStorage.
+  const setLang = (l: Lang) => {
+    applyLang(l);
+    if (isInTelegram()) api.setLanguage(l).catch(() => {});
+  };
+
+  // Серверный выбор (в т.ч. сделанный через /language в боте) приоритетнее
+  // локального. Если на сервере пусто, а локально юзер уже переключал язык
+  // раньше (до появления синхронизации) — отправляем его на сервер.
+  const syncWithServer = (serverLang: Lang | null | undefined) => {
+    if (serverLang === "ru" || serverLang === "en") {
+      applyLang(serverLang);
+      return;
+    }
+    let stored: string | null = null;
+    try {
+      stored = localStorage.getItem(STORAGE_KEY);
+    } catch {
+      /* noop */
+    }
+    if ((stored === "ru" || stored === "en") && isInTelegram()) {
+      api.setLanguage(stored).catch(() => {});
+    }
   };
 
   const value = useMemo<LangContextValue>(
     () => ({
       lang,
       setLang,
+      syncWithServer,
       t: (ru: string, en: string) => (lang === "en" ? en : ru),
     }),
     [lang],

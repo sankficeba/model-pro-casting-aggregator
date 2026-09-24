@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { ChevronLeft, Crown, CheckCircle2, Clock, Sparkles } from "lucide-react";
 import { api } from "../api";
 import { useLang } from "../i18n";
+import { openExternalLink } from "../telegram";
 import type { SubscriptionPlan, SubscriptionStatus } from "../types";
 
 interface Props {
@@ -64,6 +65,29 @@ export function SubscriptionScreen({ onBack }: Props) {
   const [loading, setLoading] = useState(true);
   const [checkoutPending, setCheckoutPending] = useState(false);
   const [selectedCode, setSelectedCode] = useState<string | null>(null);
+  const [awaitingPayment, setAwaitingPayment] = useState(false);
+
+  // Пока оплата открыта в браузере, при возврате в Mini App перечитываем
+  // статус: webhook ЮKassa к этому моменту обычно уже продлил подписку.
+  useEffect(() => {
+    if (!awaitingPayment) return;
+    const refresh = () => {
+      if (document.visibilityState !== "visible") return;
+      api
+        .getSubscriptionStatus()
+        .then((s) => {
+          setStatus(s);
+          if (s.is_active) setAwaitingPayment(false);
+        })
+        .catch(() => {});
+    };
+    document.addEventListener("visibilitychange", refresh);
+    window.addEventListener("focus", refresh);
+    return () => {
+      document.removeEventListener("visibilitychange", refresh);
+      window.removeEventListener("focus", refresh);
+    };
+  }, [awaitingPayment]);
 
   useEffect(() => {
     api
@@ -89,7 +113,14 @@ export function SubscriptionScreen({ onBack }: Props) {
     setError(null);
     try {
       const checkout = await api.createSubscriptionCheckout(selectedPlan.code);
-      window.location.href = checkout.confirmation_url;
+      if (openExternalLink(checkout.confirmation_url)) {
+        // Оплата открылась в браузере, Mini App остаётся открытым —
+        // статус подтянем, когда юзер вернётся (см. useEffect ниже).
+        setCheckoutPending(false);
+        setAwaitingPayment(true);
+      } else {
+        window.location.href = checkout.confirmation_url;
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       setCheckoutPending(false);
@@ -247,6 +278,15 @@ export function SubscriptionScreen({ onBack }: Props) {
                 {t(
                   "Платёжная система ещё не настроена администратором.",
                   "The payment system hasn't been set up by the admin yet.",
+                )}
+              </div>
+            )}
+
+            {awaitingPayment && (
+              <div className="rounded-card bg-bg-card/40 border border-accent/40 px-3 py-2 text-xs text-slate-200">
+                {t(
+                  "Страница оплаты открыта в браузере. После оплаты вернитесь сюда — статус обновится автоматически.",
+                  "The payment page opened in your browser. Come back here after paying — the status will update automatically.",
                 )}
               </div>
             )}

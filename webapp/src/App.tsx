@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ChevronLeft } from "lucide-react";
 import { api } from "./api";
 import type {
@@ -47,7 +47,7 @@ type Screen =
   | { kind: "admin" };
 
 export default function App() {
-  const { t } = useLang();
+  const { t, syncWithServer } = useLang();
   const [screen, setScreen] = useState<Screen>({ kind: "loading" });
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -79,8 +79,17 @@ export default function App() {
 
   const [botChatActive, setBotChatActive] = useState<boolean>(true);
 
+  // Язык с сервера применяем один раз при старте: при последующих /me
+  // рефетчах он мог бы откатить только что сделанное переключение, если
+  // PUT /me/language ещё не долетел.
+  const langSynced = useRef(false);
+
   const fetchSubscriptions = async (): Promise<Subscription[]> => {
     const me: MeResponse = await api.getMe();
+    if (!langSynced.current) {
+      langSynced.current = true;
+      syncWithServer(me.language);
+    }
     setSubscriptions(me.subscriptions ?? []);
     setIsAdmin(me.is_admin);
     setBotChatActive(me.bot_chat_active !== false);

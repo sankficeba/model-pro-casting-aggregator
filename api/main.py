@@ -29,6 +29,7 @@ from api.schemas import (
     FavoritesSettings,
     PerfEvent,
     GeneralProfileSchema,
+    LanguageUpdate,
     ProblemActionResponse,
     ProblemItem,
     ProblemReportRequest,
@@ -185,7 +186,20 @@ async def me(user: TelegramUser = Depends(current_user)) -> dict:
         "is_admin": is_admin_user(user),
         "subscriptions": subscriptions,
         "bot_chat_active": bot_chat_active,
+        # Явный выбор языка (общий для бота и Mini App). None — не выбирал.
+        "language": getattr(db_user, "language", None),
     }
+
+
+@app.put("/api/me/language")
+async def set_my_language(
+    body: LanguageUpdate,
+    user: TelegramUser = Depends(current_user),
+) -> dict:
+    """Переключатель RU/EN в Mini App пишет в тот же users.language, что и
+    /language в боте, — язык бота и Mini App остаётся одинаковым."""
+    await repo.set_user_language(user.id, body.language)
+    return {"language": body.language}
 
 
 @app.get("/api/refs")
@@ -988,10 +1002,14 @@ async def yookassa_webhook(request: Request) -> dict:
             payment.user_id, yk_id, new_until,
         )
         # Уведомим юзера в чате
-        text = (
-            "✅ <b>Подписка активна!</b>\n\n"
-            f"Действует до <b>{new_until.strftime('%d.%m.%Y')}</b>. "
-            "Спасибо!"
+        from bot import i18n
+
+        lang = await i18n.get_lang(payment.user_id, None)
+        until = new_until.strftime("%d.%m.%Y")
+        text = i18n.t(
+            lang,
+            f"✅ <b>Подписка активна!</b>\n\nДействует до <b>{until}</b>. Спасибо!",
+            f"✅ <b>Subscription active!</b>\n\nValid until <b>{until}</b>. Thank you!",
         )
         url = f"https://api.telegram.org/bot{settings.bot_token}/sendMessage"
         try:
