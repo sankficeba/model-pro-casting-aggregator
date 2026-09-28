@@ -119,12 +119,15 @@ export interface BroadcastStartResponse {
 
 export interface AdminProfileRow {
   user_id: number;
+  category: CategoryCode;
   full_name: string | null;
   gender: string | null;
   city: string | null;
   actual_age: number | null;
   project_types: string[];
   role_types: string[];
+  work_types: string[];
+  telegram_user: string | null;
   email: string | null;
   completed_at: string | null;
   updated_at: string;

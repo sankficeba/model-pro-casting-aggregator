@@ -26,6 +26,7 @@ import type {
   BroadcastFilterBody,
   ProblemItem,
 } from "../types";
+import { CATEGORY_LABELS } from "../types";
 
 type Tab = "profiles" | "messages";
 
@@ -474,10 +475,13 @@ function ProfilesTab() {
   return (
     <ul className="space-y-2">
       {rows.map((p) => (
-        <li key={p.user_id} className="rounded-card bg-bg-surface p-3 text-sm">
+        <li key={`${p.category}-${p.user_id}`} className="rounded-card bg-bg-surface p-3 text-sm">
           <div className="flex items-baseline justify-between gap-2">
             <div className="font-medium">
               {p.full_name || <span className="text-slate-500">— без имени —</span>}
+              <span className="ml-2 text-xs font-normal text-accent">
+                {CATEGORY_LABELS[p.category] ?? p.category}
+              </span>
             </div>
             <div
               className={
@@ -492,6 +496,7 @@ function ProfilesTab() {
           </div>
           <div className="text-slate-400 text-xs mt-1 space-x-2">
             <span>id: {p.user_id}</span>
+            {p.telegram_user && <span>· @{p.telegram_user.replace(/^@/, "")}</span>}
             {p.gender && <span>· {p.gender === "male" ? "м" : "ж"}</span>}
             {p.actual_age != null && <span>· {p.actual_age} лет</span>}
             {p.city && <span>· {p.city}</span>}
@@ -500,6 +505,11 @@ function ProfilesTab() {
             <div className="text-slate-300 text-xs mt-1.5 break-words">
               {p.project_types.length > 0 && <>Проекты: {p.project_types.join(", ")} </>}
               {p.role_types.length > 0 && <>· Роли: {p.role_types.join(", ")}</>}
+            </div>
+          )}
+          {p.work_types.length > 0 && (
+            <div className="text-slate-300 text-xs mt-1.5 break-words">
+              Виды работ: {p.work_types.join(", ")}
             </div>
           )}
           {p.email && <div className="text-slate-500 text-xs mt-1">{p.email}</div>}

@@ -18,8 +18,18 @@ from sqlalchemy.orm import selectinload
 from api.auth import TelegramUser, admin_user
 from config import settings
 from db import repository as repo
-from db.models import ActorProfile, Message, Notification
+from db.models import AdminProfile as AdminCategoryProfile
+from db.models import CreativeProfile, EventProfile, GeneralProfile, Message, Notification
 from db.session import AsyncSessionLocal
+
+# Анкеты живут по категориям (миграция 0013). Старая actor_profiles больше
+# не пишется — читать её в админке нельзя.
+CATEGORY_PROFILE_MODELS = {
+    "creative": CreativeProfile,
+    "event": EventProfile,
+    "general": GeneralProfile,
+    "admin": AdminCategoryProfile,
+}
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
@@ -28,12 +38,15 @@ router = APIRouter(prefix="/api/admin", tags=["admin"])
 
 class AdminProfile(BaseModel):
     user_id: int
+    category: str
     full_name: Optional[str] = None
     gender: Optional[str] = None
     city: Optional[str] = None
     actual_age: Optional[int] = None
     project_types: list[str] = []
     role_types: list[str] = []
+    work_types: list[str] = []
+    telegram_user: Optional[str] = None
     email: Optional[str] = None
     completed_at: Optional[datetime] = None
     updated_at: datetime
@@ -120,6 +133,7 @@ async def stats(_: TelegramUser = Depends(admin_user)) -> AdminStats:
         async with AsyncSessionLocal() as session:
             return (await session.execute(stmt)).scalar_one()
 
+    models = list(CATEGORY_PROFILE_MODELS.values())
     (
         profiles_total,
         profiles_completed,
@@ -129,9 +143,11 @@ async def stats(_: TelegramUser = Depends(admin_user)) -> AdminStats:
         notifications_success,
         extra,
     ) = await _asyncio.gather(
-        _count(select(func.count(ActorProfile.user_id))),
-        _count(select(func.count(ActorProfile.user_id)).where(
-            ActorProfile.completed_at.is_not(None)
+        # Сумма по всем категориям: юзер с 2 категориями = 2 анкеты.
+        _asyncio.gather(*(_count(select(func.count(m.id))) for m in models)),
+        _asyncio.gather(*(
+            _count(select(func.count(m.id)).where(m.completed_at.is_not(None)))
+            for m in models
         )),
         _count(select(func.count(Message.id))),
         _count(select(func.count(Message.id)).where(Message.is_casting.is_(True))),
@@ -142,8 +158,8 @@ async def stats(_: TelegramUser = Depends(admin_user)) -> AdminStats:
         repo.get_extended_admin_stats(),
     )
     return AdminStats(
-        profiles_total=profiles_total,
-        profiles_completed=profiles_completed,
+        profiles_total=sum(profiles_total),
+        profiles_completed=sum(profiles_completed),
         messages_total=messages_total,
         messages_casting=messages_casting,
         notifications_total=notifications_total,
@@ -257,28 +273,33 @@ async def list_profiles(
     offset: int = Query(0, ge=0),
     _: TelegramUser = Depends(admin_user),
 ) -> list[AdminProfile]:
+    # Из каждой категории берём первые offset+limit по updated_at, сливаем и
+    # режем страницу — глобальный порядок «свежие сверху» сохраняется.
+    rows: list[tuple[str, object]] = []
     async with AsyncSessionLocal() as session:
-        res = await session.execute(
-            select(ActorProfile)
-            .order_by(ActorProfile.updated_at.desc())
-            .limit(limit)
-            .offset(offset)
-        )
-        rows = res.scalars().all()
+        for category, model in CATEGORY_PROFILE_MODELS.items():
+            res = await session.execute(
+                select(model).order_by(model.updated_at.desc()).limit(offset + limit)
+            )
+            rows.extend((category, p) for p in res.scalars().all())
+    rows.sort(key=lambda r: r[1].updated_at, reverse=True)
     return [
         AdminProfile(
             user_id=p.user_id,
+            category=category,
             full_name=p.full_name,
             gender=p.gender,
             city=p.city,
             actual_age=p.actual_age,
-            project_types=list(p.project_types or []),
-            role_types=list(p.role_types or []),
+            project_types=list(getattr(p, "project_types", None) or []),
+            role_types=list(getattr(p, "role_types", None) or []),
+            work_types=list(getattr(p, "work_types", None) or []),
+            telegram_user=p.telegram_user,
             email=p.email,
             completed_at=p.completed_at,
             updated_at=p.updated_at,
         )
-        for p in rows
+        for category, p in rows[offset:offset + limit]
     ]
 
 
