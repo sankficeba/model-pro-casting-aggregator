@@ -19,7 +19,7 @@ from api.auth import TelegramUser, admin_user
 from config import settings
 from db import repository as repo
 from db.models import AdminProfile as AdminCategoryProfile
-from db.models import CreativeProfile, EventProfile, GeneralProfile, Message, Notification
+from db.models import CreativeProfile, EventProfile, GeneralProfile, Message, Notification, User
 from db.session import AsyncSessionLocal
 
 # Анкеты живут по категориям (миграция 0013). Старая actor_profiles больше
@@ -119,6 +119,18 @@ class BroadcastAudienceResponse(BaseModel):
 class BroadcastStartResponse(BaseModel):
     ok: bool
     audience_count: int
+
+
+class GrantSubscriptionBody(BaseModel):
+    # @username или числовой telegram id.
+    user: str = Field(min_length=1, max_length=64)
+    days: int = Field(default=30, ge=1, le=3650)
+
+
+class GrantSubscriptionResponse(BaseModel):
+    user_id: int
+    username: Optional[str]
+    active_until: datetime
 
 
 # ---------- Endpoints ----------
@@ -265,6 +277,33 @@ async def broadcast_start(
         logger.warning("broadcast_start: prompt sendMessage error: {}", e)
 
     return BroadcastStartResponse(ok=True, audience_count=audience)
+
+
+@router.post("/subscription/grant", response_model=GrantSubscriptionResponse)
+async def grant_subscription(
+    body: GrantSubscriptionBody,
+    admin: TelegramUser = Depends(admin_user),
+) -> GrantSubscriptionResponse:
+    """Вручную продлить подписку юзеру на N дней. Ищем только среди тех,
+    кто уже есть в users — чтобы опечатка в id не создала юзера-призрака."""
+    query = body.user.strip().lstrip("@")
+    if query.isdigit():
+        cond = User.id == int(query)
+    else:
+        cond = func.lower(User.username) == query.lower()
+    async with AsyncSessionLocal() as session:
+        row = (await session.execute(select(User.id, User.username).where(cond))).first()
+    if row is None:
+        raise HTTPException(status_code=404, detail=f"Пользователь «{body.user}» не найден.")
+    user_id, username = row
+    active_until = await repo.extend_subscription(user_id, body.days)
+    logger.info(
+        "admin {} granted {}d subscription to {} (@{}), active_until={}",
+        admin.id, body.days, user_id, username, active_until,
+    )
+    return GrantSubscriptionResponse(
+        user_id=user_id, username=username, active_until=active_until,
+    )
 
 
 @router.get("/profiles", response_model=list[AdminProfile])

@@ -117,6 +117,12 @@ export interface BroadcastStartResponse {
   audience_count: number;
 }
 
+export interface GrantSubscriptionResponse {
+  user_id: number;
+  username: string | null;
+  active_until: string;
+}
+
 export interface AdminProfileRow {
   user_id: number;
   category: CategoryCode;

@@ -15,6 +15,7 @@ import {
   ListChecks,
   LifeBuoy,
   Check,
+  Gift,
 } from "lucide-react";
 import { api } from "../api";
 import { openTelegramLink, tg } from "../telegram";
@@ -59,6 +60,7 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
       <main className="flex-1 px-5 py-4 space-y-5">
         <StatsBlock />
         <ProblemsBlock />
+        <GrantSubscriptionBlock />
         <BroadcastBlock />
 
         <div>
@@ -254,6 +256,95 @@ function ProblemsBlock() {
           ))}
         </ul>
       )}
+    </section>
+  );
+}
+
+// ===== Grant subscription =====
+
+const GRANT_DAYS_OPTIONS = [7, 30, 90];
+
+function GrantSubscriptionBlock() {
+  const [user, setUser] = useState("");
+  const [days, setDays] = useState(30);
+  const [submitting, setSubmitting] = useState(false);
+  const [result, setResult] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const submit = async () => {
+    const q = user.trim();
+    if (!q || submitting) return;
+    setSubmitting(true);
+    setError(null);
+    setResult(null);
+    try {
+      const r = await api.adminGrantSubscription(q, days);
+      const who = r.username ? `@${r.username}` : `id ${r.user_id}`;
+      const until = new Date(r.active_until).toLocaleString("ru-RU");
+      setResult(`${who}: +${days} дн., подписка до ${until}`);
+      setUser("");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <section className="space-y-3">
+      <h2 className="text-sm uppercase tracking-wider text-slate-500 inline-flex items-center gap-1.5">
+        <Gift className="w-4 h-4" />
+        Начислить подписку
+      </h2>
+      <div className="text-xs text-slate-400 -mt-1">
+        Username или Telegram ID. Если подписка активна, дни добавятся к
+        текущему сроку.
+      </div>
+
+      <input
+        type="text"
+        value={user}
+        onChange={(e) => setUser(e.target.value)}
+        onKeyDown={(e) => e.key === "Enter" && submit()}
+        placeholder="@username или 123456789"
+        className="w-full bg-bg-card rounded-card px-3 py-2 outline-none focus:ring-1 ring-accent text-sm"
+      />
+      <div className="flex gap-2">
+        {GRANT_DAYS_OPTIONS.map((d) => (
+          <button
+            key={d}
+            onClick={() => setDays(d)}
+            className={
+              "px-3 py-1.5 rounded-chip text-sm border transition " +
+              (days === d
+                ? "bg-bg-card border-accent text-accent"
+                : "bg-bg-card border-bg-card text-slate-400")
+            }
+          >
+            {d} дн.
+          </button>
+        ))}
+      </div>
+
+      {error && (
+        <div className="rounded-card bg-red-950/40 border border-red-900 px-3 py-2 text-sm text-red-300">
+          {error}
+        </div>
+      )}
+      {result && (
+        <div className="rounded-card bg-emerald-900/40 border border-emerald-800 px-3 py-2 text-sm text-emerald-300">
+          {result}
+        </div>
+      )}
+
+      <button
+        onClick={submit}
+        disabled={submitting || !user.trim()}
+        className="w-full rounded-card bg-accent text-bg font-medium py-3 transition disabled:opacity-50 hover:opacity-90 inline-flex items-center justify-center gap-2"
+      >
+        <Gift className="w-4 h-4" />
+        {submitting ? "Начисляем…" : `Начислить ${days} дн.`}
+      </button>
     </section>
   );
 }

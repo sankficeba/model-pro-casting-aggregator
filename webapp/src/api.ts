@@ -13,6 +13,7 @@ import type {
   FavoriteShowResponse,
   FavoritesList,
   FavoritesSettings,
+  GrantSubscriptionResponse,
   ProblemActionResponse,
   ProblemsList,
   MeResponse,
@@ -322,5 +323,10 @@ export const api = {
     request<BroadcastStartResponse>("/admin/broadcast/start", {
       method: "POST",
       body: JSON.stringify(body),
+    }),
+  adminGrantSubscription: (user: string, days: number) =>
+    request<GrantSubscriptionResponse>("/admin/subscription/grant", {
+      method: "POST",
+      body: JSON.stringify({ user, days }),
     }),
 };
