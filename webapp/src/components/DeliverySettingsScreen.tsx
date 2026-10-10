@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
-import { ChevronLeft, Zap, Inbox, Moon, Sun, PlayCircle, Trash2 } from "lucide-react";
+import { ChevronLeft, Zap, Inbox, Moon, Sun, Trash2 } from "lucide-react";
 import { api } from "../api";
-import { tg } from "../telegram";
 import { useLang } from "../i18n";
 import type { DeliverySettings } from "../types";
+import { DigestReviewButton } from "./DigestReviewButton";
 
 interface Props {
   onBack: () => void;
@@ -26,35 +26,8 @@ export function DeliverySettingsScreen({ onBack }: Props) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [savedToast, setSavedToast] = useState(false);
-  const [reviewing, setReviewing] = useState(false);
-  const [emptyQueue, setEmptyQueue] = useState(false);
   const [clearing, setClearing] = useState(false);
   const [confirmingClear, setConfirmingClear] = useState(false);
-
-  useEffect(() => {
-    if (!emptyQueue) return;
-    const handle = setTimeout(() => setEmptyQueue(false), 3000);
-    return () => clearTimeout(handle);
-  }, [emptyQueue]);
-
-  const startReview = async () => {
-    setReviewing(true);
-    setError(null);
-    setEmptyQueue(false);
-    try {
-      const res = await api.startDigestReview();
-      if (!res.sent) {
-        setEmptyQueue(true);
-        setSettings((s) => ({ ...s, pending_count: 0 }));
-        setReviewing(false);
-        return;
-      }
-      tg?.close();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-      setReviewing(false);
-    }
-  };
 
   const clearQueue = async () => {
     if (!confirmingClear) {
@@ -177,41 +150,10 @@ export function DeliverySettingsScreen({ onBack }: Props) {
           </button>
           {settings.delivery_mode === "digest" && (
             <>
-              <button
-                onClick={startReview}
-                disabled={reviewing}
-                className="w-full p-4 rounded-card border border-accent/40 text-left flex items-center gap-3 transition hover:border-accent disabled:opacity-50"
-              >
-                <PlayCircle className="w-5 h-5 text-accent shrink-0" />
-                <div className="flex-1">
-                  <div className="font-medium">
-                    {reviewing
-                      ? t("Открываем…", "Opening…")
-                      : t(
-                          `Пролистать накопленные объявления${
-                            settings.pending_count > 0 ? ` (${settings.pending_count})` : ""
-                          }`,
-                          `Browse collected postings${
-                            settings.pending_count > 0 ? ` (${settings.pending_count})` : ""
-                          }`,
-                        )}
-                  </div>
-                  <div className="text-xs text-slate-400 mt-0.5">
-                    {t(
-                      "Mini App закроется, и в чате с ботом начнут приходить накопленные кастинги.",
-                      "The Mini App will close, and collected castings will start arriving in the bot chat.",
-                    )}
-                  </div>
-                </div>
-              </button>
-              {emptyQueue && (
-                <div
-                  role="status"
-                  className="rounded-card border border-red-500/60 bg-red-950/30 text-red-200 text-sm px-3 py-2 animate-fade-in-out"
-                >
-                  {t("Пока что новых объявлений нет.", "There are no new postings yet.")}
-                </div>
-              )}
+              <DigestReviewButton
+                pendingCount={settings.pending_count}
+                onEmpty={() => setSettings((s) => ({ ...s, pending_count: 0 }))}
+              />
               <button
                 onClick={clearQueue}
                 disabled={clearing || settings.pending_count === 0}

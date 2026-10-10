@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { CheckCircle2, AlertCircle, ShieldCheck, Plus, Ban, Megaphone, Bell, BellOff, Bookmark, LifeBuoy } from "lucide-react";
 import { api } from "../api";
-import type { CategoryCode, Subscription } from "../types";
+import type { CategoryCode, DeliverySettings, Subscription } from "../types";
 import { CATEGORY_LABELS, CATEGORY_LABELS_EN } from "../types";
 import { useLang } from "../i18n";
+import { DigestReviewButton } from "./DigestReviewButton";
 
 interface Props {
   subscriptions: Subscription[];
@@ -35,6 +36,12 @@ export function CategoryMenuScreen({
   const { t, lang, setLang } = useLang();
   const [pending, setPending] = useState<CategoryCode | null>(null);
   const canAdd = subscriptions.length < 4;
+  const [delivery, setDelivery] = useState<DeliverySettings | null>(null);
+
+  useEffect(() => {
+    // Ошибку глушим: кнопка дайджеста на главном экране необязательна.
+    api.getDeliverySettings().then(setDelivery).catch(() => {});
+  }, []);
 
   const toggle = async (sub: Subscription, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -71,6 +78,14 @@ export function CategoryMenuScreen({
           )}
         </div>
       </div>
+      {delivery?.delivery_mode === "digest" && (
+        <div className="space-y-3">
+          <DigestReviewButton
+            pendingCount={delivery.pending_count}
+            onEmpty={() => setDelivery((d) => (d ? { ...d, pending_count: 0 } : d))}
+          />
+        </div>
+      )}
       <div className="space-y-3">
         {subscriptions.map((s) => {
           const pct = Math.max(0, Math.min(100, s.completion_pct ?? (s.profile_completed ? 100 : 0)));
