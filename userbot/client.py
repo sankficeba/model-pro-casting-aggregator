@@ -696,9 +696,9 @@ class Userbot:
                 lang=user_lang,
             )
 
-            from bot.keyboards import EMOJI_RESPOND, actions_rows
+            from bot.keyboards import EMOJI_RESPOND, SHOW_RESPOND_BUTTONS, actions_rows
             kb_buttons: list[list[InlineKeyboardButton]] = []
-            for i, db_id in zip(hit_idxs, matched_db_ids):
+            for i, db_id in (zip(hit_idxs, matched_db_ids) if SHOW_RESPOND_BUTTONS else []):
                 title = _vacancy_title(vacancies[i], user_lang)
                 kb_buttons.append([
                     InlineKeyboardButton(

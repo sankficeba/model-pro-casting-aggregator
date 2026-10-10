@@ -217,7 +217,7 @@ async def _build_digest_message(
     ) + "</i>"
 
     kb_buttons: list[list[InlineKeyboardButton]] = []
-    for i in matched_idxs:
+    for i in (matched_idxs if keyboards.SHOW_RESPOND_BUTTONS else []):
         v = canon_vacancies[i]
         title = _vacancy_title(vac_extractions[i], lang)
         kb_buttons.append([
@@ -874,17 +874,22 @@ def build_dispatcher(
         if msg is not None and msg.reply_markup is not None:
             try:
                 old_rows = list(msg.reply_markup.inline_keyboard)
-                # Свежий fav-ряд (одиночный).
-                fav_row = keyboards.actions_rows(
+                # Свежий fav-ряд (одиночный). Если кнопка «В избранное»
+                # выключена, после удаления из избранного ряд просто убираем.
+                fresh = keyboards.actions_rows(
                     message_id=msg_id, is_favorited=new_state, lang=lang,
-                )[-1]
+                )
+                fav_row = fresh[-1] if len(fresh) > 1 else None
                 new_rows: list = []
                 for row in old_rows:
                     is_fav_row = any(
                         (btn.callback_data or "").startswith("fav:")
                         for btn in row
                     )
-                    new_rows.append(fav_row if is_fav_row else row)
+                    if not is_fav_row:
+                        new_rows.append(row)
+                    elif fav_row is not None:
+                        new_rows.append(fav_row)
                 await msg.edit_reply_markup(
                     reply_markup=InlineKeyboardMarkup(inline_keyboard=new_rows)
                 )

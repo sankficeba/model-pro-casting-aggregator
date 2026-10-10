@@ -16,6 +16,12 @@ EMOJI_FAV_ADD = "5361760588764566472"   # 📎
 EMOJI_FAV_REMOVE = "5465665476971471368"  # ❌
 EMOJI_NEXT = "5404546954183059646"  # ▶️
 
+# Кнопки «Сгенерировать отклик» и «Добавить в избранное» под
+# уведомлениями временно скрыты. Callback-хендлеры оставлены, чтобы
+# кнопки в уже отправленных сообщениях продолжали работать.
+SHOW_RESPOND_BUTTONS = False
+SHOW_FAVORITE_BUTTON = False
+
 
 def actions_rows(
     *, message_id: int, is_favorited: bool, lang: Lang = "ru",
@@ -40,7 +46,7 @@ def actions_rows(
             icon_custom_emoji_id=EMOJI_FAV_ADD,
         )
     )
-    return [
+    rows = [
         [
             InlineKeyboardButton(
                 text=t(lang, "Оригинал", "Original"),
@@ -53,8 +59,12 @@ def actions_rows(
                 icon_custom_emoji_id=EMOJI_DELETE,
             ),
         ],
-        [fav_btn],
     ]
+    # Ряд «Удалить из избранного» нужен и при выключенной кнопке: его
+    # перерисовывает cb_favorite в старых сообщениях.
+    if SHOW_FAVORITE_BUTTON or is_favorited:
+        rows.append([fav_btn])
+    return rows
 
 
 def problem_resolve_row(problem_id: int) -> list[list[InlineKeyboardButton]]:
