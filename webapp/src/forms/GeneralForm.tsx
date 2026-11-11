@@ -18,12 +18,13 @@ interface Props {
   onOpenBase: () => void;
 }
 
-const TOTAL_REQUIRED = 2;
+const TOTAL_REQUIRED = 3;
 
 function validate(data: Data, t: (ru: string, en: string) => string): string[] {
   const missing: string[] = [];
   if (baseMissing(data)) missing.push(t("Основная информация", "Basic information"));
   if (!data.work_types || data.work_types.length === 0) missing.push(t("Типы работ", "Work types"));
+  if (data.min_rate == null) missing.push(t("Минимальная ставка", "Minimum rate"));
   return missing;
 }
 
@@ -65,6 +66,8 @@ export function GeneralForm({ onDone, onOpenBase }: Props) {
           value={data.min_rate ?? null}
           onChange={(v) => update({ min_rate: v })}
           min={0}
+          placeholder={t("0 — любая ставка", "0 — any rate")}
+          required
         />
         <label className="block space-y-1">
           <span className="text-sm text-slate-400">{t("Опыт работы", "Work experience")}</span>

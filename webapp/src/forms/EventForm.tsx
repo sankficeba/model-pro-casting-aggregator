@@ -1,4 +1,3 @@
-import { TextFieldWithAutocomplete } from "../fields/TextFieldWithAutocomplete";
 import { NumberFieldWithAutocomplete } from "../fields/NumberFieldWithAutocomplete";
 import { MultiSelectField } from "../fields/MultiSelectField";
 import { SelectField } from "../fields/SelectField";
@@ -20,12 +19,13 @@ interface Props {
   onOpenBase: () => void;
 }
 
-const TOTAL_REQUIRED = 2;
+const TOTAL_REQUIRED = 3;
 
 function validate(data: Data, t: (ru: string, en: string) => string): string[] {
   const missing: string[] = [];
   if (baseMissing(data)) missing.push(t("Основная информация", "Basic information"));
   if (!data.work_types || data.work_types.length === 0) missing.push(t("Должности", "Positions"));
+  if (data.min_rate == null) missing.push(t("Минимальная ставка", "Minimum rate"));
   return missing;
 }
 
@@ -67,6 +67,8 @@ export function EventForm({ onDone, onOpenBase }: Props) {
           value={data.min_rate ?? null}
           onChange={(v) => update({ min_rate: v })}
           min={0}
+          placeholder={t("0 — любая ставка", "0 — any rate")}
+          required
         />
         <label className="block space-y-1">
           <span className="text-sm text-slate-400">{t("Опыт работы", "Work experience")}</span>
@@ -85,7 +87,13 @@ export function EventForm({ onDone, onOpenBase }: Props) {
       </section>
 
       <section className="space-y-3">
-        <h3 className="text-sm uppercase tracking-wider text-slate-500">{t("Внешность", "Appearance")}</h3>
+        <h3 className="text-sm uppercase tracking-wider text-slate-500">{t("Внешность — по желанию", "Appearance — optional")}</h3>
+        <p className="text-xs text-slate-500 -mt-1">
+          {t(
+            "Помогает отсеять вакансии, где ищут конкретную внешность.",
+            "Helps filter out postings looking for a specific look.",
+          )}
+        </p>
         <NumberFieldWithAutocomplete
           field="height_cm"
           label={t("Рост, см", "Height, cm")}
@@ -93,22 +101,6 @@ export function EventForm({ onDone, onOpenBase }: Props) {
           onChange={(v) => update({ height_cm: v })}
           min={120}
           max={220}
-        />
-        <NumberFieldWithAutocomplete
-          field="clothing_size"
-          label={t("Размер одежды", "Clothing size")}
-          value={data.clothing_size ?? null}
-          onChange={(v) => update({ clothing_size: v })}
-          min={20}
-          max={80}
-        />
-        <NumberFieldWithAutocomplete
-          field="shoe_size"
-          label={t("Размер обуви", "Shoe size")}
-          value={data.shoe_size ?? null}
-          onChange={(v) => update({ shoe_size: v })}
-          min={30}
-          max={55}
         />
         <MultiSelectField
           label={t("Этнотип", "Ethnicity")}
@@ -133,13 +125,6 @@ export function EventForm({ onDone, onOpenBase }: Props) {
           value={data.hair_length ?? null}
           onChange={(v) => update({ hair_length: v })}
           options={refs.hair_lengths.map((h) => ({ value: h.code, label: h.label }))}
-        />
-        <TextFieldWithAutocomplete
-          field="portfolio_url"
-          label={t("Фото-портфолио", "Photo portfolio")}
-          value={data.portfolio_url ?? ""}
-          onChange={(v) => update({ portfolio_url: v })}
-          type="url"
         />
       </section>
     </CategoryFormShell>

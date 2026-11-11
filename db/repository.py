@@ -1008,25 +1008,18 @@ _SUGGESTION_FIELDS = {
 
 # Required-поля per category для расчёта completion_pct в меню Mini App.
 # Должно совпадать с frontend-validate() в каждой форме (webapp/src/forms/*).
+# Правило: обязательно поле направления, которое указано хотя бы в половине
+# реальных вакансий этой категории (замер 11.2026: творческие — проекты 68%,
+# роли 80%, возраст 84%, ставка 85%; event/general/admin — должности 92–98%,
+# ставка 93–99%). Рост/этнотип/внешность (<20%) — необязательные.
+_BASE_REQ = ["full_name", "gender", "city", "actual_age", "phone", "telegram_user", "email"]
 _REQUIRED_FIELDS = {
-    "creative": [
-        "full_name", "gender", "city", "actual_age",
-        "project_types", "role_types",
-        "height_cm", "ethnicity", "body_type", "hair_color", "hair_length",
-        "phone", "telegram_user", "email",
+    "creative": _BASE_REQ + [
+        "project_types", "role_types", "play_age_min", "play_age_max", "min_rate",
     ],
-    "event": [
-        "full_name", "gender", "city", "actual_age",
-        "work_types", "phone", "telegram_user", "email",
-    ],
-    "general": [
-        "full_name", "gender", "city", "actual_age",
-        "work_types", "phone", "telegram_user", "email",
-    ],
-    "admin": [
-        "full_name", "gender", "city", "actual_age",
-        "work_types", "phone", "telegram_user", "email",
-    ],
+    "event": _BASE_REQ + ["work_types", "min_rate"],
+    "general": _BASE_REQ + ["work_types", "min_rate"],
+    "admin": _BASE_REQ + ["work_types", "min_rate"],
 }
 
 
