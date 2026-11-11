@@ -112,9 +112,9 @@ async def build_main_menu(user_id: int, lang: Lang) -> tuple[str, InlineKeyboard
         + t(
             lang,
             "Присылаем свежие кастинги и подработки по твоим направлениям первым. "
-            "Анкету и настройки уведомлений меняй в Mini App.",
+            "Анкета — в «Настроить анкету», доставка уведомлений и фильтры — кнопками ниже.",
             "We send you fresh castings and gigs in your categories first. "
-            "Edit your profile and notification settings in the Mini App.",
+            "Profile — via \"Edit profile\", delivery and filters — with the buttons below.",
         )
         + "</blockquote>\n"
         + status
