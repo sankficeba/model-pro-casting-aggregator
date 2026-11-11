@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { CheckCircle2, AlertCircle, ShieldCheck, Plus, Ban, Megaphone, Bell, BellOff, Bookmark, LifeBuoy } from "lucide-react";
+import { CheckCircle2, AlertCircle, ShieldCheck, Plus, Bell, BellOff } from "lucide-react";
 import { api } from "../api";
 import type { CategoryCode, DeliverySettings, Subscription } from "../types";
 import { CATEGORY_LABELS, CATEGORY_LABELS_EN } from "../types";
@@ -10,11 +10,6 @@ interface Props {
   subscriptions: Subscription[];
   onOpenForm: (c: CategoryCode) => void;
   onAddCategory: () => void;
-  onBlacklist: () => void;
-  onSuggestChannel: () => void;
-  onDelivery: () => void;
-  onFavorites: () => void;
-  onReportProblem: () => void;
   onAdmin?: () => void;
   isAdmin?: boolean;
   onChange?: () => Promise<void> | void;
@@ -24,11 +19,6 @@ export function CategoryMenuScreen({
   subscriptions,
   onOpenForm,
   onAddCategory,
-  onBlacklist,
-  onSuggestChannel,
-  onDelivery,
-  onFavorites,
-  onReportProblem,
   onAdmin,
   isAdmin,
   onChange,
@@ -149,44 +139,6 @@ export function CategoryMenuScreen({
           {t("Добавить категорию", "Add category")}
         </button>
       )}
-
-      <div className="mt-4 grid grid-cols-1 gap-2">
-        <button
-          onClick={onFavorites}
-          className="w-full py-3 rounded-card border border-bg-card text-slate-300 hover:border-accent hover:text-accent transition flex items-center justify-center gap-2"
-        >
-          <Bookmark className="w-4 h-4" />
-          {t("Избранные вакансии", "Favorite postings")}
-        </button>
-        <button
-          onClick={onDelivery}
-          className="w-full py-3 rounded-card border border-bg-card text-slate-300 hover:border-accent hover:text-accent transition flex items-center justify-center gap-2"
-        >
-          <Bell className="w-4 h-4" />
-          {t("Доставка уведомлений", "Notification delivery")}
-        </button>
-        <button
-          onClick={onBlacklist}
-          className="w-full py-3 rounded-card border border-bg-card text-slate-300 hover:border-accent hover:text-accent transition flex items-center justify-center gap-2"
-        >
-          <Ban className="w-4 h-4" />
-          {t("Чёрный список слов", "Blocked words")}
-        </button>
-        <button
-          onClick={onSuggestChannel}
-          className="w-full py-3 rounded-card border border-bg-card text-slate-300 hover:border-accent hover:text-accent transition flex items-center justify-center gap-2"
-        >
-          <Megaphone className="w-4 h-4" />
-          {t("Предложить канал", "Suggest a channel")}
-        </button>
-        <button
-          onClick={onReportProblem}
-          className="w-full py-3 rounded-card border border-bg-card text-slate-300 hover:border-accent hover:text-accent transition flex items-center justify-center gap-2"
-        >
-          <LifeBuoy className="w-4 h-4" />
-          {t("Сообщить о проблеме", "Report a problem")}
-        </button>
-      </div>
     </div>
   );
 }

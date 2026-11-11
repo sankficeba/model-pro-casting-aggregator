@@ -6,7 +6,8 @@ import html
 from pathlib import Path
 
 from aiogram import Bot, Dispatcher, F
-from aiogram.filters import Command, CommandStart
+from aiogram.filters import Command, CommandStart, StateFilter
+from aiogram.fsm.context import FSMContext
 from aiogram.types import (
     CallbackQuery,
     InlineKeyboardButton,
@@ -18,7 +19,7 @@ from loguru import logger
 from sqlalchemy import select
 
 from api import profile_repo
-from bot import i18n, keyboards, menu
+from bot import i18n, keyboards, menu, settings_menu
 from bot.i18n import Lang, t
 from bot.response import compose_response
 from config import settings
@@ -319,14 +320,21 @@ def build_dispatcher(
 ) -> Dispatcher:
     dp = Dispatcher()
     dp.include_router(menu.build_router())
+    # Экраны из Mini App: избранное, доставка, чёрный список, канал, проблема.
+    # Их message-хендлеры работают только в FSM-состояниях ввода; общий
+    # fallback ниже стоит со StateFilter(None) и их не перехватывает.
+    dp.include_router(settings_menu.build_router())
+    dp.callback_query.outer_middleware(settings_menu.ClearInputOnCallback())
 
     @dp.message(Command("menu"))
-    async def cmd_menu(message: Message) -> None:
+    async def cmd_menu(message: Message, state: FSMContext) -> None:
+        await state.clear()
         lang = await i18n.get_lang(message.from_user.id, message.from_user.language_code)
         await menu.send_main_menu(message, lang)
 
     @dp.message(CommandStart())
-    async def cmd_start(message: Message) -> None:
+    async def cmd_start(message: Message, state: FSMContext) -> None:
+        await state.clear()
         lang = await i18n.get_lang(message.from_user.id, message.from_user.language_code)
         await repository.upsert_user(
             message.from_user.id,
@@ -918,7 +926,7 @@ def build_dispatcher(
 
     # ---------- Admin broadcast OR fallback ----------
 
-    @dp.message()
+    @dp.message(StateFilter(None))
     async def admin_broadcast_or_fallback(message: Message) -> None:
         """Если у админа есть pending broadcast — рассылаем его сообщение
         (текст/фото/видео/гифку) всем по фильтру. Иначе на любое сообщение

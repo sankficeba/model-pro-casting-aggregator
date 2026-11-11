@@ -146,6 +146,9 @@ async def build_main_menu(user_id: int, lang: Lang) -> tuple[str, InlineKeyboard
             t(lang, f"Накопленные объявления ({pending})", f"Saved postings ({pending})"),
             E_BELL, callback_data="digest:next",
         )])
+    from bot.settings_menu import main_menu_rows  # циклический импорт
+
+    rows += main_menu_rows(lang)
     rows.append([_btn(
         "English" if lang == "ru" else "Русский", E_GLOBE, callback_data=CB_LANG_TOGGLE,
     )])

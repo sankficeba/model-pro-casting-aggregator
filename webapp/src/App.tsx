@@ -13,14 +13,9 @@ import {
 import { AdminDashboard } from "./components/AdminDashboard";
 import { BackgroundShapes } from "./components/BackgroundShapes";
 import { BotChatRequiredBanner } from "./components/BotChatRequiredBanner";
-import { BlacklistScreen } from "./components/BlacklistScreen";
 import { CategorySurveyScreen } from "./components/CategorySurveyScreen";
 import { CategoryMenuScreen } from "./components/CategoryMenuScreen";
-import { DeliverySettingsScreen } from "./components/DeliverySettingsScreen";
-import { FavoritesScreen } from "./components/FavoritesScreen";
-import { ReportProblemScreen } from "./components/ReportProblemScreen";
 import { SuccessToast } from "./components/SuccessToast";
-import { SuggestChannelScreen } from "./components/SuggestChannelScreen";
 import { SuggestionsProvider } from "./contexts/SuggestionsContext";
 import { CreativeForm } from "./forms/CreativeForm";
 import { EventForm } from "./forms/EventForm";
@@ -34,11 +29,6 @@ type Screen =
   | { kind: "survey" }
   | { kind: "menu" }
   | { kind: "form"; category: CategoryCode }
-  | { kind: "blacklist" }
-  | { kind: "suggestChannel" }
-  | { kind: "delivery" }
-  | { kind: "favorites" }
-  | { kind: "reportProblem" }
   | { kind: "addCategory" }
   | { kind: "admin" };
 
@@ -174,34 +164,9 @@ export default function App() {
           onOpenForm={(c) => setScreen({ kind: "form", category: c })}
           onAddCategory={() => setScreen({ kind: "addCategory" })}
           onAdmin={() => setScreen({ kind: "admin" })}
-          onBlacklist={() => setScreen({ kind: "blacklist" })}
-          onSuggestChannel={() => setScreen({ kind: "suggestChannel" })}
-          onDelivery={() => setScreen({ kind: "delivery" })}
-          onFavorites={() => setScreen({ kind: "favorites" })}
-          onReportProblem={() => setScreen({ kind: "reportProblem" })}
           onChange={async () => { await fetchSubscriptions(); }}
         />
       );
-    }
-
-    if (screen.kind === "blacklist") {
-      return <BlacklistScreen onBack={goToMenu} />;
-    }
-
-    if (screen.kind === "suggestChannel") {
-      return <SuggestChannelScreen onBack={goToMenu} />;
-    }
-
-    if (screen.kind === "delivery") {
-      return <DeliverySettingsScreen onBack={goToMenu} />;
-    }
-
-    if (screen.kind === "favorites") {
-      return <FavoritesScreen onBack={goToMenu} />;
-    }
-
-    if (screen.kind === "reportProblem") {
-      return <ReportProblemScreen onBack={goToMenu} />;
     }
 
     if (screen.kind === "form") {
