@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { CheckCircle2, AlertCircle, ShieldCheck, Plus, Bell, BellOff, UserRound, ChevronRight } from "lucide-react";
+import { CheckCircle2, AlertCircle, ShieldCheck, Plus, Bell, BellOff, UserRound, ChevronRight, Lock } from "lucide-react";
 import { api } from "../api";
 import type { CategoryCode, DeliverySettings, Subscription } from "../types";
 import {
@@ -49,15 +49,25 @@ export function CategoryMenuScreen({
   const [delivery, setDelivery] = useState<DeliverySettings | null>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [base, setBase] = useState<Record<string, any> | null>(null);
+  // null — ещё грузим; false — не удалось получить (тогда не блокируем).
+  const [baseLoaded, setBaseLoaded] = useState<boolean | null>(null);
 
   useEffect(() => {
     // Ошибку глушим: кнопка дайджеста на главном экране необязательна.
     api.getDeliverySettings().then(setDelivery).catch(() => {});
-    api.getBaseProfile().then(setBase).catch(() => {});
+    api
+      .getBaseProfile()
+      .then((b) => {
+        setBase(b);
+        setBaseLoaded(true);
+      })
+      .catch(() => setBaseLoaded(false));
   }, []);
 
   const basePct = Math.max(0, Math.min(100, Number(base?.completion_pct ?? 0)));
   const baseDone = !!base?.completed;
+  // Направления доступны только после «Основной информации».
+  const locked = baseLoaded === null || (baseLoaded === true && !baseDone);
   const baseSummary = [
     base?.full_name,
     base?.actual_age != null ? t(`${base.actual_age} лет`, `${base.actual_age} y.o.`) : null,
@@ -146,8 +156,40 @@ export function CategoryMenuScreen({
         <div className="text-xs uppercase tracking-wider text-slate-500 px-1">
           {t("Направления", "Categories")}
         </div>
+        {locked && baseLoaded && (
+          <div className="flex items-center gap-2 px-1 text-xs text-amber-400">
+            <Lock className="w-3.5 h-3.5 shrink-0" />
+            {t(
+              "Сначала заполни основную информацию — потом откроются анкеты направлений.",
+              "Fill in your basic information first — then the category forms unlock.",
+            )}
+          </div>
+        )}
         {ALL_CATEGORIES.map((c) => {
           const s = subscriptions.find((x) => x.category === c);
+          if (locked) {
+            // До заполнения «Основной информации» анкеты закрыты: нажатие ведёт туда.
+            return (
+              <button
+                key={c}
+                onClick={onOpenBase}
+                className="w-full p-4 rounded-card border border-bg-card text-left transition opacity-50 hover:opacity-70"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="shrink-0 p-2 text-slate-500">
+                    <Lock className="w-5 h-5" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium text-slate-300">{t(CATEGORY_LABELS[c], CATEGORY_LABELS_EN[c])}</div>
+                    <div className="text-xs text-slate-500 truncate">
+                      {t(CATEGORY_DESCRIPTIONS[c], CATEGORY_DESCRIPTIONS_EN[c])}
+                    </div>
+                  </div>
+                  {s?.profile_completed && <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />}
+                </div>
+              </button>
+            );
+          }
           if (!s) {
             // Направление ещё не выбрано: нажатие добавляет его и открывает анкету.
             return (
