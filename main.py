@@ -80,11 +80,13 @@ async def expiry_reminder_loop(bot: Bot) -> None:
                         f"<b>{title}</b>\n\n"
                         f"Активна до <b>{active_until.strftime('%d.%m.%Y %H:%M МСК')}</b> "
                         f"(осталось примерно {friendly}).\n\n"
-                        "Продли подписку в Mini App, чтобы продолжить получать "
+                        "Продли подписку, чтобы продолжить получать "
                         "уведомления о кастингах без задержек."
                     )
+                    from bot.menu import subscribe_button_row
+                    kb = InlineKeyboardMarkup(inline_keyboard=[subscribe_button_row("ru")])
                     try:
-                        await bot.send_message(user_id, text, parse_mode="HTML")
+                        await bot.send_message(user_id, text, parse_mode="HTML", reply_markup=kb)
                         await repository.mark_expiry_reminder_sent(user_id, stage)
                     except Exception as e:  # noqa: BLE001
                         logger.warning(

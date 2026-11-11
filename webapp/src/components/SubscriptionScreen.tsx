@@ -19,30 +19,32 @@ const formatDate = (iso: string | null, lang: "ru" | "en"): string => {
   });
 };
 
-// Стили рамки/акцента под бейдж конкретного тарифа.
-const BADGE_STYLES: Record<string, { ring: string; chip: string; chipText: string }> = {
-  Популярный: {
-    ring: "border-amber-400/70 ring-1 ring-amber-400/40",
-    chip: "bg-amber-400/20 border-amber-400/60",
-    chipText: "text-amber-200",
-  },
-  Выгодный: {
-    ring: "border-emerald-400/70 ring-1 ring-emerald-400/40",
-    chip: "bg-emerald-400/15 border-emerald-400/60",
-    chipText: "text-emerald-200",
-  },
-  Максимум: {
-    ring: "border-fuchsia-400/70 ring-1 ring-fuchsia-400/40",
-    chip: "bg-fuchsia-400/15 border-fuchsia-400/60",
-    chipText: "text-fuchsia-200",
-  },
+// Цвет бейджа тарифа (чип рядом с названием, без наезда на рамку).
+const BADGE_STYLES: Record<string, { chip: string; en: string }> = {
+  Популярный: { chip: "bg-amber-400/15 text-amber-300", en: "Popular" },
+  Выгодный: { chip: "bg-emerald-400/15 text-emerald-300", en: "Best value" },
+  Максимум: { chip: "bg-fuchsia-400/15 text-fuchsia-300", en: "Maximum" },
 };
 
-function planMonthlyHint(plan: SubscriptionPlan, lang: "ru" | "en"): string | null {
-  if (plan.days < 60) return null;
-  const months = Math.round(plan.days / 30);
-  const perMonth = Math.round(plan.price_rub / months);
-  return lang === "en" ? `≈ ${perMonth} RUB/mo` : `≈ ${perMonth} ₽/мес`;
+const monthsOf = (plan: SubscriptionPlan) => Math.max(1, Math.round(plan.days / 30));
+
+function planTitle(plan: SubscriptionPlan, lang: "ru" | "en"): string {
+  if (lang !== "en") return plan.label;
+  const m = monthsOf(plan);
+  return `${m} month${m === 1 ? "" : "s"}`;
+}
+
+function planMonthlyHint(plan: SubscriptionPlan, lang: "ru" | "en"): string {
+  const perMonth = Math.round(plan.price_rub / monthsOf(plan));
+  return lang === "en" ? `${perMonth} ₽/mo` : `${perMonth} ₽/мес`;
+}
+
+// Полная цена без скидки — от цены месячного тарифа.
+function fullPrice(plan: SubscriptionPlan, plans: SubscriptionPlan[]): number | null {
+  const monthly = plans.find((p) => monthsOf(p) === 1);
+  if (!monthly || monthsOf(plan) === 1) return null;
+  const full = monthly.price_rub * monthsOf(plan);
+  return full > plan.price_rub ? full : null;
 }
 
 function pluralizeDaysRu(n: number): string {
@@ -203,70 +205,58 @@ export function SubscriptionScreen({ onBack }: Props) {
             <div className="text-xs uppercase tracking-wider text-slate-500 px-1">
               {t("Выберите тариф", "Choose a plan")}
             </div>
-            <div className="space-y-3">
+            <div className="space-y-2.5" role="radiogroup">
               {status.plans.map((plan) => {
                 const isSelected = selectedPlan?.code === plan.code;
-                const styles = plan.badge ? BADGE_STYLES[plan.badge] : null;
-                const monthly = planMonthlyHint(plan, lang);
+                const badge = plan.badge ? BADGE_STYLES[plan.badge] : null;
+                const full = fullPrice(plan, status.plans);
                 return (
                   <button
                     key={plan.code}
+                    role="radio"
+                    aria-checked={isSelected}
                     onClick={() => setSelectedCode(plan.code)}
-                    className={`w-full text-left rounded-card border p-4 transition relative
-                      ${
-                        isSelected
-                          ? styles
-                            ? `${styles.ring} bg-bg-card/40`
-                            : "border-accent ring-1 ring-accent/40 bg-accent/5"
-                          : styles
-                            ? `${styles.ring} bg-bg-card/20 opacity-90`
-                            : "border-bg-card hover:border-accent/60 bg-bg-card/20"
-                      }`}
+                    className={`w-full text-left rounded-card border px-4 py-3.5 transition flex items-center gap-3 ${
+                      isSelected
+                        ? "border-accent bg-accent/10 ring-1 ring-accent/40"
+                        : "border-bg-card bg-bg-card/30 hover:border-accent/50"
+                    }`}
                   >
-                    {plan.badge && styles && (
-                      <span
-                        className={`absolute -top-2 left-3 px-2 py-0.5 rounded-full border text-[11px] font-medium uppercase tracking-wide ${styles.chip} ${styles.chipText}`}
-                      >
-                        {plan.badge === "Популярный" && (
-                          <Sparkles className="inline w-3 h-3 mr-1 -mt-0.5" />
-                        )}
-                        {plan.badge}
-                      </span>
-                    )}
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <div className="font-medium">{plan.label}</div>
-                        {plan.discount_pct > 0 && (
-                          <div className="text-xs text-emerald-300 mt-0.5">
-                            {t("Скидка", "Discount")} {plan.discount_pct}%
-                          </div>
-                        )}
-                        {monthly && (
-                          <div className="text-xs text-slate-400 mt-1">{monthly}</div>
-                        )}
-                      </div>
-                      <div className="text-right shrink-0">
-                        <div className="text-2xl font-semibold tabular-nums">
-                          {plan.price_rub} ₽
-                        </div>
-                        <div className="text-[11px] text-slate-500 mt-0.5">
-                          {t("за", "for")} {plan.days} {dayLabel(plan.days, lang)}
-                        </div>
-                      </div>
-                    </div>
-                    <div
-                      className={`mt-3 flex items-center gap-2 text-xs ${
-                        isSelected ? "text-accent" : "text-slate-500"
+                    <span
+                      className={`shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                        isSelected ? "border-accent" : "border-slate-500"
                       }`}
                     >
-                      <span
-                        className={`inline-block w-3 h-3 rounded-full border ${
-                          isSelected
-                            ? "border-accent bg-accent"
-                            : "border-slate-500"
-                        }`}
-                      />
-                      {isSelected ? t("Выбрано", "Selected") : t("Выбрать", "Select")}
+                      {isSelected && <span className="w-2.5 h-2.5 rounded-full bg-accent" />}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                        <span className="font-medium">{planTitle(plan, lang)}</span>
+                        {plan.badge && badge && (
+                          <span
+                            className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold uppercase tracking-wide ${badge.chip}`}
+                          >
+                            {plan.badge === "Популярный" && <Sparkles className="w-3 h-3" />}
+                            {lang === "en" ? badge.en : plan.badge}
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-xs text-slate-400 mt-0.5">
+                        {planMonthlyHint(plan, lang)}
+                        {plan.discount_pct > 0 && (
+                          <span className="text-emerald-300"> · −{plan.discount_pct}%</span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <div className="text-xl font-semibold tabular-nums leading-tight">
+                        {plan.price_rub} ₽
+                      </div>
+                      {full && (
+                        <div className="text-xs text-slate-500 line-through tabular-nums">
+                          {full} ₽
+                        </div>
+                      )}
                     </div>
                   </button>
                 );
@@ -315,8 +305,8 @@ export function SubscriptionScreen({ onBack }: Props) {
             </button>
             <div className="text-[11px] text-slate-500 text-center">
               {t(
-                "Оплата через ЮKassa. После успешного платежа подписка продлевается автоматически.",
-                "Payment via YooKassa. After a successful payment, the subscription renews automatically.",
+                "Оплата картой или СБП через ЮKassa. Дни добавятся к текущему сроку сразу после оплаты. Оплатить можно и в чате бота — отправьте ему любое сообщение.",
+                "Pay by card or SBP via YooKassa. Days are added to your current term right after payment. You can also pay in the bot chat — send it any message.",
               )}
             </div>
           </>

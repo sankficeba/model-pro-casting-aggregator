@@ -52,8 +52,11 @@ class Settings(BaseSettings):
     # Платная подписка
     subscription_trial_days: int = Field(7, alias="SUBSCRIPTION_TRIAL_DAYS")
     subscription_period_days: int = Field(30, alias="SUBSCRIPTION_PERIOD_DAYS")
-    subscription_price_rub: int = Field(499, alias="SUBSCRIPTION_PRICE_RUB")
+    subscription_price_rub: int = Field(299, alias="SUBSCRIPTION_PRICE_RUB")
     subscription_return_url: str = Field("", alias="SUBSCRIPTION_RETURN_URL")
+    # URL Mini App (https://...). Если задан — в меню бота появляется кнопка
+    # «Открыть приложение»; иначе юзер открывает Mini App кнопкой у поля ввода.
+    webapp_url: str = Field("", alias="WEBAPP_URL")
 
     # YooKassa
     yookassa_shop_id: str = Field("", alias="YOOKASSA_SHOP_ID")

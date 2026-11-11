@@ -512,39 +512,17 @@ async def subscription_checkout(
             status_code=503,
             detail="Платёжная система не настроена. Свяжись с администратором.",
         )
-    import uuid
-
     from api.plans import get_plan
+    from payments.checkout import create_subscription_payment
+
     plan = get_plan(body.plan_code)
-    days = plan.days
-    amount_rub = plan.price_rub
-    idempotency_key = uuid.uuid4().hex
-    payment_id = await repo.insert_payment_pending(
-        user_id=user.id,
-        idempotency_key=idempotency_key,
-        amount_rub=amount_rub,
-        days=days,
-    )
-    base_return = settings.subscription_return_url or "https://t.me/"
-    # Маркер ?paid=1 нужен чтобы Mini App после редиректа понял, что юзер
-    # только что оплатил и показал toast «Подписка активирована».
-    sep = "&" if "?" in base_return else "?"
-    return_url = f"{base_return}{sep}paid=1"
     try:
-        created = await yookassa_client.create_payment(
-            amount_rub=amount_rub,
-            days=days,
-            user_id=user.id,
-            idempotency_key=idempotency_key,
-            return_url=return_url,
-            description=f"Подписка: {plan.label}",
-        )
+        created = await create_subscription_payment(user.id, plan)
     except Exception as e:  # noqa: BLE001
         logger.exception("YooKassa create_payment failed: {}", e)
         raise HTTPException(
             status_code=502, detail="Не удалось создать платёж. Попробуй позже."
         ) from e
-    await repo.attach_yk_payment_id(payment_id, created.payment_id)
     return SubscriptionCheckoutResponse(
         confirmation_url=created.confirmation_url,
         payment_id=created.payment_id,

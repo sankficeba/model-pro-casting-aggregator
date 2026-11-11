@@ -1,27 +1,31 @@
-"""Тарифы подписки. Хардкод — менять реже, чем 1 раз в квартал."""
+"""Тарифы подписки. Хардкод — менять реже, чем 1 раз в квартал.
+
+Базовая цена — 299 ₽/мес; скидка длинных тарифов считается от неё.
+"""
 from __future__ import annotations
 
 from api.schemas import SubscriptionPlan
 
+BASE_MONTHLY_PRICE_RUB = 299
+
+
+def _plan(code: str, months: int, price_rub: int, label: str, badge: str | None) -> SubscriptionPlan:
+    full = BASE_MONTHLY_PRICE_RUB * months
+    discount = round((1 - price_rub / full) * 100) if price_rub < full else 0
+    return SubscriptionPlan(
+        code=code, days=30 * months, price_rub=price_rub,
+        label=label, discount_pct=discount, badge=badge,
+    )
+
 
 SUBSCRIPTION_PLANS: list[SubscriptionPlan] = [
-    SubscriptionPlan(
-        code="1m", days=30, price_rub=499,
-        label="1 месяц", discount_pct=0, badge=None,
-    ),
-    SubscriptionPlan(
-        code="3m", days=90, price_rub=1350,
-        label="3 месяца", discount_pct=10, badge="Популярный",
-    ),
-    SubscriptionPlan(
-        code="6m", days=180, price_rub=2550,
-        label="6 месяцев", discount_pct=15, badge="Выгодный",
-    ),
-    SubscriptionPlan(
-        code="12m", days=360, price_rub=4500,
-        label="12 месяцев", discount_pct=25, badge="Максимум",
-    ),
+    _plan("1m", 1, 299, "1 месяц", None),
+    _plan("3m", 3, 799, "3 месяца", "Популярный"),     # ≈ 266 ₽/мес, −11%
+    _plan("6m", 6, 1490, "6 месяцев", "Выгодный"),     # ≈ 248 ₽/мес, −17%
+    _plan("12m", 12, 2690, "12 месяцев", "Максимум"),  # ≈ 224 ₽/мес, −25%
 ]
+
+PLAN_LABELS_EN = {"1m": "1 month", "3m": "3 months", "6m": "6 months", "12m": "12 months"}
 
 
 def get_plan(code: str | None) -> SubscriptionPlan:
@@ -31,3 +35,8 @@ def get_plan(code: str | None) -> SubscriptionPlan:
             if p.code == code:
                 return p
     return SUBSCRIPTION_PLANS[0]
+
+
+def find_plan(code: str | None) -> SubscriptionPlan | None:
+    """Как get_plan, но без фолбэка: None для неизвестного кода."""
+    return next((p for p in SUBSCRIPTION_PLANS if p.code == code), None)

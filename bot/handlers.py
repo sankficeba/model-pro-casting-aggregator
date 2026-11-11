@@ -18,7 +18,7 @@ from loguru import logger
 from sqlalchemy import select
 
 from api import profile_repo
-from bot import i18n, keyboards
+from bot import i18n, keyboards, menu
 from bot.i18n import Lang, t
 from bot.response import compose_response
 from config import settings
@@ -34,11 +34,13 @@ def _help_text_user(lang: Lang) -> str:
         lang,
         "<b>Команды:</b>\n"
         "/start — приветствие\n"
+        "/menu — главное меню и оплата подписки\n"
         "/review — посмотреть накопленные объявления (digest)\n"
         "/language — сменить язык\n"
         "/help — помощь",
         "<b>Commands:</b>\n"
         "/start — welcome message\n"
+        "/menu — main menu and subscription payment\n"
         "/review — view accumulated postings (digest)\n"
         "/language — change language\n"
         "/help — help",
@@ -316,6 +318,12 @@ def build_dispatcher(
     userbot: Userbot | None = None,
 ) -> Dispatcher:
     dp = Dispatcher()
+    dp.include_router(menu.build_router())
+
+    @dp.message(Command("menu"))
+    async def cmd_menu(message: Message) -> None:
+        lang = await i18n.get_lang(message.from_user.id, message.from_user.language_code)
+        await menu.send_main_menu(message, lang)
 
     @dp.message(CommandStart())
     async def cmd_start(message: Message) -> None:
@@ -353,6 +361,7 @@ def build_dispatcher(
             parse_mode="HTML",
             reply_markup=ReplyKeyboardRemove(),
         )
+        await menu.send_main_menu(message, lang)
 
     @dp.message(Command("help"))
     async def cmd_help(message: Message) -> None:
@@ -933,24 +942,20 @@ def build_dispatcher(
     @dp.message()
     async def admin_broadcast_or_fallback(message: Message) -> None:
         """Если у админа есть pending broadcast — рассылаем его сообщение
-        (текст/фото/видео/гифку) всем по фильтру. Иначе на текстовое
-        сообщение шлём «Не понял», нетекстовые игнорируем."""
+        (текст/фото/видео/гифку) всем по фильтру. Иначе на любое сообщение
+        в личке отвечаем главным меню (статус подписки + оплата)."""
         from_user = message.from_user
-        if from_user is not None and _is_admin(from_user.id):
+        if from_user is None:
+            return
+        if _is_admin(from_user.id):
             pending = await repository.get_broadcast_pending(from_user.id)
             if pending is not None:
                 await _process_admin_broadcast(bot, message, pending)
                 return
-        if message.text:
-            lang = await i18n.get_lang(
-                from_user.id if from_user else 0,
-                from_user.language_code if from_user else None,
-            )
-            await message.answer(
-                t(lang, "Не понял. ", "Didn't understand. ")
-                + _help_for(from_user.id if from_user else None, lang),
-                parse_mode="HTML",
-            )
+        if message.chat.type != "private":
+            return
+        lang = await i18n.get_lang(from_user.id, from_user.language_code)
+        await menu.send_main_menu(message, lang)
 
     return dp
 
