@@ -116,6 +116,12 @@ export function getInitData(): string {
   return tg?.initData ?? "";
 }
 
+/** @username текущего юзера Telegram (или null, если username не задан). */
+export function getTelegramUsername(): string | null {
+  const u = tg?.initDataUnsafe?.user?.username;
+  return u ? `@${u}` : null;
+}
+
 export function isInTelegram(): boolean {
   return Boolean(tg?.initData);
 }

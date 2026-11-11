@@ -10,12 +10,13 @@ import { BASE_FIELDS, type Data } from "../hooks/useCategoryFormState";
 import { CategoryFormShell } from "../components/CategoryFormShell";
 import { useSuggestionsRefresh } from "../contexts/SuggestionsContext";
 import { useLang } from "../i18n";
+import { getTelegramUsername } from "../telegram";
 
 interface Props {
   onDone: () => void;
 }
 
-const TOTAL_REQUIRED = 6;
+const TOTAL_REQUIRED = 7;
 
 function validate(data: Data, t: (ru: string, en: string) => string): string[] {
   const missing: string[] = [];
@@ -24,14 +25,11 @@ function validate(data: Data, t: (ru: string, en: string) => string): string[] {
   if (data.actual_age == null) missing.push(t("Возраст", "Age"));
   if (!data.city?.trim()) missing.push(t("Город", "City"));
   if (!data.phone?.trim()) missing.push(t("Телефон", "Phone"));
-  if (!data.email?.trim()) missing.push(t("Email", "Email"));
-  if (
-    data.telegram_user &&
-    data.telegram_user.trim() &&
-    validateTelegramUser(data.telegram_user.trim(), t) !== null
-  ) {
+  if (!data.telegram_user?.trim()) missing.push(t("Telegram", "Telegram"));
+  else if (validateTelegramUser(data.telegram_user.trim(), t) !== null) {
     missing.push(t("Telegram (исправь формат)", "Telegram (fix format)"));
   }
+  if (!data.email?.trim()) missing.push(t("Email", "Email"));
   return missing;
 }
 
@@ -61,7 +59,16 @@ export function BaseInfoForm({ onDone }: Props) {
   useEffect(() => {
     Promise.all([api.getBaseProfile(), api.getRefs()])
       .then(([b, r]) => {
-        setData(pickBase(b as Data));
+        const loaded = pickBase(b as Data);
+        // Telegram обязателен: если пусто — подставляем @username из Telegram
+        // и сразу сохраняем (юзер может поправить).
+        const tgUser = getTelegramUsername();
+        if (!loaded.telegram_user?.trim() && tgUser) {
+          loaded.telegram_user = tgUser;
+          api.putBaseProfile(loaded).catch(() => {});
+        }
+        dataRef.current = loaded;
+        setData(loaded);
         setRefs(r);
       })
       .catch((e) => setError(e instanceof Error ? e.message : String(e)))
@@ -170,12 +177,6 @@ export function BaseInfoForm({ onDone }: Props) {
           />
           {t("Готов(а) к командировкам", "Ready for business trips")}
         </label>
-        <SelectField
-          label={t("Налоговый статус", "Tax status")}
-          value={data.tax_status ?? null}
-          onChange={(v) => update({ tax_status: v })}
-          options={refs.tax_status.map((tx) => ({ value: tx.code, label: tx.label }))}
-        />
       </section>
 
       <section className="space-y-3">
@@ -195,6 +196,15 @@ export function BaseInfoForm({ onDone }: Props) {
           onChange={(v) => update({ telegram_user: v })}
           placeholder="@username"
           error={validateTelegramUser(data.telegram_user ?? "", t) ?? undefined}
+          required
+        />
+        <TextFieldWithAutocomplete
+          field="vk_url"
+          label={t("VK", "VK")}
+          value={data.vk_url ?? ""}
+          onChange={(v) => update({ vk_url: v })}
+          placeholder="vk.com/username"
+          type="url"
         />
         <TextFieldWithAutocomplete
           field="email"

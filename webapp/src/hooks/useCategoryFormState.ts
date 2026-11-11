@@ -11,7 +11,7 @@ export type Data = Record<string, any>;
  * (должно совпадать с db/repository.BASE_FIELDS). */
 export const BASE_FIELDS = [
   "full_name", "gender", "actual_age", "city", "ready_for_travel",
-  "phone", "telegram_user", "email", "tax_status",
+  "phone", "telegram_user", "vk_url", "email",
 ] as const;
 
 /** Обязательные общие поля (db/repository.BASE_REQUIRED_FIELDS). */
@@ -22,6 +22,7 @@ export function baseMissing(data: Data): boolean {
     data.actual_age == null ||
     !data.city?.trim() ||
     !data.phone?.trim() ||
+    !data.telegram_user?.trim() ||
     !data.email?.trim()
   );
 }

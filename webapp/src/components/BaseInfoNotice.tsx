@@ -26,7 +26,7 @@ export function BaseInfoNotice({ missing, onOpen }: Props) {
         <div className="font-medium">{t("Основная информация", "Basic information")}</div>
         <div className="text-xs text-slate-400">
           {missing
-            ? t("Сначала заполни ФИО, возраст, город и контакты →", "Fill in your name, age, city and contacts first →")
+            ? t("Сначала заполни ФИО, возраст, город, телефон, Telegram и email →", "Fill in your name, age, city, phone, Telegram and email first →")
             : t("ФИО, возраст, город и контакты — общие для всех анкет", "Name, age, city and contacts — shared by all applications")}
         </div>
       </div>

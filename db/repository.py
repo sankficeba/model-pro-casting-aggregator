@@ -1013,19 +1013,19 @@ _REQUIRED_FIELDS = {
         "full_name", "gender", "city", "actual_age",
         "project_types", "role_types",
         "height_cm", "ethnicity", "body_type", "hair_color", "hair_length",
-        "phone", "email",
+        "phone", "telegram_user", "email",
     ],
     "event": [
         "full_name", "gender", "city", "actual_age",
-        "work_types", "phone", "email",
+        "work_types", "phone", "telegram_user", "email",
     ],
     "general": [
         "full_name", "gender", "city", "actual_age",
-        "work_types", "phone", "email",
+        "work_types", "phone", "telegram_user", "email",
     ],
     "admin": [
         "full_name", "gender", "city", "actual_age",
-        "work_types", "phone", "email",
+        "work_types", "phone", "telegram_user", "email",
     ],
 }
 
@@ -1178,9 +1178,11 @@ async def complete_category_profile(
 # анкеты юзера.
 BASE_FIELDS = (
     "full_name", "gender", "actual_age", "city", "ready_for_travel",
-    "phone", "telegram_user", "email", "tax_status",
+    "phone", "telegram_user", "vk_url", "email",
 )
-BASE_REQUIRED_FIELDS = ("full_name", "gender", "actual_age", "city", "phone", "email")
+BASE_REQUIRED_FIELDS = (
+    "full_name", "gender", "actual_age", "city", "phone", "telegram_user", "email",
+)
 
 
 async def _user_profiles(session, user_id: int) -> list:
