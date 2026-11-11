@@ -25,6 +25,25 @@ from db import repository
 from payments import yookassa_client
 from payments.checkout import create_subscription_payment
 
+# Premium custom emoji (наборы NewsEmoji / GlowingFont, как в zipzyVPN).
+# В кнопках — icon_custom_emoji_id (текст без эмодзи), в тексте — <tg-emoji>.
+E_HOME = "5416041192905265756"      # 🏠
+E_OK = "5364035134725043602"        # ✅
+E_NO = "5210952531676504517"        # ❌
+E_MONEY = "5282811522131727448"     # 💰
+E_EDIT = "5395444784611480792"      # ✏️  настроить анкету
+E_CROWN = "5217822164362739968"     # 👑  подписка
+E_BELL = "5458603043203327669"      # 🔔  накопленные объявления
+E_GLOBE = "5447410659077661506"     # 🌐  язык
+E_CALENDAR = "5413879192267805083"  # 🗓  тарифы
+E_PAY = "5233326571099534068"       # 💸  оплатить
+
+
+def tge(emoji_id: str, fallback: str) -> str:
+    """Премиум-эмодзи в HTML-тексте; без Premium виден fallback."""
+    return f'<tg-emoji emoji-id="{emoji_id}">{fallback}</tg-emoji>'
+
+
 CB_MAIN = "menu:main"
 CB_SUB = "sub:menu"
 CB_PLAN_PREFIX = "sub:plan:"
@@ -39,6 +58,10 @@ def _days_ru(n: int) -> str:
 
 def _plan_title(plan: SubscriptionPlan, lang: Lang) -> str:
     return PLAN_LABELS_EN.get(plan.code, plan.label) if lang == "en" else plan.label
+
+
+def _btn(text: str, emoji_id: str | None = None, **kw) -> InlineKeyboardButton:
+    return InlineKeyboardButton(text=text, icon_custom_emoji_id=emoji_id, **kw)
 
 
 def _plan_button_text(plan: SubscriptionPlan, lang: Lang) -> str:
@@ -57,23 +80,23 @@ async def _status_line(user_id: int, lang: Lang) -> tuple[str, bool]:
         days = s["days_left"]
         until_ru = s["active_until"].strftime("%d.%m.%Y")
         until_en = s["active_until"].strftime("%m/%d/%Y")
-        return t(
+        return tge(E_OK, "✅") + t(
             lang,
-            f"✅ Подписка активна до <b>{until_ru}</b> (осталось {days} {_days_ru(days)})",
-            f"✅ Subscription active until <b>{until_en}</b> ({days} day{'s' if days != 1 else ''} left)",
+            f" Подписка активна до <b>{until_ru}</b> (осталось {days} {_days_ru(days)})",
+            f" Subscription active until <b>{until_en}</b> ({days} day{'s' if days != 1 else ''} left)",
         ), True
-    return t(
+    return tge(E_NO, "❌") + t(
         lang,
-        "❌ Подписка не активна — уведомления приходят в режиме «1 в день».",
-        "❌ Subscription inactive — notifications arrive in \"1 per day\" mode.",
+        " Подписка не активна — уведомления приходят в режиме «1 в день».",
+        " Subscription inactive — notifications arrive in \"1 per day\" mode.",
     ), False
 
 
 async def build_main_menu(user_id: int, lang: Lang) -> tuple[str, InlineKeyboardMarkup]:
     status, active = await _status_line(user_id, lang)
     text = (
-        t(lang, "🏠 <b>Главное меню</b>", "🏠 <b>Main menu</b>")
-        + "\n\n<blockquote>"
+        tge(E_HOME, "🏠") + t(lang, " <b>Главное меню</b>", " <b>Main menu</b>")
+        + "\n<blockquote>"
         + t(
             lang,
             "Присылаем свежие кастинги и подработки по твоим направлениям первым. "
@@ -81,48 +104,47 @@ async def build_main_menu(user_id: int, lang: Lang) -> tuple[str, InlineKeyboard
             "We send you fresh castings and gigs in your categories first. "
             "Edit your profile and notification settings in the Mini App.",
         )
-        + "</blockquote>\n\n"
+        + "</blockquote>\n"
         + status
         + "\n"
+        + tge(E_MONEY, "💰")
         + t(
             lang,
-            f"💰 Тариф — от {SUBSCRIPTION_PLANS[0].price_rub} ₽/мес",
-            f"💰 Plans from {SUBSCRIPTION_PLANS[0].price_rub} ₽/mo",
+            f" Тариф — от {SUBSCRIPTION_PLANS[0].price_rub} ₽/мес",
+            f" Plans from {SUBSCRIPTION_PLANS[0].price_rub} ₽/mo",
         )
     )
-    rows: list[list[InlineKeyboardButton]] = [[
-        InlineKeyboardButton(
-            text=t(lang, "💳 Продлить подписку", "💳 Renew subscription") if active
-            else t(lang, "💳 Оформить подписку", "💳 Subscribe"),
-            callback_data=CB_SUB,
-        )
-    ]]
+    rows: list[list[InlineKeyboardButton]] = []
+    if settings.webapp_url.startswith("https://"):
+        rows.append([_btn(
+            t(lang, "Настроить анкету", "Edit profile"), E_EDIT,
+            web_app=WebAppInfo(url=settings.webapp_url),
+        )])
+    rows.append([_btn(
+        t(lang, "Продлить подписку", "Renew subscription") if active
+        else t(lang, "Оформить подписку", "Subscribe"),
+        E_CROWN, callback_data=CB_SUB,
+    )])
     try:
         pending = await repository.count_pending(user_id)
     except Exception:  # noqa: BLE001
         pending = 0
     if pending > 0:
-        rows.append([InlineKeyboardButton(
-            text=t(lang, f"📬 Накопленные объявления ({pending})", f"📬 Saved postings ({pending})"),
-            callback_data="digest:next",
+        rows.append([_btn(
+            t(lang, f"Накопленные объявления ({pending})", f"Saved postings ({pending})"),
+            E_BELL, callback_data="digest:next",
         )])
-    if settings.webapp_url.startswith("https://"):
-        rows.append([InlineKeyboardButton(
-            text=t(lang, "📱 Открыть приложение", "📱 Open app"),
-            web_app=WebAppInfo(url=settings.webapp_url),
-        )])
-    rows.append([InlineKeyboardButton(
-        text="🇬🇧 English" if lang == "ru" else "🇷🇺 Русский",
-        callback_data=CB_LANG_TOGGLE,
+    rows.append([_btn(
+        "English" if lang == "ru" else "Русский", E_GLOBE, callback_data=CB_LANG_TOGGLE,
     )])
     return text, InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 async def build_subscription_menu(user_id: int, lang: Lang) -> tuple[str, InlineKeyboardMarkup]:
     status, active = await _status_line(user_id, lang)
-    title = (
-        t(lang, "💳 <b>Продлить подписку</b>", "💳 <b>Renew subscription</b>") if active
-        else t(lang, "💳 <b>Оформить подписку</b>", "💳 <b>Subscribe</b>")
+    title = tge(E_CROWN, "👑") + (
+        t(lang, " <b>Продлить подписку</b>", " <b>Renew subscription</b>") if active
+        else t(lang, " <b>Оформить подписку</b>", " <b>Subscribe</b>")
     )
     text = (
         title + "\n\n" + status + "\n\n"
@@ -135,7 +157,7 @@ async def build_subscription_menu(user_id: int, lang: Lang) -> tuple[str, Inline
         )
     )
     rows = [
-        [InlineKeyboardButton(text=_plan_button_text(p, lang), callback_data=f"{CB_PLAN_PREFIX}{p.code}")]
+        [_btn(_plan_button_text(p, lang), E_CALENDAR, callback_data=f"{CB_PLAN_PREFIX}{p.code}")]
         for p in SUBSCRIPTION_PLANS
     ]
     rows.append([InlineKeyboardButton(text=t(lang, "⬅️ Назад", "⬅️ Back"), callback_data=CB_MAIN)])
@@ -144,10 +166,7 @@ async def build_subscription_menu(user_id: int, lang: Lang) -> tuple[str, Inline
 
 def subscribe_button_row(lang: Lang) -> list[InlineKeyboardButton]:
     """Кнопка «Продлить подписку» для напоминаний об истечении."""
-    return [InlineKeyboardButton(
-        text=t(lang, "💳 Продлить подписку", "💳 Renew subscription"),
-        callback_data=CB_SUB,
-    )]
+    return [_btn(t(lang, "Продлить подписку", "Renew subscription"), E_CROWN, callback_data=CB_SUB)]
 
 
 async def send_main_menu(message: Message, lang: Lang) -> None:
@@ -237,20 +256,20 @@ async def cb_plan(query: CallbackQuery) -> None:
         )
         return
     title = _plan_title(plan, lang)
-    text = t(
+    text = tge(E_CALENDAR, "🗓") + t(
         lang,
-        f"📅 <b>Подписка на {title} — {plan.price_rub} ₽</b>\n\n"
+        f" <b>Подписка на {title} — {plan.price_rub} ₽</b>\n\n"
         f"Нажми «Оплатить» — откроется страница ЮKassa (карта или СБП). "
         f"После оплаты подписка продлится на {plan.days} {_days_ru(plan.days)}, "
         f"а бот пришлёт подтверждение.",
-        f"📅 <b>{title} subscription — {plan.price_rub} ₽</b>\n\n"
+        f" <b>{title} subscription — {plan.price_rub} ₽</b>\n\n"
         f"Tap \"Pay\" to open the YooKassa page (card or SBP). "
         f"After payment the subscription is extended by {plan.days} days "
         f"and the bot will send a confirmation.",
     )
     kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(
-            text=t(lang, f"💳 Оплатить {plan.price_rub} ₽", f"💳 Pay {plan.price_rub} ₽"),
+        [_btn(
+            t(lang, f"Оплатить {plan.price_rub} ₽", f"Pay {plan.price_rub} ₽"), E_PAY,
             url=created.confirmation_url,
         )],
         [InlineKeyboardButton(text=t(lang, "⬅️ Другой тариф", "⬅️ Other plan"), callback_data=CB_SUB)],
