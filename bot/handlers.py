@@ -338,24 +338,9 @@ def build_dispatcher(
             await repository.mark_user_bot_chat_active(message.from_user.id)
         except Exception:  # noqa: BLE001
             pass
-        # Активируем пробный период при первом /start.
-        active_until = await repository.start_trial_if_first_time(
-            message.from_user.id, settings.subscription_trial_days,
-        )
-        # /start — только главное меню. Если пробный период стартовал
-        # именно сейчас, добавляем в меню строку об этом.
-        trial_note = ""
-        if active_until is not None:
-            status = await repository.get_subscription_status(message.from_user.id)
-            if status["is_active"]:
-                trial_note = t(
-                    lang,
-                    f"🎁 <b>Пробный период активирован</b> — бесплатно на "
-                    f"{settings.subscription_trial_days} дней.",
-                    f"🎁 <b>Trial period activated</b> — free for "
-                    f"{settings.subscription_trial_days} days.",
-                )
-        await menu.send_main_menu(message, lang, note=trial_note)
+        # /start — только главное меню. Пробный период больше не включается
+        # сам: новый юзер видит в меню кнопку «Активировать пробный период».
+        await menu.send_main_menu(message, lang)
 
     @dp.message(Command("help"))
     async def cmd_help(message: Message) -> None:

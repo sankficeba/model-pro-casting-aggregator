@@ -1931,6 +1931,37 @@ async def start_trial_if_first_time(user_id: int, trial_days: int) -> Optional[d
         return active_until
 
 
+async def activate_trial(user_id: int, trial_days: int) -> Optional[datetime]:
+    """Активировать пробный период по кнопке. Только если trial ещё ни разу
+    не запускался; дни добавляются к текущему сроку (если, например, админ
+    уже выдал подписку вручную), а не перезаписывают его.
+    Возвращает новый active_until или None, если trial уже был."""
+    async with AsyncSessionLocal() as session:
+        await upsert_user_in_session(session, user_id)
+        res = await session.execute(
+            select(User.trial_started_at, User.subscription_active_until)
+            .where(User.id == user_id)
+            .with_for_update()
+        )
+        row = res.first()
+        if row is None or row[0] is not None:
+            return None
+        now = datetime.now(timezone.utc)
+        base = row[1] if row[1] is not None and row[1] > now else now
+        active_until = base + timedelta(days=trial_days)
+        await session.execute(
+            update(User)
+            .where(User.id == user_id)
+            .values(
+                trial_started_at=now,
+                subscription_active_until=active_until,
+                last_expiry_reminder_stage=None,
+            )
+        )
+        await session.commit()
+        return active_until
+
+
 async def get_subscription_status(user_id: int) -> dict:
     """Возвращает {active_until, days_left, is_active, trial_started_at}."""
     async with AsyncSessionLocal() as session:

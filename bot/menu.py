@@ -48,6 +48,8 @@ CB_MAIN = "menu:main"
 CB_SUB = "sub:menu"
 CB_PLAN_PREFIX = "sub:plan:"
 CB_LANG_TOGGLE = "menu:lang"
+CB_TRIAL = "trial:activate"
+E_GIFT = "5199749070830197566"      # 🎁  пробный период (как в zipzy)
 
 
 def _days_ru(n: int) -> str:
@@ -74,8 +76,15 @@ def _plan_button_text(plan: SubscriptionPlan, lang: Lang) -> str:
     return text
 
 
-async def _status_line(user_id: int, lang: Lang) -> tuple[str, bool]:
-    s = await repository.get_subscription_status(user_id)
+def _trial_available(s: dict) -> bool:
+    """Пробный период ещё не брали и подписки сейчас нет — показываем
+    новому юзеру кнопку активации вместо оплаты (как в zipzyVPN)."""
+    return s.get("trial_started_at") is None and not s["is_active"]
+
+
+async def _status_line(user_id: int, lang: Lang, s: dict | None = None) -> tuple[str, bool]:
+    if s is None:
+        s = await repository.get_subscription_status(user_id)
     if s["is_active"] and s["active_until"] is not None:
         days = s["days_left"]
         until_ru = s["active_until"].strftime("%d.%m.%Y")
@@ -93,7 +102,10 @@ async def _status_line(user_id: int, lang: Lang) -> tuple[str, bool]:
 
 
 async def build_main_menu(user_id: int, lang: Lang) -> tuple[str, InlineKeyboardMarkup]:
-    status, active = await _status_line(user_id, lang)
+    s = await repository.get_subscription_status(user_id)
+    if _trial_available(s):
+        return _build_trial_offer(lang)
+    status, active = await _status_line(user_id, lang, s)
     text = (
         tge(E_HOME, "🏠") + t(lang, " <b>Главное меню</b>", " <b>Main menu</b>")
         + "\n<blockquote>"
@@ -134,6 +146,48 @@ async def build_main_menu(user_id: int, lang: Lang) -> tuple[str, InlineKeyboard
             t(lang, f"Накопленные объявления ({pending})", f"Saved postings ({pending})"),
             E_BELL, callback_data="digest:next",
         )])
+    rows.append([_btn(
+        "English" if lang == "ru" else "Русский", E_GLOBE, callback_data=CB_LANG_TOGGLE,
+    )])
+    return text, InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def _build_trial_offer(lang: Lang) -> tuple[str, InlineKeyboardMarkup]:
+    """Стартовый экран нового юзера: описание + кнопка «Активировать»."""
+    days = settings.subscription_trial_days
+    text = (
+        tge(E_HOME, "🏠") + " <b>Model Promo Agency</b>"
+        + "\n<blockquote>"
+        + t(
+            lang,
+            "Агрегатор кастингов и подработок: в реальном времени собираем "
+            "вакансии из сотен каналов и агентств и присылаем подходящие тебе первым.\n\n"
+            "🛠 Разнорабочие · 🎉 Event-персонал · 📸 Актёры и модели · 💻 Администрирование",
+            "A casting and gig aggregator: we collect postings from hundreds of "
+            "channels and agencies in real time and send you the matching ones first.\n\n"
+            "🛠 General labor · 🎉 Event staff · 📸 Actors & models · 💻 Administration",
+        )
+        + "</blockquote>\n"
+        + tge(E_GIFT, "🎁")
+        + t(
+            lang,
+            f" Попробуй бесплатно: <b>{days} {_days_ru(days)}</b> полного доступа — "
+            f"все подходящие кастинги сразу, без ограничений.\n",
+            f" Try it free: <b>{days} days</b> of full access — "
+            f"every matching casting instantly, no limits.\n",
+        )
+        + tge(E_MONEY, "💰")
+        + t(
+            lang,
+            f" Дальше — от {SUBSCRIPTION_PLANS[0].price_rub} ₽/мес.",
+            f" Then from {SUBSCRIPTION_PLANS[0].price_rub} ₽/mo.",
+        )
+    )
+    rows = [[_btn(
+        t(lang, f"Активировать пробный период — {days} {_days_ru(days)}",
+          f"Activate free trial — {days} days"),
+        E_GIFT, callback_data=CB_TRIAL,
+    )]]
     rows.append([_btn(
         "English" if lang == "ru" else "Русский", E_GLOBE, callback_data=CB_LANG_TOGGLE,
     )])
@@ -204,7 +258,31 @@ def build_router() -> Router:
     router.callback_query.register(cb_lang_toggle, F.data == CB_LANG_TOGGLE)
     router.callback_query.register(cb_subscription, F.data == CB_SUB)
     router.callback_query.register(cb_plan, F.data.startswith(CB_PLAN_PREFIX))
+    router.callback_query.register(cb_trial, F.data == CB_TRIAL)
     return router
+
+
+async def cb_trial(query: CallbackQuery) -> None:
+    lang = await _lang_of(query)
+    days = settings.subscription_trial_days
+    until = await repository.activate_trial(query.from_user.id, days)
+    if until is None:
+        await query.answer(
+            t(lang, "Пробный период уже был активирован.", "The free trial has already been used."),
+            show_alert=True,
+        )
+    else:
+        await query.answer(t(lang, "Пробный период активирован!", "Free trial activated!"))
+    text, kb = await build_main_menu(query.from_user.id, lang)
+    if until is not None:
+        text += "\n\n" + tge(E_GIFT, "🎁") + t(
+            lang,
+            f" <b>Пробный период активирован</b> — {days} {_days_ru(days)} бесплатно. "
+            "Заполни анкету, чтобы получать подходящие кастинги.",
+            f" <b>Free trial activated</b> — {days} days free. "
+            "Fill in your profile to start receiving matching castings.",
+        )
+    await _edit_or_send(query, text, kb)
 
 
 async def cb_main(query: CallbackQuery) -> None:
