@@ -169,8 +169,10 @@ def subscribe_button_row(lang: Lang) -> list[InlineKeyboardButton]:
     return [_btn(t(lang, "Продлить подписку", "Renew subscription"), E_CROWN, callback_data=CB_SUB)]
 
 
-async def send_main_menu(message: Message, lang: Lang) -> None:
+async def send_main_menu(message: Message, lang: Lang, note: str = "") -> None:
     text, kb = await build_main_menu(message.from_user.id, lang)  # type: ignore[union-attr]
+    if note:
+        text += "\n\n" + note
     await message.answer(text, parse_mode="HTML", reply_markup=kb, disable_web_page_preview=True)
 
 

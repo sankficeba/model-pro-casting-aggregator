@@ -342,26 +342,20 @@ def build_dispatcher(
         active_until = await repository.start_trial_if_first_time(
             message.from_user.id, settings.subscription_trial_days,
         )
+        # /start — только главное меню. Если пробный период стартовал
+        # именно сейчас, добавляем в меню строку об этом.
         trial_note = ""
         if active_until is not None:
-            # Если только что стартовали trial — сообщим об этом.
             status = await repository.get_subscription_status(message.from_user.id)
             if status["is_active"]:
-                trial_note = "\n\n" + t(
+                trial_note = t(
                     lang,
-                    f"🎁 <b>Пробный период активирован</b> — "
-                    f"бесплатно на {settings.subscription_trial_days} дней "
-                    f"(до {active_until.strftime('%d.%m.%Y')}).",
-                    f"🎁 <b>Trial period activated</b> — "
-                    f"free for {settings.subscription_trial_days} days "
-                    f"(until {active_until.strftime('%m/%d/%Y')}).",
+                    f"🎁 <b>Пробный период активирован</b> — бесплатно на "
+                    f"{settings.subscription_trial_days} дней.",
+                    f"🎁 <b>Trial period activated</b> — free for "
+                    f"{settings.subscription_trial_days} days.",
                 )
-        await message.answer(
-            _greeting(lang) + trial_note + "\n\n" + _help_for(message.from_user.id, lang),
-            parse_mode="HTML",
-            reply_markup=ReplyKeyboardRemove(),
-        )
-        await menu.send_main_menu(message, lang)
+        await menu.send_main_menu(message, lang, note=trial_note)
 
     @dp.message(Command("help"))
     async def cmd_help(message: Message) -> None:
