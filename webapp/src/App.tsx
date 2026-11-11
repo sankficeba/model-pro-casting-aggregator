@@ -5,7 +5,6 @@ import type {
   CategoryCode,
   MeResponse,
   Subscription,
-  SubscriptionStatus,
 } from "./types";
 import {
   initTelegram,
@@ -20,8 +19,6 @@ import { CategoryMenuScreen } from "./components/CategoryMenuScreen";
 import { DeliverySettingsScreen } from "./components/DeliverySettingsScreen";
 import { FavoritesScreen } from "./components/FavoritesScreen";
 import { ReportProblemScreen } from "./components/ReportProblemScreen";
-import { SubscriptionBanner } from "./components/SubscriptionBanner";
-import { SubscriptionScreen } from "./components/SubscriptionScreen";
 import { SuccessToast } from "./components/SuccessToast";
 import { SuggestChannelScreen } from "./components/SuggestChannelScreen";
 import { SuggestionsProvider } from "./contexts/SuggestionsContext";
@@ -42,7 +39,6 @@ type Screen =
   | { kind: "delivery" }
   | { kind: "favorites" }
   | { kind: "reportProblem" }
-  | { kind: "subscription" }
   | { kind: "addCategory" }
   | { kind: "admin" };
 
@@ -51,31 +47,9 @@ export default function App() {
   const [screen, setScreen] = useState<Screen>({ kind: "loading" });
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [subStatus, setSubStatus] = useState<SubscriptionStatus | null>(null);
+  // Подписка и её оплата живут в боте (главное меню); в Mini App остаётся
+  // только тост после возврата из ЮKassa.
   const [paymentToast, setPaymentToast] = useState<string | null>(null);
-
-  const fetchSubStatus = async (): Promise<SubscriptionStatus | null> => {
-    try {
-      const s = await api.getSubscriptionStatus();
-      setSubStatus(s);
-      return s;
-    } catch {
-      // не валим экран если ручка ещё не задеплоена
-      return null;
-    }
-  };
-
-  /** После редиректа из ЮKassa (?paid=1) пытаемся подтянуть актуальный
-   * статус подписки — webhook может дойти на сервер с задержкой 1-3 сек.
-   * Делаем 5 ретраев с интервалом 1 сек, останавливаемся как только
-   * увидим is_active=true. */
-  const refreshAfterPayment = async () => {
-    for (let i = 0; i < 5; i++) {
-      const s = await fetchSubStatus();
-      if (s?.is_active) return;
-      await new Promise((r) => setTimeout(r, 1000));
-    }
-  };
 
   const [botChatActive, setBotChatActive] = useState<boolean>(true);
 
@@ -129,8 +103,7 @@ export default function App() {
     initTelegram();
     refreshMe();
     // Если юзер только что вернулся из ЮKassa после успешной оплаты —
-    // показываем toast и пинаем статус в фоне до момента когда webhook
-    // отработает на сервере. Маркер ?paid=1 чистим из URL, чтобы при
+    // показываем toast. Маркер ?paid=1 чистим из URL, чтобы при
     // случайном refresh не показывать тост повторно.
     const params = new URLSearchParams(window.location.search);
     if (params.get("paid") === "1") {
@@ -144,9 +117,6 @@ export default function App() {
       setPaymentToast(
         t("✅ Оплата прошла. Подписка активирована!", "✅ Payment successful. Subscription activated!")
       );
-      refreshAfterPayment();
-    } else {
-      fetchSubStatus();
     }
   }, []);
 
@@ -234,17 +204,6 @@ export default function App() {
       return <ReportProblemScreen onBack={goToMenu} />;
     }
 
-    if (screen.kind === "subscription") {
-      return (
-        <SubscriptionScreen
-          onBack={async () => {
-            await fetchSubStatus();
-            setScreen({ kind: "menu" });
-          }}
-        />
-      );
-    }
-
     if (screen.kind === "form") {
       const FormComponent = {
         creative: CreativeForm,
@@ -272,28 +231,11 @@ export default function App() {
     return null;
   };
 
-  // Плашка подписки видна только на главных «оседлых» экранах:
-  // меню/чёрный список/предложение канала/доставка. На формах и опроснике
-  // прячем — там и так нижние бары, и она заслонит контент.
-  const showBanner =
-    screen.kind === "menu" ||
-    screen.kind === "blacklist" ||
-    screen.kind === "suggestChannel" ||
-    screen.kind === "delivery" ||
-    screen.kind === "favorites" ||
-    screen.kind === "reportProblem";
-
   return (
     <SuggestionsProvider>
       <BackgroundShapes />
       {!botChatActive && screen.kind !== "loading" && screen.kind !== "error" && (
         <BotChatRequiredBanner />
-      )}
-      {showBanner && (
-        <SubscriptionBanner
-          status={subStatus}
-          onClick={() => setScreen({ kind: "subscription" })}
-        />
       )}
       {paymentToast && (
         <SuccessToast
