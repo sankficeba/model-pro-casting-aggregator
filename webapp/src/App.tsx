@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ChevronLeft } from "lucide-react";
+import { Bell, BellOff, ChevronLeft } from "lucide-react";
 import { api } from "./api";
 import type {
   CategoryCode,
@@ -37,6 +37,7 @@ export default function App() {
   const [screen, setScreen] = useState<Screen>({ kind: "loading" });
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [toggling, setToggling] = useState(false);
   // Подписка и её оплата живут в боте (главное меню); в Mini App остаётся
   // только тост после возврата из ЮKassa.
   const [paymentToast, setPaymentToast] = useState<string | null>(null);
@@ -161,13 +162,12 @@ export default function App() {
           }}
           onOpenBase={() => setScreen({ kind: "base" })}
           onAdmin={() => setScreen({ kind: "admin" })}
-          onChange={async () => { await fetchSubscriptions(); }}
         />
       );
     }
 
-    const backBar = (onBack: () => void) => (
-      <div className="sticky top-0 z-20 bg-bg/90 backdrop-blur border-b border-bg-card">
+    const backBar = (onBack: () => void, right?: React.ReactNode) => (
+      <div className="sticky top-0 z-20 bg-bg/90 backdrop-blur border-b border-bg-card flex items-center justify-between pr-4">
         <button
           onClick={onBack}
           className="flex items-center gap-1 px-4 py-3 text-slate-400 hover:text-white"
@@ -175,8 +175,42 @@ export default function App() {
           <ChevronLeft className="w-5 h-5" />
           {t("Назад", "Back")}
         </button>
+        {right}
       </div>
     );
+
+    /** Вкл/выкл уведомлений по направлению — внутри анкеты, а не на карточке. */
+    const notifyToggle = (category: CategoryCode) => {
+      const sub = subscriptions.find((s) => s.category === category);
+      if (!sub) return null;
+      const on = sub.enabled;
+      return (
+        <button
+          onClick={async () => {
+            if (toggling) return;
+            setToggling(true);
+            try {
+              await api.patchSubscription(category, !on);
+              await fetchSubscriptions();
+            } catch {
+              /* состояние останется прежним */
+            } finally {
+              setToggling(false);
+            }
+          }}
+          disabled={toggling}
+          className={`flex items-center gap-2 text-sm transition disabled:opacity-50 ${on ? "text-accent" : "text-slate-500"}`}
+          aria-pressed={on}
+          title={on ? t("Выключить уведомления", "Turn off notifications") : t("Включить уведомления", "Turn on notifications")}
+        >
+          {on ? <Bell className="w-4 h-4" /> : <BellOff className="w-4 h-4" />}
+          {t("Уведомления", "Notifications")}
+          <span className={`relative w-9 h-5 rounded-full transition ${on ? "bg-accent" : "bg-bg-card"}`}>
+            <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${on ? "left-[18px]" : "left-0.5"}`} />
+          </span>
+        </button>
+      );
+    };
 
     if (screen.kind === "form") {
       const FormComponent = {
@@ -188,7 +222,7 @@ export default function App() {
       const category = screen.category;
       return (
         <div>
-          {backBar(goToMenu)}
+          {backBar(goToMenu, notifyToggle(category))}
           <FormComponent
             key={category}
             onDone={refreshMe}

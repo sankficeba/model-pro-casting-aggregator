@@ -1042,14 +1042,19 @@ def _is_filled(value) -> bool:
 
 
 def _completion_pct(profile, category: str) -> int:
-    """Процент заполненных required-полей профиля категории. 0 если профиль не создан."""
+    """Процент заполнения анкеты категории — как в форме Mini App:
+    «Основная информация» считается одним пунктом (заполнены все её
+    обязательные поля или нет) + каждое обязательное поле самого направления."""
     if profile is None:
         return 0
     fields = _REQUIRED_FIELDS.get(category, [])
     if not fields:
         return 0
-    filled = sum(1 for f in fields if _is_filled(getattr(profile, f, None)))
-    return int(round(filled * 100 / len(fields)))
+    specific = [f for f in fields if f not in BASE_REQUIRED_FIELDS]
+    base_ok = all(_is_filled(getattr(profile, f, None)) for f in BASE_REQUIRED_FIELDS)
+    filled = int(base_ok) + sum(1 for f in specific if _is_filled(getattr(profile, f, None)))
+    # +0.5 и floor — как Math.round во фронте (round() в Python банковский: 12.5 → 12).
+    return int(filled * 100 / (1 + len(specific)) + 0.5)
 
 
 async def get_subscriptions(user_id: int) -> list[dict]:

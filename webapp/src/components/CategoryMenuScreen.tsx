@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { CheckCircle2, AlertCircle, ShieldCheck, Plus, Bell, BellOff, UserRound, ChevronRight, Lock } from "lucide-react";
+import { CheckCircle2, AlertCircle, ShieldCheck, Plus, BellOff, UserRound, ChevronRight, Lock } from "lucide-react";
 import { api } from "../api";
 import type { CategoryCode, DeliverySettings, Subscription } from "../types";
 import {
@@ -21,7 +21,13 @@ interface Props {
   onOpenBase: () => void;
   onAdmin?: () => void;
   isAdmin?: boolean;
-  onChange?: () => Promise<void> | void;
+}
+
+function yearsRu(n: number): string {
+  if (n % 100 >= 11 && n % 100 <= 14) return "лет";
+  if (n % 10 === 1) return "год";
+  if (n % 10 >= 2 && n % 10 <= 4) return "года";
+  return "лет";
 }
 
 export function CategoryMenuScreen({
@@ -31,10 +37,8 @@ export function CategoryMenuScreen({
   onOpenBase,
   onAdmin,
   isAdmin,
-  onChange,
 }: Props) {
   const { t, lang, setLang } = useLang();
-  const [pending, setPending] = useState<CategoryCode | null>(null);
   const [starting, setStarting] = useState<CategoryCode | null>(null);
 
   const start = async (c: CategoryCode) => {
@@ -70,20 +74,11 @@ export function CategoryMenuScreen({
   const locked = baseLoaded === null || (baseLoaded === true && !baseDone);
   const baseSummary = [
     base?.full_name,
-    base?.actual_age != null ? t(`${base.actual_age} лет`, `${base.actual_age} y.o.`) : null,
+    base?.actual_age != null
+      ? t(`${base.actual_age} ${yearsRu(Number(base.actual_age))}`, `${base.actual_age} y.o.`)
+      : null,
     base?.city,
   ].filter(Boolean).join(" · ");
-
-  const toggle = async (sub: Subscription, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setPending(sub.category);
-    try {
-      await api.patchSubscription(sub.category, !sub.enabled);
-      if (onChange) await onChange();
-    } finally {
-      setPending(null);
-    }
-  };
 
   return (
     <div className="min-h-[100dvh] p-5 flex flex-col gap-4">
@@ -218,7 +213,6 @@ export function CategoryMenuScreen({
           }
           const pct = Math.max(0, Math.min(100, s.completion_pct ?? (s.profile_completed ? 100 : 0)));
           const isComplete = s.profile_completed;
-          const isPending = pending === s.category;
           return (
             <button
               key={s.category}
@@ -230,20 +224,15 @@ export function CategoryMenuScreen({
               }`}
             >
               <div className="flex items-center gap-3 mb-2">
-                <button
-                  onClick={(e) => toggle(s, e)}
-                  disabled={isPending}
-                  className={`shrink-0 p-2 rounded-card transition ${
-                    s.enabled
-                      ? "text-accent hover:bg-accent/10"
-                      : "text-slate-500 hover:text-slate-300 hover:bg-bg-card"
-                  } ${isPending ? "opacity-50" : ""}`}
-                  aria-label={s.enabled ? t("Выключить уведомления", "Turn off notifications") : t("Включить уведомления", "Turn on notifications")}
-                  title={s.enabled ? t("Уведомления включены", "Notifications on") : t("Уведомления выключены", "Notifications off")}
-                >
-                  {s.enabled ? <Bell className="w-5 h-5" /> : <BellOff className="w-5 h-5" />}
-                </button>
                 <span className="font-medium flex-1 min-w-0">{t(CATEGORY_LABELS[s.category], CATEGORY_LABELS_EN[s.category])}</span>
+                {!s.enabled && (
+                  <span
+                    className="flex items-center gap-1 text-xs text-slate-500"
+                    title={t("Уведомления выключены", "Notifications off")}
+                  >
+                    <BellOff className="w-4 h-4" />
+                  </span>
+                )}
                 <span className="flex items-center gap-1.5 text-sm text-slate-400">
                   {isComplete ? (
                     <>
