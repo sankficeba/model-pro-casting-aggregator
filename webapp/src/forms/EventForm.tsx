@@ -6,14 +6,6 @@ import { CategoryFormShell } from "../components/CategoryFormShell";
 import { BaseInfoNotice } from "../components/BaseInfoNotice";
 import { useLang } from "../i18n";
 
-function getWorkTypes(t: (ru: string, en: string) => string) {
-  return [
-    { value: "hostess", label: t("Хостес", "Hostess") },
-    { value: "promo_model", label: t("Промо-модель", "Promo model") },
-    { value: "animator", label: t("Аниматор", "Entertainer") },
-  ];
-}
-
 interface Props {
   onDone: () => void;
   onOpenBase: () => void;
@@ -58,7 +50,7 @@ export function EventForm({ onDone, onOpenBase }: Props) {
           label={t("Выберите интересующие вас должности", "Select the positions you're interested in")}
           value={data.work_types ?? []}
           onChange={(v) => update({ work_types: v })}
-          options={getWorkTypes(t)}
+          options={refs.work_types_event.map((w) => ({ value: w.code, label: w.label }))}
           required
         />
         <NumberFieldWithAutocomplete

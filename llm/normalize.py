@@ -85,12 +85,34 @@ def _normalize_vacancy(v: VacancyExtraction) -> VacancyExtraction:
     )
 
 
+# Код типа работы → категория, к которой он относится.
+_WORK_TYPE_CATEGORY: dict[str, str] = {
+    code: cat
+    for cat, ref_key in (("event", "work_types_event"), ("general", "work_types_general"), ("admin", "work_types_admin"))
+    for code in _CODES.get(ref_key, set())
+}
+
+
+def _fix_category(v: VacancyExtraction, post_category: str | None) -> VacancyExtraction:
+    """Если все типы работ вакансии из одной категории, а вакансия стоит в
+    другой (типично: «хелпер» на мероприятие → category=event), переносим её
+    туда, где этот тип есть в анкетах. Иначе вакансию не получит никто:
+    в анкетах event нет «хелпера», а анкеты general не видят event-вакансии."""
+    cats = {_WORK_TYPE_CATEGORY[c] for c in v.work_types if c in _WORK_TYPE_CATEGORY}
+    effective = v.category or post_category
+    if len(cats) == 1 and effective in ("event", "general", "admin"):
+        target = next(iter(cats))
+        if target != effective:
+            return v.model_copy(update={"category": target})
+    return v
+
+
 def normalize_extracted(data: PostExtraction) -> PostExtraction:
     """Возвращает копию PostExtraction с нормализованными списками кодов
     на уровне поста (project_types) и каждой вакансии (role_types)."""
     return data.model_copy(
         update={
             "project_types": _normalize_list("project_types", data.project_types),
-            "vacancies": [_normalize_vacancy(v) for v in data.vacancies],
+            "vacancies": [_fix_category(_normalize_vacancy(v), data.category) for v in data.vacancies],
         }
     )

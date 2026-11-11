@@ -5,13 +5,6 @@ import { CategoryFormShell } from "../components/CategoryFormShell";
 import { BaseInfoNotice } from "../components/BaseInfoNotice";
 import { useLang } from "../i18n";
 
-function getWorkTypes(t: (ru: string, en: string) => string) {
-  return [
-    { value: "registration_operator", label: t("Оператор регистрации", "Registration operator") },
-    { value: "supervisor", label: t("Супервайзер", "Supervisor") },
-  ];
-}
-
 interface Props {
   onDone: () => void;
   onOpenBase: () => void;
@@ -56,7 +49,7 @@ export function AdminForm({ onDone, onOpenBase }: Props) {
           label={t("Типы работ", "Work types")}
           value={data.work_types ?? []}
           onChange={(v) => update({ work_types: v })}
-          options={getWorkTypes(t)}
+          options={refs.work_types_admin.map((w) => ({ value: w.code, label: w.label }))}
           required
         />
         <NumberFieldWithAutocomplete

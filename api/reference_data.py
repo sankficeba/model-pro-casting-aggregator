@@ -173,16 +173,25 @@ _SKILLS_INSTRUMENTS = [
     ("ukulele", "Укулеле", "Ukulele"),
 ]
 
+# Новые типы (11.2026) выделены по реальным вакансиям, которые раньше
+# сваливались в соседний тип: зрители — в «хостес» (~1.4к/мес), промоутеры —
+# в «промо-модель» (~1.5к), официанты — в «хостес», охрана — без типа (~400),
+# склад — в «хелпер» (~400).
 _WORK_TYPES_EVENT = [
     ("hostess", "Хостес", "Hostess"),
     ("promo_model", "Промо-модель", "Promo model"),
+    ("promoter", "Промоутер / консультант", "Promoter / brand consultant"),
     ("animator", "Аниматор", "Animator"),
+    ("audience", "Зрители на съёмках", "TV show audience"),
+    ("catering", "Официант / бармен", "Waiter / bartender"),
 ]
 
 _WORK_TYPES_GENERAL = [
     ("helper", "Хелпер", "Helper"),
-    ("cleaning", "Клининг", "Cleaning"),
     ("loader", "Грузчик", "Loader"),
+    ("warehouse", "Склад / фасовка", "Warehouse / packing"),
+    ("cleaning", "Клининг", "Cleaning"),
+    ("security", "Охрана / контроль", "Security / stewarding"),
 ]
 
 _WORK_TYPES_ADMIN = [

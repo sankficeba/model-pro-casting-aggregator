@@ -22,6 +22,9 @@ export interface Refs {
   skills_dance: RefItem[];
   skills_vocal: RefItem[];
   skills_instruments: RefItem[];
+  work_types_event: RefItem[];
+  work_types_general: RefItem[];
+  work_types_admin: RefItem[];
 }
 
 export interface Profile {
