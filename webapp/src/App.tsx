@@ -21,6 +21,7 @@ import { CreativeForm } from "./forms/CreativeForm";
 import { EventForm } from "./forms/EventForm";
 import { GeneralForm } from "./forms/GeneralForm";
 import { AdminForm } from "./forms/AdminForm";
+import { BaseInfoForm } from "./forms/BaseInfoForm";
 import { useLang } from "./i18n";
 
 type Screen =
@@ -29,6 +30,8 @@ type Screen =
   | { kind: "survey" }
   | { kind: "menu" }
   | { kind: "form"; category: CategoryCode }
+  // returnTo — анкета направления, из которой открыли «Основную информацию».
+  | { kind: "base"; returnTo?: CategoryCode }
   | { kind: "addCategory" }
   | { kind: "admin" };
 
@@ -163,11 +166,24 @@ export default function App() {
           isAdmin={isAdmin}
           onOpenForm={(c) => setScreen({ kind: "form", category: c })}
           onAddCategory={() => setScreen({ kind: "addCategory" })}
+          onOpenBase={() => setScreen({ kind: "base" })}
           onAdmin={() => setScreen({ kind: "admin" })}
           onChange={async () => { await fetchSubscriptions(); }}
         />
       );
     }
+
+    const backBar = (onBack: () => void) => (
+      <div className="sticky top-0 z-20 bg-bg/90 backdrop-blur border-b border-bg-card">
+        <button
+          onClick={onBack}
+          className="flex items-center gap-1 px-4 py-3 text-slate-400 hover:text-white"
+        >
+          <ChevronLeft className="w-5 h-5" />
+          {t("Назад", "Back")}
+        </button>
+      </div>
+    );
 
     if (screen.kind === "form") {
       const FormComponent = {
@@ -176,18 +192,32 @@ export default function App() {
         general: GeneralForm,
         admin: AdminForm,
       }[screen.category];
+      const category = screen.category;
       return (
         <div>
-          <div className="sticky top-0 z-20 bg-bg/90 backdrop-blur border-b border-bg-card">
-            <button
-              onClick={goToMenu}
-              className="flex items-center gap-1 px-4 py-3 text-slate-400 hover:text-white"
-            >
-              <ChevronLeft className="w-5 h-5" />
-              {t("Назад", "Back")}
-            </button>
-          </div>
-          <FormComponent onDone={refreshMe} />
+          {backBar(goToMenu)}
+          <FormComponent
+            key={category}
+            onDone={refreshMe}
+            onOpenBase={() => setScreen({ kind: "base", returnTo: category })}
+          />
+        </div>
+      );
+    }
+
+    if (screen.kind === "base") {
+      const returnTo = screen.returnTo;
+      const back = () =>
+        returnTo ? setScreen({ kind: "form", category: returnTo }) : goToMenu();
+      return (
+        <div>
+          {backBar(back)}
+          <BaseInfoForm
+            onDone={async () => {
+              await fetchSubscriptions().catch(() => {});
+              back();
+            }}
+          />
         </div>
       );
     }

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { CheckCircle2, AlertCircle, ShieldCheck, Plus, Bell, BellOff } from "lucide-react";
+import { CheckCircle2, AlertCircle, ShieldCheck, Plus, Bell, BellOff, UserRound, ChevronRight } from "lucide-react";
 import { api } from "../api";
 import type { CategoryCode, DeliverySettings, Subscription } from "../types";
 import { CATEGORY_LABELS, CATEGORY_LABELS_EN } from "../types";
@@ -10,6 +10,7 @@ interface Props {
   subscriptions: Subscription[];
   onOpenForm: (c: CategoryCode) => void;
   onAddCategory: () => void;
+  onOpenBase: () => void;
   onAdmin?: () => void;
   isAdmin?: boolean;
   onChange?: () => Promise<void> | void;
@@ -19,6 +20,7 @@ export function CategoryMenuScreen({
   subscriptions,
   onOpenForm,
   onAddCategory,
+  onOpenBase,
   onAdmin,
   isAdmin,
   onChange,
@@ -27,11 +29,22 @@ export function CategoryMenuScreen({
   const [pending, setPending] = useState<CategoryCode | null>(null);
   const canAdd = subscriptions.length < 4;
   const [delivery, setDelivery] = useState<DeliverySettings | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [base, setBase] = useState<Record<string, any> | null>(null);
 
   useEffect(() => {
     // Ошибку глушим: кнопка дайджеста на главном экране необязательна.
     api.getDeliverySettings().then(setDelivery).catch(() => {});
+    api.getBaseProfile().then(setBase).catch(() => {});
   }, []);
+
+  const basePct = Math.max(0, Math.min(100, Number(base?.completion_pct ?? 0)));
+  const baseDone = !!base?.completed;
+  const baseSummary = [
+    base?.full_name,
+    base?.actual_age != null ? t(`${base.actual_age} лет`, `${base.actual_age} y.o.`) : null,
+    base?.city,
+  ].filter(Boolean).join(" · ");
 
   const toggle = async (sub: Subscription, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -45,7 +58,7 @@ export function CategoryMenuScreen({
   };
 
   return (
-    <div className="min-h-screen p-5 space-y-4">
+    <div className="min-h-[100dvh] p-5 flex flex-col gap-4">
       <div className="flex justify-between items-center gap-2">
         <h1 className="text-2xl font-semibold">{t("Мои направления", "My categories")}</h1>
         <div className="flex items-center gap-1.5 shrink-0">
@@ -76,7 +89,45 @@ export function CategoryMenuScreen({
           />
         </div>
       )}
-      <div className="space-y-3">
+
+      {/* Основная информация — общие поля для всех анкет */}
+      <button
+        onClick={onOpenBase}
+        className={`w-full p-4 rounded-card border-2 text-left transition ${
+          baseDone ? "border-accent/40 bg-accent/5 hover:border-accent" : "border-amber-400/60 bg-amber-400/10"
+        }`}
+      >
+        <div className="flex items-center gap-3">
+          <div className="shrink-0 w-10 h-10 rounded-full bg-accent/15 flex items-center justify-center">
+            <UserRound className="w-5 h-5 text-accent" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="font-semibold">{t("Основная информация", "Basic information")}</div>
+            <div className="text-xs text-slate-400 truncate">
+              {baseDone && baseSummary
+                ? baseSummary
+                : t("Заполни один раз — подставится во все анкеты", "Fill in once — used in all applications")}
+            </div>
+          </div>
+          {baseDone ? (
+            <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0" />
+          ) : (
+            <span className="text-sm text-amber-400 tabular-nums shrink-0">{basePct}%</span>
+          )}
+          <ChevronRight className="w-4 h-4 text-slate-500 shrink-0" />
+        </div>
+        {!baseDone && (
+          <div className="mt-3 h-1.5 w-full rounded-full bg-bg-card overflow-hidden">
+            <div className="h-full bg-amber-400 transition-all" style={{ width: `${basePct}%` }} />
+          </div>
+        )}
+      </button>
+
+      {/* Направления — по центру оставшегося места */}
+      <div className="flex-1 flex flex-col justify-center gap-3 py-2">
+        <div className="text-xs uppercase tracking-wider text-slate-500 px-1">
+          {t("Направления", "Categories")}
+        </div>
         {subscriptions.map((s) => {
           const pct = Math.max(0, Math.min(100, s.completion_pct ?? (s.profile_completed ? 100 : 0)));
           const isComplete = s.profile_completed;
@@ -129,16 +180,16 @@ export function CategoryMenuScreen({
             </button>
           );
         })}
+        {canAdd && (
+          <button
+            onClick={onAddCategory}
+            className="w-full py-3 rounded-card border-2 border-dashed border-bg-card text-slate-400 hover:border-accent hover:text-accent transition flex items-center justify-center gap-2"
+          >
+            <Plus className="w-4 h-4" />
+            {t("Добавить направление", "Add category")}
+          </button>
+        )}
       </div>
-      {canAdd && (
-        <button
-          onClick={onAddCategory}
-          className="w-full py-3 rounded-card border-2 border-dashed border-bg-card text-slate-400 hover:border-accent hover:text-accent transition flex items-center justify-center gap-2"
-        >
-          <Plus className="w-4 h-4" />
-          {t("Добавить категорию", "Add category")}
-        </button>
-      )}
     </div>
   );
 }

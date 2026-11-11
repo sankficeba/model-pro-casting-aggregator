@@ -1,11 +1,36 @@
 import { useEffect, useRef, useState } from "react";
-import { api } from "../api";
+import { api, waitBaseSaved } from "../api";
 import type { CategoryCode, Refs } from "../types";
 import { useSuggestionsRefresh } from "../contexts/SuggestionsContext";
 import { useLang } from "../i18n";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type Data = Record<string, any>;
+
+/** Общие поля всех анкет — редактируются только в «Основной информации»
+ * (должно совпадать с db/repository.BASE_FIELDS). */
+export const BASE_FIELDS = [
+  "full_name", "gender", "actual_age", "city", "ready_for_travel",
+  "phone", "telegram_user", "email", "tax_status",
+] as const;
+
+/** Обязательные общие поля (db/repository.BASE_REQUIRED_FIELDS). */
+export function baseMissing(data: Data): boolean {
+  return (
+    !data.full_name?.trim() ||
+    !data.gender ||
+    data.actual_age == null ||
+    !data.city?.trim() ||
+    !data.phone?.trim() ||
+    !data.email?.trim()
+  );
+}
+
+function withoutBase(data: Data): Data {
+  const out: Data = { ...data };
+  for (const f of BASE_FIELDS) delete out[f];
+  return out;
+}
 
 interface Options {
   category: CategoryCode;
@@ -46,7 +71,8 @@ export function useCategoryFormState({
   }, [refreshSuggestions]);
 
   useEffect(() => {
-    Promise.all([api.getCategoryProfile(category), api.getRefs()])
+    waitBaseSaved()
+      .then(() => Promise.all([api.getCategoryProfile(category), api.getRefs()]))
       .then(([p, r]) => {
         setData((prev) => ({ ...prev, ...(p as Data) }));
         setRefs(r);
@@ -55,18 +81,27 @@ export function useCategoryFormState({
       .finally(() => setLoading(false));
   }, [category]);
 
+  const dataRef = useRef<Data>(initial);
+
   useEffect(() => {
     return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
+      // Ушли с экрана до срабатывания автосейва — досохраняем, а не теряем.
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+        debounceRef.current = null;
+        api.putCategoryProfile(category, withoutBase(dataRef.current)).catch(() => {});
+      }
     };
-  }, []);
+  }, [category]);
 
   const update = (patch: Data) => {
     setData((prev) => {
       const next = { ...prev, ...patch };
+      dataRef.current = next;
       if (debounceRef.current) clearTimeout(debounceRef.current);
       debounceRef.current = setTimeout(() => {
-        api.putCategoryProfile(category, next).catch(() => {});
+        debounceRef.current = null;
+        api.putCategoryProfile(category, withoutBase(next)).catch(() => {});
       }, 400);
       return next;
     });
@@ -82,7 +117,8 @@ export function useCategoryFormState({
     setError(null);
     try {
       if (debounceRef.current) clearTimeout(debounceRef.current);
-      await api.putCategoryProfile(category, data);
+      debounceRef.current = null;
+      await api.putCategoryProfile(category, withoutBase(data));
       await api.completeCategoryProfile(category);
       onDone();
     } catch (e) {

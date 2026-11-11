@@ -1171,6 +1171,75 @@ async def complete_category_profile(
         return _profile_row_to_dict(row), was_first_time
 
 
+# ---------------------------------------------------------------- Основная информация
+# Общие для всех анкет поля. Отдельной таблицы нет: значения хранятся в
+# каждой анкете-категории (на них опирается matching), а блок «Основная
+# информация» в Mini App читает их и при сохранении раскладывает во все
+# анкеты юзера.
+BASE_FIELDS = (
+    "full_name", "gender", "actual_age", "city", "ready_for_travel",
+    "phone", "telegram_user", "email", "tax_status",
+)
+BASE_REQUIRED_FIELDS = ("full_name", "gender", "actual_age", "city", "phone", "email")
+
+
+async def _user_profiles(session, user_id: int) -> list:
+    rows = []
+    for model in CATEGORY_TO_MODEL.values():
+        r = (await session.execute(select(model).where(model.user_id == user_id))).scalar_one_or_none()
+        if r is not None:
+            rows.append(r)
+    _epoch = datetime.min.replace(tzinfo=timezone.utc)
+    rows.sort(key=lambda r: r.updated_at or _epoch, reverse=True)
+    return rows
+
+
+def _base_from_profiles(rows: list) -> dict:
+    """Самое свежее заполненное значение каждого общего поля среди анкет."""
+    out: dict = {f: None for f in BASE_FIELDS}
+    out["ready_for_travel"] = bool(rows[0].ready_for_travel) if rows else False
+    for f in BASE_FIELDS:
+        if f == "ready_for_travel":
+            continue
+        for r in rows:
+            v = getattr(r, f, None)
+            if _is_filled(v):
+                out[f] = v
+                break
+    filled = sum(1 for f in BASE_REQUIRED_FIELDS if _is_filled(out.get(f)))
+    out["completion_pct"] = int(round(filled * 100 / len(BASE_REQUIRED_FIELDS)))
+    out["completed"] = filled == len(BASE_REQUIRED_FIELDS)
+    return out
+
+
+async def get_base_profile(user_id: int) -> dict:
+    async with AsyncSessionLocal() as session:
+        return _base_from_profiles(await _user_profiles(session, user_id))
+
+
+async def set_base_profile(user_id: int, data: dict) -> dict:
+    """Записать общие поля во все анкеты юзера (по его подпискам на
+    категории; недостающие анкеты создаются черновиками)."""
+    patch = {k: v for k, v in data.items() if k in BASE_FIELDS}
+    async with AsyncSessionLocal() as session:
+        cats = (await session.execute(
+            select(UserCategorySubscription.category).where(UserCategorySubscription.user_id == user_id)
+        )).scalars().all()
+    if patch:
+        for cat in cats:
+            if cat in CATEGORY_TO_MODEL:
+                await upsert_category_profile(user_id, cat, patch)
+    return await get_base_profile(user_id)
+
+
+def missing_required_fields(profile: Optional[dict], category: str) -> list[str]:
+    """Обязательные поля анкеты категории (включая общие), которые не заполнены."""
+    return [
+        f for f in _REQUIRED_FIELDS.get(category, [])
+        if not _is_filled((profile or {}).get(f))
+    ]
+
+
 async def get_user_blacklist(user_id: int) -> list[str]:
     """Список запрещённых слов/фраз юзера."""
     async with AsyncSessionLocal() as session:

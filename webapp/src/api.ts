@@ -155,6 +155,11 @@ function humanizeApiError(status: number, body: string): string {
   return body?.trim() ? body : (en ? `Error ${status}` : `Ошибка ${status}`);
 }
 
+// Последнее сохранение «Основной информации»: экраны, читающие анкеты,
+// ждут его, чтобы не показать данные до записи общих полей.
+let lastBaseSave: Promise<unknown> = Promise.resolve();
+export const waitBaseSaved = () => lastBaseSave;
+
 // ===== HTTP =====
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -179,6 +184,20 @@ export const api = {
     request<Profile>("/profile", { method: "PUT", body: JSON.stringify(data) }),
   completeProfile: () =>
     request<Profile>("/profile/complete", { method: "POST" }),
+
+  // «Основная информация» — общие поля всех анкет
+  getBaseProfile: async () => {
+    await waitBaseSaved();
+    return request<Record<string, unknown>>("/base-profile");
+  },
+  putBaseProfile: (data: Record<string, unknown>) => {
+    const p = request<Record<string, unknown>>("/base-profile", {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+    lastBaseSave = p.catch(() => undefined);
+    return p;
+  },
 
   // Per-category profile + subscriptions
   getCategoryProfile: <T = Record<string, unknown>>(category: CategoryCode) =>

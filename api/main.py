@@ -256,7 +256,32 @@ async def create_subscriptions(
 ) -> dict:
     """Создать строки подписки. Идемпотентно. Возвращает обновлённый список."""
     subs = await repo.set_subscriptions(user.id, list(body.categories))
+    # Новые анкеты сразу получают уже заполненную «Основную информацию».
+    base = await repo.get_base_profile(user.id)
+    filled = {k: base[k] for k in repo.BASE_FIELDS if base.get(k) not in (None, "")}
+    if filled:
+        await repo.set_base_profile(user.id, filled)
+        subs = await repo.get_subscriptions(user.id)
     return {"subscriptions": subs}
+
+
+@app.get("/api/base-profile")
+async def get_base_profile_endpoint(user: TelegramUser = Depends(current_user)) -> dict:
+    """«Основная информация» — общие поля всех анкет юзера."""
+    return await repo.get_base_profile(user.id)
+
+
+@app.put("/api/base-profile")
+async def put_base_profile_endpoint(
+    body: dict,
+    user: TelegramUser = Depends(current_user),
+) -> dict:
+    """Сохранить общие поля сразу во все анкеты юзера."""
+    from api.schemas import _BaseProfileSchema
+
+    payload = {k: v for k, v in body.items() if k in repo.BASE_FIELDS}
+    validated = _BaseProfileSchema.model_validate(payload)
+    return await repo.set_base_profile(user.id, validated.model_dump(exclude_unset=True))
 
 
 @app.patch("/api/subscriptions/{category}")
@@ -322,6 +347,17 @@ async def complete_category_profile_endpoint(
     """Финальное завершение анкеты категории — шлёт уведомление в бот."""
     if category not in CATEGORY_TO_SCHEMA:
         raise HTTPException(status_code=400, detail="Unknown category")
+    current = await repo.get_category_profile(user.id, category)
+    missing = repo.missing_required_fields(current, category)
+    if missing:
+        base_missing = [f for f in missing if f in repo.BASE_FIELDS]
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Сначала заполни «Основную информацию»." if base_missing
+                else "Заполни обязательные поля анкеты."
+            ),
+        )
     p, was_first_time = await repo.complete_category_profile(user.id, category)
     if p is None:
         raise HTTPException(status_code=400, detail="Profile not found")
