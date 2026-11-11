@@ -13,7 +13,6 @@ import {
 import { AdminDashboard } from "./components/AdminDashboard";
 import { BackgroundShapes } from "./components/BackgroundShapes";
 import { BotChatRequiredBanner } from "./components/BotChatRequiredBanner";
-import { CategorySurveyScreen } from "./components/CategorySurveyScreen";
 import { CategoryMenuScreen } from "./components/CategoryMenuScreen";
 import { SuccessToast } from "./components/SuccessToast";
 import { SuggestionsProvider } from "./contexts/SuggestionsContext";
@@ -27,12 +26,10 @@ import { useLang } from "./i18n";
 type Screen =
   | { kind: "loading" }
   | { kind: "error"; msg: string }
-  | { kind: "survey" }
   | { kind: "menu" }
   | { kind: "form"; category: CategoryCode }
   // returnTo — анкета направления, из которой открыли «Основную информацию».
   | { kind: "base"; returnTo?: CategoryCode }
-  | { kind: "addCategory" }
   | { kind: "admin" };
 
 export default function App() {
@@ -65,8 +62,10 @@ export default function App() {
 
   const refreshMe = async () => {
     try {
-      const subs = await fetchSubscriptions();
-      setScreen(subs.length === 0 ? { kind: "survey" } : { kind: "menu" });
+      // Отдельного экрана выбора направлений нет: все 4 видны в меню,
+      // невыбранное добавляется по нажатию.
+      await fetchSubscriptions();
+      setScreen({ kind: "menu" });
     } catch (e) {
       setScreen({
         kind: "error",
@@ -145,27 +144,21 @@ export default function App() {
       return <AdminDashboard onBack={() => setScreen({ kind: "menu" })} />;
     }
 
-    if (screen.kind === "survey") {
-      return <CategorySurveyScreen onDone={refreshMe} />;
-    }
-
-    if (screen.kind === "addCategory") {
-      return (
-        <CategorySurveyScreen
-          excludeCategories={subscriptions.map((s) => s.category)}
-          onDone={refreshMe}
-          title={t("Добавить категорию", "Add category")}
-        />
-      );
-    }
-
     if (screen.kind === "menu") {
       return (
         <CategoryMenuScreen
           subscriptions={subscriptions}
           isAdmin={isAdmin}
           onOpenForm={(c) => setScreen({ kind: "form", category: c })}
-          onAddCategory={() => setScreen({ kind: "addCategory" })}
+          onStartCategory={async (c) => {
+            try {
+              await api.createSubscriptions([c]);
+              await fetchSubscriptions();
+              setScreen({ kind: "form", category: c });
+            } catch (e) {
+              setScreen({ kind: "error", msg: e instanceof Error ? e.message : String(e) });
+            }
+          }}
           onOpenBase={() => setScreen({ kind: "base" })}
           onAdmin={() => setScreen({ kind: "admin" })}
           onChange={async () => { await fetchSubscriptions(); }}

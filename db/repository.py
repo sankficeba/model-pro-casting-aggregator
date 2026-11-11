@@ -1222,11 +1222,20 @@ async def set_base_profile(user_id: int, data: dict) -> dict:
     категории; недостающие анкеты создаются черновиками)."""
     patch = {k: v for k, v in data.items() if k in BASE_FIELDS}
     async with AsyncSessionLocal() as session:
-        cats = (await session.execute(
+        cats = set((await session.execute(
             select(UserCategorySubscription.category).where(UserCategorySubscription.user_id == user_id)
-        )).scalars().all()
+        )).scalars().all())
+        # Плюс анкеты, которые уже есть, даже без подписки.
+        for cat, model in CATEGORY_TO_MODEL.items():
+            if (await session.execute(select(model.id).where(model.user_id == user_id))).first():
+                cats.add(cat)
+    if not cats:
+        # Направление ещё не выбрано: храним общие поля в черновике анкеты
+        # (без подписки она не участвует в подборе). При выборе направления
+        # create_subscriptions разложит их в его анкету.
+        cats = {"general"}
     if patch:
-        for cat in cats:
+        for cat in sorted(cats):
             if cat in CATEGORY_TO_MODEL:
                 await upsert_category_profile(user_id, cat, patch)
     return await get_base_profile(user_id)

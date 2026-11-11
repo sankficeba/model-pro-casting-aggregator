@@ -2,14 +2,22 @@ import { useEffect, useState } from "react";
 import { CheckCircle2, AlertCircle, ShieldCheck, Plus, Bell, BellOff, UserRound, ChevronRight } from "lucide-react";
 import { api } from "../api";
 import type { CategoryCode, DeliverySettings, Subscription } from "../types";
-import { CATEGORY_LABELS, CATEGORY_LABELS_EN } from "../types";
+import {
+  CATEGORY_DESCRIPTIONS,
+  CATEGORY_DESCRIPTIONS_EN,
+  CATEGORY_LABELS,
+  CATEGORY_LABELS_EN,
+} from "../types";
+
+const ALL_CATEGORIES: CategoryCode[] = ["creative", "event", "general", "admin"];
 import { useLang } from "../i18n";
 import { DigestReviewButton } from "./DigestReviewButton";
 
 interface Props {
   subscriptions: Subscription[];
   onOpenForm: (c: CategoryCode) => void;
-  onAddCategory: () => void;
+  /** Невыбранное направление: подписать юзера и открыть анкету. */
+  onStartCategory: (c: CategoryCode) => Promise<void>;
   onOpenBase: () => void;
   onAdmin?: () => void;
   isAdmin?: boolean;
@@ -19,7 +27,7 @@ interface Props {
 export function CategoryMenuScreen({
   subscriptions,
   onOpenForm,
-  onAddCategory,
+  onStartCategory,
   onOpenBase,
   onAdmin,
   isAdmin,
@@ -27,7 +35,17 @@ export function CategoryMenuScreen({
 }: Props) {
   const { t, lang, setLang } = useLang();
   const [pending, setPending] = useState<CategoryCode | null>(null);
-  const canAdd = subscriptions.length < 4;
+  const [starting, setStarting] = useState<CategoryCode | null>(null);
+
+  const start = async (c: CategoryCode) => {
+    if (starting) return;
+    setStarting(c);
+    try {
+      await onStartCategory(c);
+    } finally {
+      setStarting(null);
+    }
+  };
   const [delivery, setDelivery] = useState<DeliverySettings | null>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [base, setBase] = useState<Record<string, any> | null>(null);
@@ -128,7 +146,34 @@ export function CategoryMenuScreen({
         <div className="text-xs uppercase tracking-wider text-slate-500 px-1">
           {t("Направления", "Categories")}
         </div>
-        {subscriptions.map((s) => {
+        {ALL_CATEGORIES.map((c) => {
+          const s = subscriptions.find((x) => x.category === c);
+          if (!s) {
+            // Направление ещё не выбрано: нажатие добавляет его и открывает анкету.
+            return (
+              <button
+                key={c}
+                onClick={() => start(c)}
+                disabled={starting !== null}
+                className="w-full p-4 rounded-card border border-dashed border-bg-card text-left transition hover:border-accent disabled:opacity-60"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="shrink-0 p-2 text-slate-500">
+                    <Plus className="w-5 h-5" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium text-slate-300">{t(CATEGORY_LABELS[c], CATEGORY_LABELS_EN[c])}</div>
+                    <div className="text-xs text-slate-500 truncate">
+                      {t(CATEGORY_DESCRIPTIONS[c], CATEGORY_DESCRIPTIONS_EN[c])}
+                    </div>
+                  </div>
+                  <span className="text-sm text-accent shrink-0">
+                    {starting === c ? t("Открываем…", "Opening…") : t("Заполнить", "Fill in")}
+                  </span>
+                </div>
+              </button>
+            );
+          }
           const pct = Math.max(0, Math.min(100, s.completion_pct ?? (s.profile_completed ? 100 : 0)));
           const isComplete = s.profile_completed;
           const isPending = pending === s.category;
@@ -180,15 +225,6 @@ export function CategoryMenuScreen({
             </button>
           );
         })}
-        {canAdd && (
-          <button
-            onClick={onAddCategory}
-            className="w-full py-3 rounded-card border-2 border-dashed border-bg-card text-slate-400 hover:border-accent hover:text-accent transition flex items-center justify-center gap-2"
-          >
-            <Plus className="w-4 h-4" />
-            {t("Добавить направление", "Add category")}
-          </button>
-        )}
       </div>
     </div>
   );
