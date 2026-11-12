@@ -16,7 +16,14 @@ from aiogram.types import (
 )
 from loguru import logger
 
-from api.plans import PLAN_LABELS_EN, SUBSCRIPTION_PLANS, find_plan
+from api.plans import (
+    PLAN_LABELS_EN,
+    current_plans,
+    find_plan,
+    get_plan,
+    promo_active,
+    promo_last_day,
+)
 from api.schemas import SubscriptionPlan
 from bot import i18n
 from bot.i18n import Lang, t
@@ -66,9 +73,48 @@ def _btn(text: str, emoji_id: str | None = None, **kw) -> InlineKeyboardButton:
     return InlineKeyboardButton(text=text, icon_custom_emoji_id=emoji_id, **kw)
 
 
+E_FIRE = "5424972470023104089"      # 🔥  акция
+_MONTHS_GEN_RU = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля",
+                  "августа", "сентября", "октября", "ноября", "декабря"]
+_MONTHS_EN = ["January", "February", "March", "April", "May", "June", "July",
+              "August", "September", "October", "November", "December"]
+
+
+def _strike(s: str) -> str:
+    """Зачёркивание для текста кнопок (HTML там не работает): 4̶9̶9̶."""
+    return "".join(ch + "̶" for ch in s)
+
+
+def _price_html(price: int, regular: int | None, suffix: str = " ₽") -> str:
+    """«<s>499</s> <b>299 ₽</b>» при акции, иначе «299 ₽»."""
+    return f"<s>{regular}</s> <b>{price}{suffix}</b>" if regular else f"{price}{suffix}"
+
+
+def _promo_line(lang: Lang) -> str:
+    """«🔥 До 30 ноября — скидки на подписку!» (пусто, если акции нет)."""
+    if not promo_active():
+        return ""
+    last = promo_last_day()
+    return tge(E_FIRE, "🔥") + t(
+        lang,
+        f" <b>До {last.day} {_MONTHS_GEN_RU[last.month - 1]} — скидки на подписку!</b>\n",
+        f" <b>Subscription discounts until {_MONTHS_EN[last.month - 1]} {last.day}!</b>\n",
+    )
+
+
+def _from_price_line(lang: Lang, prefix_ru: str = "Тариф — от", prefix_en: str = "Plans from") -> str:
+    p = get_plan(None)
+    return tge(E_MONEY, "💰") + t(
+        lang,
+        f" {prefix_ru} {_price_html(p.price_rub, p.regular_price_rub, ' ₽/мес')}",
+        f" {prefix_en} {_price_html(p.price_rub, p.regular_price_rub, ' ₽/mo')}",
+    )
+
+
 def _plan_button_text(plan: SubscriptionPlan, lang: Lang) -> str:
-    """«3 месяца — 799 ₽ · ≈266 ₽/мес»."""
-    text = f"{_plan_title(plan, lang)} — {plan.price_rub} ₽"
+    """«3 месяца — 1̶3̶5̶0̶ 799 ₽ · ≈266 ₽/мес» (зачёркнуто — при акции)."""
+    old = f"{_strike(str(plan.regular_price_rub))} " if plan.regular_price_rub else ""
+    text = f"{_plan_title(plan, lang)} — {old}{plan.price_rub} ₽"
     months = plan.days // 30
     if months > 1:
         per_month = round(plan.price_rub / months)
@@ -119,12 +165,8 @@ async def build_main_menu(user_id: int, lang: Lang) -> tuple[str, InlineKeyboard
         + "</blockquote>\n"
         + status
         + "\n"
-        + tge(E_MONEY, "💰")
-        + t(
-            lang,
-            f" Тариф — от {SUBSCRIPTION_PLANS[0].price_rub} ₽/мес",
-            f" Plans from {SUBSCRIPTION_PLANS[0].price_rub} ₽/mo",
-        )
+        + _promo_line(lang)
+        + _from_price_line(lang)
     )
     rows: list[list[InlineKeyboardButton]] = []
     if settings.webapp_url.startswith("https://"):
@@ -178,12 +220,8 @@ def _build_trial_offer(lang: Lang) -> tuple[str, InlineKeyboardMarkup]:
             f" Try it free: <b>{days} days</b> of full access — "
             f"every matching casting instantly, no limits.\n",
         )
-        + tge(E_MONEY, "💰")
-        + t(
-            lang,
-            f" Дальше — от {SUBSCRIPTION_PLANS[0].price_rub} ₽/мес.",
-            f" Then from {SUBSCRIPTION_PLANS[0].price_rub} ₽/mo.",
-        )
+        + _promo_line(lang)
+        + _from_price_line(lang, "Дальше — от", "Then from")
     )
     rows = [[_btn(
         t(lang, f"Активировать пробный период — {days} {_days_ru(days)}",
@@ -201,6 +239,7 @@ async def build_subscription_menu(user_id: int, lang: Lang) -> tuple[str, Inline
     )
     text = (
         title + "\n\n" + status + "\n\n"
+        + _promo_line(lang)
         + t(
             lang,
             "Выбери срок — оплата картой или по СБП через ЮKassa. "
@@ -211,7 +250,7 @@ async def build_subscription_menu(user_id: int, lang: Lang) -> tuple[str, Inline
     )
     rows = [
         [_btn(_plan_button_text(p, lang), E_CALENDAR, callback_data=f"{CB_PLAN_PREFIX}{p.code}")]
-        for p in SUBSCRIPTION_PLANS
+        for p in current_plans()
     ]
     rows.append([InlineKeyboardButton(text=t(lang, "⬅️ Назад", "⬅️ Back"), callback_data=CB_MAIN)])
     return text, InlineKeyboardMarkup(inline_keyboard=rows)
@@ -337,11 +376,11 @@ async def cb_plan(query: CallbackQuery) -> None:
     title = _plan_title(plan, lang)
     text = tge(E_CALENDAR, "🗓") + t(
         lang,
-        f" <b>Подписка на {title} — {plan.price_rub} ₽</b>\n\n"
+        f" <b>Подписка на {title}</b> — {_price_html(plan.price_rub, plan.regular_price_rub)}\n\n"
         f"Нажми «Оплатить» — откроется страница ЮKassa (карта или СБП). "
         f"После оплаты подписка продлится на {plan.days} {_days_ru(plan.days)}, "
         f"а бот пришлёт подтверждение.",
-        f" <b>{title} subscription — {plan.price_rub} ₽</b>\n\n"
+        f" <b>{title} subscription</b> — {_price_html(plan.price_rub, plan.regular_price_rub)}\n\n"
         f"Tap \"Pay\" to open the YooKassa page (card or SBP). "
         f"After payment the subscription is extended by {plan.days} days "
         f"and the bot will send a confirmation.",

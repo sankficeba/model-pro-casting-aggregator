@@ -1,42 +1,69 @@
-"""Тарифы подписки. Хардкод — менять реже, чем 1 раз в квартал.
+"""Тарифы подписки.
 
-Базовая цена — 299 ₽/мес; скидка длинных тарифов считается от неё.
+Обычная цена — 499 ₽/мес (длинные тарифы со скидкой). До PROMO_UNTIL действует
+акция: цены ниже, обычная показывается зачёркнутой. После даты акционные цены
+отключаются сами — без деплоя.
 """
 from __future__ import annotations
 
+import os
+from datetime import datetime, timedelta, timezone
+
 from api.schemas import SubscriptionPlan
 
-BASE_MONTHLY_PRICE_RUB = 299
+MSK = timezone(timedelta(hours=3))
+BASE_MONTHLY_PRICE_RUB = 499
 
+# Акция «до конца ноября»: действует до 01.12.2026 00:00 МСК.
+# Можно переопределить env PROMO_UNTIL (ISO, например 2026-12-15T00:00:00+03:00)
+# или выключить пустой строкой.
+_promo_env = os.getenv("PROMO_UNTIL")
+PROMO_UNTIL: datetime | None = (
+    datetime(2026, 12, 1, tzinfo=MSK) if _promo_env is None
+    else (datetime.fromisoformat(_promo_env) if _promo_env.strip() else None)
+)
 
-def _plan(code: str, months: int, price_rub: int, label: str, badge: str | None) -> SubscriptionPlan:
-    full = BASE_MONTHLY_PRICE_RUB * months
-    discount = round((1 - price_rub / full) * 100) if price_rub < full else 0
-    return SubscriptionPlan(
-        code=code, days=30 * months, price_rub=price_rub,
-        label=label, discount_pct=discount, badge=badge,
-    )
-
-
-SUBSCRIPTION_PLANS: list[SubscriptionPlan] = [
-    _plan("1m", 1, 299, "1 месяц", None),
-    _plan("3m", 3, 799, "3 месяца", "Популярный"),     # ≈ 266 ₽/мес, −11%
-    _plan("6m", 6, 1490, "6 месяцев", "Выгодный"),     # ≈ 248 ₽/мес, −17%
-    _plan("12m", 12, 2690, "12 месяцев", "Максимум"),  # ≈ 224 ₽/мес, −25%
+# (code, months, label, badge, regular_price, promo_price)
+_PLANS = [
+    ("1m", 1, "1 месяц", None, 499, 299),
+    ("3m", 3, "3 месяца", "Популярный", 1350, 799),
+    ("6m", 6, "6 месяцев", "Выгодный", 2550, 1490),
+    ("12m", 12, "12 месяцев", "Максимум", 4500, 2690),
 ]
 
 PLAN_LABELS_EN = {"1m": "1 month", "3m": "3 months", "6m": "6 months", "12m": "12 months"}
 
 
-def get_plan(code: str | None) -> SubscriptionPlan:
+def promo_active(now: datetime | None = None) -> bool:
+    return PROMO_UNTIL is not None and (now or datetime.now(timezone.utc)) < PROMO_UNTIL
+
+
+def promo_last_day() -> datetime | None:
+    """Последний день акции (для текста «до 30 ноября»)."""
+    return (PROMO_UNTIL - timedelta(seconds=1)).astimezone(MSK) if PROMO_UNTIL else None
+
+
+def current_plans(now: datetime | None = None) -> list[SubscriptionPlan]:
+    """Тарифы с ценой, действующей сейчас."""
+    promo = promo_active(now)
+    out = []
+    for code, months, label, badge, regular, promo_price in _PLANS:
+        price = promo_price if promo else regular
+        full = BASE_MONTHLY_PRICE_RUB * months
+        out.append(SubscriptionPlan(
+            code=code, days=30 * months, price_rub=price, label=label, badge=badge,
+            discount_pct=round((1 - price / full) * 100) if price < full else 0,
+            regular_price_rub=regular if promo and regular > price else None,
+        ))
+    return out
+
+
+def get_plan(code: str | None, now: datetime | None = None) -> SubscriptionPlan:
     """Найти тариф по коду; если code не задан / неизвестен — вернуть 1m."""
-    if code:
-        for p in SUBSCRIPTION_PLANS:
-            if p.code == code:
-                return p
-    return SUBSCRIPTION_PLANS[0]
+    plans = current_plans(now)
+    return next((p for p in plans if p.code == code), plans[0])
 
 
-def find_plan(code: str | None) -> SubscriptionPlan | None:
+def find_plan(code: str | None, now: datetime | None = None) -> SubscriptionPlan | None:
     """Как get_plan, но без фолбэка: None для неизвестного кода."""
-    return next((p for p in SUBSCRIPTION_PLANS if p.code == code), None)
+    return next((p for p in current_plans(now) if p.code == code), None)

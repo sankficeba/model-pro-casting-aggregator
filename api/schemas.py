@@ -460,6 +460,8 @@ class SubscriptionPlan(BaseModel):
     label: str
     discount_pct: int = 0
     badge: Optional[str] = None  # "Популярный" / "Выгодный" и т.д.
+    # Обычная цена, если сейчас действует акция (price_rub — акционная).
+    regular_price_rub: Optional[int] = None
 
 
 class SubscriptionStatusResponse(BaseModel):

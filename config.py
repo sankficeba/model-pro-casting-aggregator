@@ -52,7 +52,8 @@ class Settings(BaseSettings):
     # Платная подписка
     subscription_trial_days: int = Field(7, alias="SUBSCRIPTION_TRIAL_DAYS")
     subscription_period_days: int = Field(30, alias="SUBSCRIPTION_PERIOD_DAYS")
-    subscription_price_rub: int = Field(299, alias="SUBSCRIPTION_PRICE_RUB")
+    # Не используется для оплаты: тарифы и акция — в api/plans.py.
+    subscription_price_rub: int = Field(499, alias="SUBSCRIPTION_PRICE_RUB")
     subscription_return_url: str = Field("", alias="SUBSCRIPTION_RETURN_URL")
     # URL Mini App для кнопки «Настроить анкету» в меню бота (тот же, что
     # у menu button бота). Пустая строка — кнопка скрыта.
