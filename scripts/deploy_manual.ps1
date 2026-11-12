@@ -30,7 +30,10 @@ param(
     [switch]$SkipTests
 )
 
-$ErrorActionPreference = "Stop"
+# Внешние команды (git/npm/uv/ssh) пишут предупреждения в stderr — в Windows PowerShell 5.1
+# при Stop это валит скрипт. Успех проверяем по $LASTEXITCODE (Must-Succeed).
+$ErrorActionPreference = "Continue"
+function Must-Succeed($what) { if ($LASTEXITCODE -ne 0) { throw "$what завершился с кодом $LASTEXITCODE" } }
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
 function Step($msg) { Write-Host "==> $msg" -ForegroundColor Cyan }
@@ -62,9 +65,9 @@ if ($Target -ne "backend") {
 }
 
 Step "Упаковка HEAD"
-git -c core.autocrlf=false archive --format=tar -o "$tmp\src.tar" HEAD
+git -c core.autocrlf=false archive --format=tar -o "$tmp\src.tar" HEAD; Must-Succeed "git archive"
 New-Item -ItemType Directory "$tmp\pkg\backend" | Out-Null
-tar -xf "$tmp\src.tar" -C "$tmp\pkg\backend"
+tar -xf "$tmp\src.tar" -C "$tmp\pkg\backend"; Must-Succeed "tar -x"
 Remove-Item -Recurse -Force "$tmp\pkg\backend\.github" -ErrorAction SilentlyContinue
 if ($Target -ne "backend") {
     New-Item -ItemType Directory "$tmp\pkg\webapp" | Out-Null
@@ -73,7 +76,7 @@ if ($Target -ne "backend") {
 }
 Remove-Item -Recurse -Force "$tmp\pkg\backend\webapp"
 Copy-Item "$tmp\pkg\backend\scripts\deploy_remote.sh" "$tmp\pkg\deploy_remote.sh"
-tar -czf "$tmp\deploy.tgz" -C "$tmp\pkg" .
+tar -czf "$tmp\deploy.tgz" -C "$tmp\pkg" .; Must-Succeed "tar -cz"
 
 Step "Загрузка на сервер"
 $remoteDir = "/tmp/mp_build_$rev"
