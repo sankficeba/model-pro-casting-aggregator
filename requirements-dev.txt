@@ -1,3 +1,5 @@
 -r requirements.txt
 pytest==8.3.3
 pytest-asyncio==0.24.0
+# db/session.py создаёт движок при импорте; локальный .env указывает на sqlite+aiosqlite
+aiosqlite==0.20.0
