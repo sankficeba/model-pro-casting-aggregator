@@ -217,6 +217,24 @@ export IMAGE="ghcr.io/sankficeba/model_pro:sha-<previous_commit>"
 docker compose -f docker-compose.prod.yml up -d
 ```
 
+## 8.1. Ручной деплой (когда GitHub Actions недоступен)
+
+Прод: `194.1.132.93` (раньше был `45.144.154.216` — обнови секрет `SSH_HOST`).
+С Windows-машины разработчика, из корня репозитория:
+
+```powershell
+./scripts/deploy_manual.ps1                  # бот + API + Mini App
+./scripts/deploy_manual.ps1 -Target backend  # только бот и API
+./scripts/deploy_manual.ps1 -Target webapp   # только Mini App
+```
+
+Скрипт деплоит ровно закоммиченный `HEAD`: гоняет тесты (`uv`), собирает фронт,
+на сервере собирает образы поверх образа зависимостей (полная сборка — только
+если менялся `requirements.txt`), делает smoke-проверку, ставит метку
+`rollback-<время>`, один раз прогоняет миграции, перезапускает app/api/webapp,
+проверяет здоровье и **сам откатывается**, если проверки не прошли. Хранятся
+3 последние rollback-метки (`docker images | grep rollback`).
+
 ## 9. Troubleshooting
 
 | Симптом | Причина | Лечение |

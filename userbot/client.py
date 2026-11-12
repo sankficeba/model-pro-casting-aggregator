@@ -61,6 +61,43 @@ def _work_type_labels(lang: Lang) -> dict[str, str]:
     return _WORK_TYPE_LABELS_EN if lang == "en" else _WORK_TYPE_LABELS
 
 
+_MAX_LINKS = 30
+_MAX_LINK_LEN = 1000
+
+
+def extract_links(message) -> list[str]:  # noqa: ANN001 — telethon Message
+    """Ссылки поста, которых нет в plain text: скрытые text-url («Оригинал →»),
+    url прямо в тексте и URL inline-кнопок. Без дублей, в порядке появления.
+    Никогда не бросает — сбор ссылок не должен ломать обработку поста."""
+    out: list[str] = []
+    try:
+        from telethon.tl.types import MessageEntityTextUrl, MessageEntityUrl
+
+        get_text = getattr(message, "get_entities_text", None)
+        if callable(get_text):
+            for ent, ent_text in get_text():
+                if isinstance(ent, MessageEntityTextUrl):
+                    out.append(ent.url)
+                elif isinstance(ent, MessageEntityUrl):
+                    out.append(ent_text)
+        rows = getattr(getattr(message, "reply_markup", None), "rows", None) or []
+        for row in rows:
+            for button in getattr(row, "buttons", []) or []:
+                url = getattr(button, "url", None)
+                if url:
+                    out.append(url)
+    except Exception as e:  # noqa: BLE001
+        logger.debug("extract_links failed: {}", e)
+    seen: set[str] = set()
+    result: list[str] = []
+    for u in out:
+        u = (u or "").strip()[:_MAX_LINK_LEN]
+        if u and u not in seen:
+            seen.add(u)
+            result.append(u)
+    return result[:_MAX_LINKS]
+
+
 # Per-category эмодзи (fallback unicode) + название для шапки.
 _CATEGORY_HEADERS = {
     "creative": ("🎬", "Творческие позиции"),
@@ -753,6 +790,7 @@ class Userbot:
             text=text,
             text_hash=text_hash_value,
             canonical_message_id=canonical_msg.id,
+            links=extract_links(event.message),
         )
         logger.info(
             "Дубль: chat={} msg={} text_hash={} canonical={} dup_row={}",
@@ -854,6 +892,7 @@ class Userbot:
                 text=text,
                 text_hash=th,
                 extracted=PostExtraction(confidence=0.0),
+                links=extract_links(event.message),
             )
             if message_db_id is not None:
                 await repository.mark_for_llm_retry(message_db_id)
@@ -883,6 +922,7 @@ class Userbot:
             text=text,
             text_hash=th,
             extracted=post,
+            links=extract_links(event.message),
         )
         if message_db_id is None:
             logger.warning("insert_message_with_vacancies вернул None — skip")

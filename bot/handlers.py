@@ -13,12 +13,10 @@ from aiogram.types import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
     Message,
-    ReplyKeyboardRemove,
 )
 from loguru import logger
 from sqlalchemy import select
 
-from api import profile_repo
 from bot import i18n, keyboards, menu, settings_menu
 from bot.i18n import Lang, t
 from bot.response import compose_response
@@ -112,40 +110,6 @@ async def _process_admin_broadcast(
         parse_mode="HTML",
     )
 
-def _greeting(lang: Lang) -> str:
-    return t(
-        lang,
-        "<b>Добро пожаловать в Model Promo Agency!</b> 👋\n\n"
-        "Мы рады видеть тебя в нашей команде. Это не просто бот, а мощный "
-        "агрегатор вакансий: мы в реальном времени анализируем огромную сеть "
-        "каналов и агентств, чтобы ты получал уведомления о кастингах и работе "
-        "самым первым! 🚀\n\n"
-        "<b>Кого мы ищем?</b>\n"
-        "У нас открыт набор на следующие направления:\n\n"
-        "🛠 <b>Разнорабочие:</b> хелперы, клининг, грузчики.\n"
-        "🎉 <b>Event-персонал:</b> хостес, промо-модели, аниматоры.\n"
-        "📸 <b>Творческие позиции:</b> актёры и модели.\n"
-        "💻 <b>Администрирование:</b> операторы регистрации, супервайзеры.\n\n"
-        "<b>Как начать зарабатывать?</b>\n"
-        "Чтобы не пропускать лучшие предложения и настроить уведомления, "
-        "открой Mini App рядом с полем ввода и заполни короткую анкету — "
-        "там можно выбрать интересующие тебя категории.",
-        "<b>Welcome to Model Promo Agency!</b> 👋\n\n"
-        "We're glad to have you on the team. This isn't just a bot — it's a "
-        "powerful job aggregator: we analyze a huge network of channels and "
-        "agencies in real time so you're the first to hear about castings and "
-        "gigs! 🚀\n\n"
-        "<b>Who are we looking for?</b>\n"
-        "We're currently recruiting for the following areas:\n\n"
-        "🛠 <b>General labor:</b> helpers, cleaning, loaders.\n"
-        "🎉 <b>Event staff:</b> hostesses, promo models, animators.\n"
-        "📸 <b>Creative positions:</b> actors and models.\n"
-        "💻 <b>Administration:</b> registration operators, supervisors.\n\n"
-        "<b>How to start earning?</b>\n"
-        "To never miss the best offers and set up notifications, open the "
-        "Mini App next to the text field and fill out a short profile — "
-        "you can pick the categories you're interested in there.",
-    )
 
 
 def _is_admin(user_id: int | None) -> bool:

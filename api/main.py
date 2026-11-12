@@ -4,42 +4,25 @@ from __future__ import annotations
 import sys
 
 import httpx
-from fastapi import Depends, FastAPI, HTTPException, Request, status
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
 
 from api import admin as admin_module
-from api import profile_repo
 from api.auth import TelegramUser, current_user, is_admin_user
 from api.reference_data import all_refs
 from api.schemas import (
     AdminProfileSchema,
-    BlacklistResponse,
-    BlacklistUpdate,
-    ChannelSuggestionRequest,
     CreativeProfileSchema,
     DeliverySettingsResponse,
-    DeliverySettingsUpdate,
-    DigestClearResponse,
     DigestStartResponse,
     EventProfileSchema,
-    FavoriteItem,
-    FavoriteShowResponse,
-    FavoritesListResponse,
-    FavoritesSettings,
-    PerfEvent,
     GeneralProfileSchema,
     LanguageUpdate,
     ProblemActionResponse,
     ProblemItem,
-    ProblemReportRequest,
     ProblemsListResponse,
-    ProfileResponse,
-    ProfileUpdate,
-    SubscriptionCheckoutRequest,
-    SubscriptionCheckoutResponse,
     SubscriptionPatchRequest,
-    SubscriptionStatusResponse,
     SubscriptionsCreateRequest,
     SuggestionsResponse,
 )
@@ -60,14 +43,6 @@ CATEGORY_LABELS = {
     "general": "Разнорабочие",
     "admin": "Администрирование",
 }
-
-FIRST_COMPLETION_MESSAGE = (
-    "✅ Анкета успешно заполнена. "
-    "Теперь вам будут поступать подходящие кастинги."
-)
-RECOMPLETION_MESSAGE = (
-    "✏️ Анкета успешно изменена. Подборка кастингов обновлена."
-)
 
 
 def _category_completion_text(category: str, was_first_time: bool) -> str:
@@ -208,42 +183,6 @@ async def refs(lang: str = "ru") -> dict:
     return all_refs("en" if lang == "en" else "ru")
 
 
-@app.get("/api/profile", response_model=ProfileResponse)
-async def get_my_profile(user: TelegramUser = Depends(current_user)) -> ProfileResponse:
-    p = await profile_repo.get_profile(user.id)
-    if p is None:
-        # Возвращаем «пустой» профиль, чтобы фронт мог отрисовать форму
-        return ProfileResponse(user_id=user.id, completion_pct=0)
-    return p
-
-
-@app.put("/api/profile", response_model=ProfileResponse)
-async def update_my_profile(
-    data: ProfileUpdate,
-    user: TelegramUser = Depends(current_user),
-) -> ProfileResponse:
-    return await profile_repo.upsert_profile(user.id, user.username, data)
-
-
-@app.post("/api/profile/complete", response_model=ProfileResponse)
-async def complete_my_profile(
-    user: TelegramUser = Depends(current_user),
-) -> ProfileResponse:
-    """Финальное завершение анкеты: уведомляем пользователя в боте.
-
-    Текст сообщения отличается в первый раз и при повторном завершении.
-    """
-    p, was_first_time = await profile_repo.mark_completed(user.id)
-    if p is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Профиль не найден",
-        )
-    text = FIRST_COMPLETION_MESSAGE if was_first_time else RECOMPLETION_MESSAGE
-    await _notify_user(user.id, text)
-    return p
-
-
 # ====================================================================
 # Per-category subscriptions and profiles (mini-app categories feature)
 # ====================================================================
@@ -368,82 +307,7 @@ async def complete_category_profile_endpoint(
 # ---------- Blacklist ----------
 
 
-@app.get("/api/blacklist", response_model=BlacklistResponse)
-async def get_blacklist(user: TelegramUser = Depends(current_user)) -> BlacklistResponse:
-    words = await repo.get_user_blacklist(user.id)
-    return BlacklistResponse(words=words)
-
-
-@app.put("/api/blacklist", response_model=BlacklistResponse)
-async def update_blacklist(
-    body: BlacklistUpdate,
-    user: TelegramUser = Depends(current_user),
-) -> BlacklistResponse:
-    saved = await repo.set_user_blacklist(user.id, body.words)
-    return BlacklistResponse(words=saved)
-
-
 # ---------- Channel suggestion ----------
-
-
-def _normalize_channel_url(ref: str) -> tuple[str, str]:
-    """Из строки ref вытащить (display_label, callback_ref).
-    callback_ref передаётся в callback_data — должен влезть в 64 байта,
-    поэтому берём username или числовой id, без https://t.me/ префикса."""
-    s = ref.strip()
-    # Принимаем https://t.me/username, t.me/username, @username, https://t.me/c/<id>[/...]
-    cleaned = s
-    for prefix in ("https://t.me/", "http://t.me/", "t.me/"):
-        if cleaned.startswith(prefix):
-            cleaned = cleaned[len(prefix):]
-            break
-    cleaned = cleaned.strip("/")
-    if cleaned.startswith("c/"):
-        chat_part = cleaned[2:].split("/", 1)[0]
-        return f"https://t.me/c/{chat_part}", f"c/{chat_part}"
-    cleaned = cleaned.lstrip("@")
-    return f"https://t.me/{cleaned}", cleaned
-
-
-@app.post("/api/channel-suggestion")
-async def channel_suggestion(
-    body: ChannelSuggestionRequest,
-    user: TelegramUser = Depends(current_user),
-) -> dict:
-    """Юзер предлагает канал админу. Шлёт всем админам HTML-сообщение
-    с двумя inline-кнопками (Добавить / Не добавлять)."""
-    display_url, ref_short = _normalize_channel_url(body.ref)
-    user_link = (
-        f"https://t.me/{user.username}" if user.username else f"tg://user?id={user.id}"
-    )
-    user_label = f"@{user.username}" if user.username else f"id {user.id}"
-    comment_block = (
-        f"\n<i>Комментарий:</i> {body.comment}" if body.comment else ""
-    )
-    text = (
-        f"📨 <b>Новое предложение канала</b>\n\n"
-        f"<b>Канал:</b> <a href=\"{display_url}\">{display_url}</a>\n"
-        f"<b>От:</b> <a href=\"{user_link}\">{user_label}</a>"
-        f"{comment_block}"
-    )
-
-    # callback_data ограничен 64 байтами. ref_short может быть длинным
-    # username — обрежем до безопасного размера. Если не влезает в
-    # callback — приложим к тексту, чтобы админ мог скопировать вручную.
-    cb_safe = ref_short[:50]  # запас на префикс "csg:add:"
-    reply_markup = {
-        "inline_keyboard": [
-            [
-                {"text": "✅ Добавить", "callback_data": f"csg:add:{cb_safe}"},
-                {"text": "❌ Не добавлять", "callback_data": f"csg:skip:{cb_safe}"},
-            ]
-        ]
-    }
-    sent = 0
-    for admin_id in settings.admin_ids:
-        await _notify_admin_html(admin_id, text, reply_markup)
-        sent += 1
-    return {"ok": True, "notified_admins": sent}
 
 
 # ---------- Delivery settings ----------
@@ -457,24 +321,6 @@ async def get_delivery(user: TelegramUser = Depends(current_user)) -> DeliverySe
         repo.count_pending(user.id),
     )
     return DeliverySettingsResponse(**s, pending_count=pending_count)
-
-
-@app.put("/api/delivery-settings", response_model=DeliverySettingsResponse)
-async def put_delivery(
-    body: DeliverySettingsUpdate,
-    user: TelegramUser = Depends(current_user),
-) -> DeliverySettingsResponse:
-    saved = await repo.set_delivery_settings(
-        user.id,
-        delivery_mode=body.delivery_mode,
-        night_mode_enabled=body.night_mode_enabled,
-        night_start_hour=body.night_start_hour,
-        night_end_hour=body.night_end_hour,
-        digest_daily_enabled=body.digest_daily_enabled,
-        digest_daily_hour=body.digest_daily_hour,
-    )
-    pending_count = await repo.count_pending(user.id)
-    return DeliverySettingsResponse(**saved, pending_count=pending_count)
 
 
 @app.post("/api/digest/start", response_model=DigestStartResponse)
@@ -504,65 +350,7 @@ async def digest_start(
     return DigestStartResponse(sent=sent, remaining=remaining)
 
 
-@app.post("/api/digest/clear", response_model=DigestClearResponse)
-async def digest_clear(
-    user: TelegramUser = Depends(current_user),
-) -> DigestClearResponse:
-    """Кнопка «Очистить накопленные» в Mini App: удаляет всю pending-очередь
-    юзера без отправки уведомлений."""
-    cleared = await repo.clear_pending(user.id)
-    return DigestClearResponse(cleared=cleared)
-
-
 # ---------- Subscription / payments ----------
-
-
-@app.get("/api/subscription/status", response_model=SubscriptionStatusResponse)
-async def subscription_status(
-    user: TelegramUser = Depends(current_user),
-) -> SubscriptionStatusResponse:
-    s = await repo.get_subscription_status(user.id)
-    from api.plans import SUBSCRIPTION_PLANS, get_plan
-    default_plan = get_plan(None)
-    return SubscriptionStatusResponse(
-        active_until=s["active_until"],
-        days_left=s["days_left"],
-        is_active=s["is_active"],
-        trial_started_at=s["trial_started_at"],
-        plan_price_rub=default_plan.price_rub,
-        plan_period_days=default_plan.days,
-        payments_configured=yookassa_client.is_configured(),
-        plans=SUBSCRIPTION_PLANS,
-    )
-
-
-@app.post("/api/subscription/checkout", response_model=SubscriptionCheckoutResponse)
-async def subscription_checkout(
-    body: SubscriptionCheckoutRequest = SubscriptionCheckoutRequest(),
-    user: TelegramUser = Depends(current_user),
-) -> SubscriptionCheckoutResponse:
-    """Создать YooKassa-платёж по выбранному тарифу. Если plan_code пуст,
-    используется тариф по умолчанию (1 месяц)."""
-    if not yookassa_client.is_configured():
-        raise HTTPException(
-            status_code=503,
-            detail="Платёжная система не настроена. Свяжись с администратором.",
-        )
-    from api.plans import get_plan
-    from payments.checkout import create_subscription_payment
-
-    plan = get_plan(body.plan_code)
-    try:
-        created = await create_subscription_payment(user.id, plan)
-    except Exception as e:  # noqa: BLE001
-        logger.exception("YooKassa create_payment failed: {}", e)
-        raise HTTPException(
-            status_code=502, detail="Не удалось создать платёж. Попробуй позже."
-        ) from e
-    return SubscriptionCheckoutResponse(
-        confirmation_url=created.confirmation_url,
-        payment_id=created.payment_id,
-    )
 
 
 # ---------- Favorites ----------
@@ -591,13 +379,6 @@ def _favorite_keyboard_dict(message_id: int) -> dict:
             ],
         ]
     }
-
-
-def _strip_html(text: str) -> str:
-    """Дёшево убрать html-теги из notification_text для preview в Mini App."""
-    import re
-    no_tags = re.sub(r"<[^>]+>", "", text)
-    return no_tags.replace("&lt;", "<").replace("&gt;", ">").replace("&amp;", "&")
 
 
 async def _build_favorite_message(
@@ -659,224 +440,6 @@ async def _build_favorite_message(
     return text, {"inline_keyboard": rows}
 
 
-def _favorite_preview(text: str) -> tuple[str, str]:
-    """(title, preview) из rendered notification text. title = первая
-    непустая строка без HTML, preview = до 240 символов."""
-    plain = _strip_html(text).strip()
-    lines = [ln.strip() for ln in plain.split("\n") if ln.strip()]
-    title = lines[0] if lines else "Без названия"
-    preview = "\n".join(lines[:5])[:280]
-    return title, preview
-
-
-@app.get("/api/favorites", response_model=FavoritesListResponse)
-async def list_favorites(
-    user: TelegramUser = Depends(current_user),
-) -> FavoritesListResponse:
-    """Список избранных кастингов пользователя. Bulk-load по message_ids
-    в 3 запроса (messages, vacancies, channels) вместо N×3 для каждого
-    избранного — было ~10-15с при 28 избранных, стало ~200мс."""
-    import time as _time
-    from sqlalchemy import select as _select
-    from db import matching
-    from db.models import Channel, Message as MessageRow, Vacancy as VacancyRow
-    from db.session import AsyncSessionLocal
-    from userbot.client import Userbot, _vacancy_title  # noqa: F401
-
-    t0 = _time.monotonic()
-    # Авто-чистка по сроку retention перед выдачей списка.
-    try:
-        await repo.prune_old_favorites(user.id)
-    except Exception:  # noqa: BLE001
-        pass
-    t1 = _time.monotonic()
-    favs = await repo.list_favorites(user.id)
-    t2 = _time.monotonic()
-    if not favs:
-        logger.info(
-            "favorites user={} empty (prune={:.0f}ms list={:.0f}ms)",
-            user.id, (t1 - t0) * 1000, (t2 - t1) * 1000,
-        )
-        return FavoritesListResponse(items=[])
-
-    msg_ids = [f.message_id for f in favs]
-    t_bulk_start = _time.monotonic()
-    async with AsyncSessionLocal() as session:
-        msgs_res = await session.execute(
-            _select(MessageRow).where(MessageRow.id.in_(msg_ids))
-        )
-        msgs_by_id: dict[int, MessageRow] = {m.id: m for m in msgs_res.scalars()}
-
-        vacs_res = await session.execute(
-            _select(VacancyRow)
-            .where(VacancyRow.message_id.in_(msg_ids))
-            .order_by(VacancyRow.idx)
-        )
-        vacs_by_msg: dict[int, list[VacancyRow]] = {}
-        for v in vacs_res.scalars():
-            vacs_by_msg.setdefault(v.message_id, []).append(v)
-
-        chat_ids = sorted({
-            m.tg_chat_id for m in msgs_by_id.values()
-            if m.tg_chat_id is not None
-        })
-        channels_by_chat: dict[int, Channel] = {}
-        if chat_ids:
-            ch_res = await session.execute(
-                _select(Channel).where(Channel.tg_chat_id.in_(chat_ids))
-            )
-            for c in ch_res.scalars():
-                channels_by_chat[c.tg_chat_id] = c
-    t_bulk_end = _time.monotonic()
-
-    def _source_label(msg: MessageRow) -> str:
-        if msg.tg_chat_username:
-            return f"@{msg.tg_chat_username}"
-        if msg.tg_chat_id is not None:
-            ch = channels_by_chat.get(msg.tg_chat_id)
-            if ch is not None and ch.username:
-                return f"@{ch.username}"
-            if ch is not None:
-                return f"приватный канал #{ch.id}"
-        return "источник"
-
-    items: list[FavoriteItem] = []
-    for f in favs:
-        msg = msgs_by_id.get(f.message_id)
-        if msg is None:
-            continue
-        canon_vacancies = vacs_by_msg.get(f.message_id, [])
-        if not canon_vacancies:
-            continue
-        post, vac_extractions = matching._orm_to_extractions(msg, canon_vacancies)
-        matched_set = set(f.matched_vacancy_ids or [])
-        matched_idxs = [
-            i for i, v in enumerate(canon_vacancies) if v.id in matched_set
-        ]
-        if not matched_idxs:
-            matched_idxs = list(range(len(canon_vacancies)))
-
-        class _PseudoMsg:
-            id = msg.tg_message_id
-            message = msg.text
-
-        eff_cat = (
-            canon_vacancies[matched_idxs[0]].category if canon_vacancies else None
-        ) or msg.category
-        text = Userbot._format_notification(
-            post=post,
-            vacancies=vac_extractions,
-            matched_idxs=matched_idxs,
-            message=_PseudoMsg(),
-            chat_username=msg.tg_chat_username,
-            effective_category=eff_cat,
-        )
-        title, preview = _favorite_preview(text)
-        items.append(FavoriteItem(
-            message_id=f.message_id,
-            title=title,
-            preview=preview,
-            saved_at=f.created_at,
-            source_label=_source_label(msg),
-        ))
-    t_end = _time.monotonic()
-    logger.info(
-        "favorites user={} n={} (prune={:.0f}ms list={:.0f}ms bulk={:.0f}ms render={:.0f}ms total={:.0f}ms)",
-        user.id, len(items),
-        (t1 - t0) * 1000,
-        (t2 - t1) * 1000,
-        (t_bulk_end - t_bulk_start) * 1000,
-        (t_end - t_bulk_end) * 1000,
-        (t_end - t0) * 1000,
-    )
-    return FavoritesListResponse(items=items)
-
-
-@app.delete("/api/favorites/{message_id}")
-async def delete_favorite(
-    message_id: int,
-    user: TelegramUser = Depends(current_user),
-) -> dict:
-    ok = await repo.remove_favorite(user.id, message_id)
-    return {"ok": ok}
-
-
-@app.get("/api/favorites/settings", response_model=FavoritesSettings)
-async def get_favorites_settings(
-    user: TelegramUser = Depends(current_user),
-) -> FavoritesSettings:
-    days = await repo.get_favorites_retention_days(user.id)
-    return FavoritesSettings(retention_days=days)
-
-
-@app.put("/api/favorites/settings", response_model=FavoritesSettings)
-async def put_favorites_settings(
-    body: FavoritesSettings,
-    user: TelegramUser = Depends(current_user),
-) -> FavoritesSettings:
-    ok = await repo.set_favorites_retention_days(user.id, body.retention_days)
-    if not ok:
-        raise HTTPException(status_code=400, detail="retention_days must be 0..90")
-    return body
-
-
-@app.post("/api/perf")
-async def report_perf(
-    body: PerfEvent,
-    user: TelegramUser = Depends(current_user),
-) -> dict:
-    """Принимает клиентские perf-метрики из Mini App и логирует.
-    Помогает понять что тормозит у конкретного юзера (network/render),
-    когда total на бэкенде хороший, а юзер видит лаг."""
-    parts_str = " ".join(f"{k}={v}ms" for k, v in (body.parts or {}).items())
-    logger.info(
-        "perf user={} event={} total={}ms {}{}",
-        user.id, body.event, body.total_ms,
-        parts_str,
-        f" ua={body.user_agent[:60]}" if body.user_agent else "",
-    )
-    return {"ok": True}
-
-
-@app.post("/api/favorites/{message_id}/show-in-chat", response_model=FavoriteShowResponse)
-async def show_favorite_in_chat(
-    message_id: int,
-    user: TelegramUser = Depends(current_user),
-) -> FavoriteShowResponse:
-    """Переотправить избранную вакансию в чат бота. Mini App после успеха
-    закрывается через Telegram.WebApp.close()."""
-    fav = await repo.get_favorite(user.id, message_id)
-    if fav is None:
-        raise HTTPException(status_code=404, detail="Не в избранном")
-    built = await _build_favorite_message(
-        user.id, message_id, list(fav.matched_vacancy_ids or []),
-    )
-    if built is None:
-        raise HTTPException(status_code=410, detail="Сообщение больше недоступно")
-    text, markup = built
-    url = f"https://api.telegram.org/bot{settings.bot_token}/sendMessage"
-    try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            r = await client.post(
-                url,
-                json={
-                    "chat_id": user.id,
-                    "text": text,
-                    "parse_mode": "HTML",
-                    "disable_web_page_preview": True,
-                    "reply_markup": markup,
-                },
-            )
-            if r.status_code != 200:
-                logger.warning("Favorite show-in-chat send failed: {} {}",
-                               r.status_code, r.text)
-                return FavoriteShowResponse(sent=False, error=r.text)
-    except httpx.HTTPError as e:
-        logger.warning("Favorite show-in-chat HTTP error: {}", e)
-        return FavoriteShowResponse(sent=False, error=str(e))
-    return FavoriteShowResponse(sent=True)
-
-
 # ---------- Problems ----------
 
 
@@ -902,19 +465,6 @@ async def _send_problem_to_admins(problem_id: int, username: str | None, user_id
         await _notify_admin_html(admin_id, text, reply_markup=markup)
         delivered += 1
     return delivered
-
-
-@app.post("/api/problems", response_model=ProblemActionResponse)
-async def report_problem(
-    body: ProblemReportRequest,
-    user: TelegramUser = Depends(current_user),
-) -> ProblemActionResponse:
-    p = await repo.create_problem(user.id, body.text.strip())
-    try:
-        await _send_problem_to_admins(p.id, user.username, user.id, p.text)
-    except Exception as e:  # noqa: BLE001
-        logger.warning("Problem admin notify failed: {}", e)
-    return ProblemActionResponse(ok=True)
 
 
 @app.get("/api/problems", response_model=ProblemsListResponse)
@@ -1034,6 +584,11 @@ async def yookassa_webhook(request: Request) -> dict:
                         "chat_id": payment.user_id,
                         "text": text,
                         "parse_mode": "HTML",
+                        # Кнопка в главное меню бота (bot/menu.py: CB_MAIN).
+                        "reply_markup": {"inline_keyboard": [[{
+                            "text": i18n.t(lang, "🏠 В главное меню", "🏠 Main menu"),
+                            "callback_data": "menu:main",
+                        }]]},
                     },
                 )
         except httpx.HTTPError as e:

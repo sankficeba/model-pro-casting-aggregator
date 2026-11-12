@@ -202,56 +202,13 @@ export interface DigestStartResponse {
   remaining: number;
 }
 
-export interface DigestClearResponse {
-  cleared: number;
-}
 
-export interface SubscriptionPlan {
-  code: string;
-  days: number;
-  price_rub: number;
-  label: string;
-  discount_pct: number;
-  badge: string | null;
-}
 
-export interface SubscriptionStatus {
-  active_until: string | null;  // ISO timestamp
-  days_left: number;
-  is_active: boolean;
-  trial_started_at: string | null;
-  plan_price_rub: number;
-  plan_period_days: number;
-  payments_configured: boolean;
-  plans: SubscriptionPlan[];
-}
 
-export interface SubscriptionCheckout {
-  confirmation_url: string;
-  payment_id: string;
-}
 
-export interface FavoriteItem {
-  message_id: number;
-  title: string;
-  preview: string;
-  saved_at: string;
-  source_label: string;
-}
 
-export interface FavoritesList {
-  items: FavoriteItem[];
-}
 
-export interface FavoriteShowResponse {
-  sent: boolean;
-  error?: string | null;
-}
 
-export interface FavoritesSettings {
-  /** Срок автоудаления в днях. 0 = не удалять автоматически. */
-  retention_days: number;
-}
 
 export interface ProblemItem {
   id: number;
@@ -299,19 +256,3 @@ export const CATEGORY_DESCRIPTIONS_EN: Record<CategoryCode, string> = {
   admin: "Registration operators, supervisors",
 };
 
-export const EMPTY_PROFILE: Profile = {
-  ready_for_travel: false,
-  project_types: [],
-  role_types: [],
-  show_negotiable: false,
-  show_noncommercial: true,
-  show_agency: true,
-  ethnicity: [],
-  body_type: [],
-  marks: [],
-  skills_sport: [],
-  skills_dance: [],
-  skills_vocal: [],
-  skills_instruments: [],
-  completion_pct: 0,
-};

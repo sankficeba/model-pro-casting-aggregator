@@ -8,18 +8,11 @@ import type {
   BroadcastStartResponse,
   CategoryCode,
   DeliverySettings,
-  DigestClearResponse,
   DigestStartResponse,
-  FavoriteShowResponse,
-  FavoritesList,
-  FavoritesSettings,
   GrantSubscriptionResponse,
   ProblemActionResponse,
   ProblemsList,
   MeResponse,
-  SubscriptionCheckout,
-  SubscriptionStatus,
-  Profile,
   Refs,
   Subscription,
 } from "./types";
@@ -179,11 +172,6 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export const api = {
   getMe: () => request<MeResponse>("/me"),
   getRefs: () => request<Refs>(`/refs?lang=${currentLang}`),
-  getProfile: () => request<Profile>("/profile"),
-  updateProfile: (data: Profile) =>
-    request<Profile>("/profile", { method: "PUT", body: JSON.stringify(data) }),
-  completeProfile: () =>
-    request<Profile>("/profile/complete", { method: "POST" }),
 
   // «Основная информация» — общие поля всех анкет
   getBaseProfile: async () => {
@@ -228,47 +216,14 @@ export const api = {
   getSuggestions: () =>
     request<{ suggestions: Record<string, unknown[]> }>("/profile/suggestions"),
 
-  // Blacklist
-  getBlacklist: () => request<{ words: string[] }>("/blacklist"),
-  putBlacklist: (words: string[]) =>
-    request<{ words: string[] }>("/blacklist", {
-      method: "PUT",
-      body: JSON.stringify({ words }),
-    }),
-
-  // Channel suggestion
-  suggestChannel: (ref: string, comment?: string) =>
-    request<{ ok: boolean; notified_admins: number }>("/channel-suggestion", {
-      method: "POST",
-      body: JSON.stringify({ ref, comment: comment || null }),
-    }),
-
-  // Delivery settings
+  // Доставка: Mini App только читает режим (кнопка «накопленные» на главном
+  // экране); сами настройки — в боте.
   getDeliverySettings: () =>
     request<DeliverySettings>("/delivery-settings"),
-  putDeliverySettings: (settings: DeliverySettings) =>
-    request<DeliverySettings>("/delivery-settings", {
-      method: "PUT",
-      body: JSON.stringify(settings),
-    }),
   startDigestReview: () =>
     request<DigestStartResponse>("/digest/start", {
       method: "POST",
       body: "{}",
-    }),
-  clearDigestQueue: () =>
-    request<DigestClearResponse>("/digest/clear", {
-      method: "POST",
-      body: "{}",
-    }),
-
-  // Subscription
-  getSubscriptionStatus: () =>
-    request<SubscriptionStatus>("/subscription/status"),
-  createSubscriptionCheckout: (planCode?: string) =>
-    request<SubscriptionCheckout>("/subscription/checkout", {
-      method: "POST",
-      body: JSON.stringify({ plan_code: planCode ?? null }),
     }),
 
   // Язык (общий с ботом)
@@ -278,41 +233,7 @@ export const api = {
       body: JSON.stringify({ language }),
     }),
 
-  // Favorites
-  listFavorites: () => request<FavoritesList>("/favorites"),
-  getFavoritesSettings: () =>
-    request<FavoritesSettings>("/favorites/settings"),
-  putFavoritesSettings: (settings: FavoritesSettings) =>
-    request<FavoritesSettings>("/favorites/settings", {
-      method: "PUT",
-      body: JSON.stringify(settings),
-    }),
-  reportPerf: (event: string, total_ms: number, parts: Record<string, number>) =>
-    request<{ ok: boolean }>("/perf", {
-      method: "POST",
-      body: JSON.stringify({
-        event,
-        total_ms: Math.round(total_ms),
-        parts: Object.fromEntries(
-          Object.entries(parts).map(([k, v]) => [k, Math.round(v)]),
-        ),
-        user_agent: navigator.userAgent.slice(0, 200),
-      }),
-    }).catch(() => ({ ok: false })),
-  removeFavorite: (messageId: number) =>
-    request<{ ok: boolean }>(`/favorites/${messageId}`, { method: "DELETE" }),
-  showFavoriteInChat: (messageId: number) =>
-    request<FavoriteShowResponse>(`/favorites/${messageId}/show-in-chat`, {
-      method: "POST",
-      body: "{}",
-    }),
-
-  // Problems
-  reportProblem: (text: string) =>
-    request<ProblemActionResponse>("/problems", {
-      method: "POST",
-      body: JSON.stringify({ text }),
-    }),
+  // Problems (админка; сами юзеры сообщают о проблеме через бота)
   listProblems: () => request<ProblemsList>("/problems"),
   resolveProblem: (problemId: number) =>
     request<ProblemActionResponse>(`/problems/${problemId}/resolve`, {

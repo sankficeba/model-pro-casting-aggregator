@@ -545,6 +545,11 @@ class Message(Base):
     tg_chat_username: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     tg_message_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     text: Mapped[str] = mapped_column(Text, nullable=False)
+    # Ссылки из поста: скрытые text-url, url в тексте, URL inline-кнопок
+    # (миграция 0034). Plain text их не содержит.
+    links: Mapped[list[str]] = mapped_column(
+        ARRAY(Text), default=list, server_default="{}", nullable=False
+    )
 
     # Дедуп форварднутых копий. text_hash — SHA-1 от нормализованного
     # текста (db/dedup.py). canonical_message_id указывает на первый

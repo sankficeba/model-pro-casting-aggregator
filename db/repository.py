@@ -225,6 +225,7 @@ async def insert_duplicate_message(
     text: str,
     text_hash: str,
     canonical_message_id: int,
+    links: list[str] | None = None,
 ) -> Optional[int]:
     """Записать повторное появление того же кастинга в другом канале.
 
@@ -242,6 +243,7 @@ async def insert_duplicate_message(
                 text=text,
                 text_hash=text_hash,
                 canonical_message_id=canonical_message_id,
+                links=list(links or []),
                 # is_casting и прочие LLM-поля — дефолт (не извлекали)
             )
             .on_conflict_do_nothing(index_elements=["tg_chat_id", "tg_message_id"])
@@ -261,6 +263,7 @@ async def insert_message_with_vacancies(
     text: str,
     text_hash: str | None,
     extracted: PostExtraction,
+    links: list[str] | None = None,
 ) -> tuple[Optional[int], list[int]]:
     """Вставить пост и его вакансии одной транзакцией.
 
@@ -277,6 +280,7 @@ async def insert_message_with_vacancies(
                 tg_message_id=tg_message_id,
                 text=text,
                 text_hash=text_hash,
+                links=list(links or []),
                 is_casting=extracted.is_casting,
                 project_types=list(extracted.project_types),
                 city=extracted.city,

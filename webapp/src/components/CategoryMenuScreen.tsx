@@ -146,8 +146,8 @@ export function CategoryMenuScreen({
         )}
       </button>
 
-      {/* Направления — по центру оставшегося места */}
-      <div className="flex-1 flex flex-col justify-center gap-3 py-2">
+      {/* Направления — сразу под «Основной информацией» */}
+      <div className="flex flex-col gap-3 pt-2">
         <div className="text-xs uppercase tracking-wider text-slate-500 px-1">
           {t("Направления", "Categories")}
         </div>
