@@ -2,12 +2,13 @@
 Используется userbot'ом и aiogram-ботом."""
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from loguru import logger
-from sqlalchemy import func as sa_func, select, update
+from sqlalchemy import func as sa_func, select, text as sa_text, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError
 
@@ -102,16 +103,76 @@ async def get_response_profile(user_id: int, category: str) -> Optional[Response
 
 # ---------- USERS ----------
 
-async def upsert_user(user_id: int, username: str | None = None) -> None:
-    """Создать или обновить запись о пользователе (last_active = NOW())."""
+async def upsert_user(
+    user_id: int, username: str | None = None, source: str | None = None,
+) -> bool:
+    """Создать или обновить запись о пользователе (last_active = NOW()).
+
+    source (метка рекламы из /start) пишется ТОЛЬКО при создании записи —
+    on-conflict-ветка её не трогает, поэтому повторный /start с другой
+    меткой не перезапишет первый источник. Возвращает True, если юзер новый."""
     async with AsyncSessionLocal() as session:
-        stmt = pg_insert(User).values(id=user_id, username=username)
+        stmt = pg_insert(User).values(id=user_id, username=username, source=source)
         stmt = stmt.on_conflict_do_update(
             index_elements=[User.id],
             set_={"username": username, "last_active": stmt.excluded.last_active},
-        )
-        await session.execute(stmt)
+        ).returning(sa_text("(xmax = 0) AS inserted"))
+        inserted = bool((await session.execute(stmt)).scalar())
         await session.commit()
+        return inserted
+
+
+_SOURCE_RE = re.compile(r"[a-z0-9_-]{1,64}")
+
+
+def normalize_source(payload: str | None) -> str | None:
+    """Метка из /start: латиница/цифры/_/-, до 64 символов, в нижнем регистре.
+    Telegram сам ограничивает payload этим алфавитом; мусор отбрасываем."""
+    s = (payload or "").strip().lower()
+    return s if _SOURCE_RE.fullmatch(s) else None
+
+
+async def get_source_funnel(since: datetime | None) -> list[dict]:
+    """Воронка по источникам для юзеров, пришедших с `since` (None — за всё
+    время): пришли → взяли пробный период → завершили анкету → оплатили."""
+    sql = sa_text("""
+        WITH completed AS (
+            SELECT user_id FROM creative_profile WHERE completed_at IS NOT NULL
+            UNION SELECT user_id FROM event_profile WHERE completed_at IS NOT NULL
+            UNION SELECT user_id FROM general_profile WHERE completed_at IS NOT NULL
+            UNION SELECT user_id FROM admin_profile WHERE completed_at IS NOT NULL
+        ), paid AS (
+            SELECT user_id, sum(amount_rub) AS revenue, count(*) AS payments
+            FROM payments WHERE status = 'succeeded' GROUP BY user_id
+        )
+        SELECT u.source,
+               count(*) AS users,
+               count(*) FILTER (WHERE u.trial_started_at IS NOT NULL) AS trial,
+               count(c.user_id) AS profile,
+               count(p.user_id) AS paid,
+               coalesce(sum(p.payments), 0) AS payments,
+               coalesce(sum(p.revenue), 0) AS revenue
+        FROM users u
+        LEFT JOIN completed c ON c.user_id = u.id
+        LEFT JOIN paid p ON p.user_id = u.id
+        WHERE (CAST(:since AS timestamptz) IS NULL OR u.first_seen >= :since)
+        GROUP BY u.source
+        ORDER BY count(*) DESC, u.source NULLS LAST
+    """)
+    async with AsyncSessionLocal() as session:
+        rows = (await session.execute(sql, {"since": since})).mappings().all()
+    return [
+        {
+            "source": r["source"],
+            "users": int(r["users"]),
+            "trial": int(r["trial"]),
+            "profile": int(r["profile"]),
+            "paid": int(r["paid"]),
+            "payments": int(r["payments"]),
+            "revenue": int(r["revenue"]),
+        }
+        for r in rows
+    ]
 
 
 # ---------- FILTERS ----------

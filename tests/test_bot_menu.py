@@ -86,12 +86,16 @@ def db(monkeypatch):
         state["retention"] = d
         return True
 
+    async def upsert_user(uid, username=None, source=None):
+        state.setdefault("upserts", []).append(source)
+        return True
+
     patches = {
         "get_subscription_status": status,
         "activate_trial": activate_trial,
         "count_pending": lambda uid: ret(state["pending"]),
         "get_user_language": lambda uid: ret("ru"),
-        "upsert_user": lambda *a, **k: ret(None),
+        "upsert_user": upsert_user,
         "mark_user_bot_chat_active": lambda *a, **k: ret(None),
         "get_broadcast_pending": lambda uid: ret(None),
         "get_user_blacklist": lambda uid: ret(list(state["blacklist"])),
@@ -237,6 +241,13 @@ async def test_report_problem_goes_to_admin(h, db):
     admin_msgs = [s for s in sent if s[1] == ADMIN]
     assert admin_msgs and "&lt;script&gt;" in admin_msgs[0][2]
     assert admin_msgs[0][3] == ["✅ Проблема решена"]
+
+
+async def test_start_payload_is_passed_as_source(h, db):
+    await h.msg("/start vk_ads1")
+    await h.msg("/start")
+    await h.msg("/start плохая-метка")
+    assert db["upserts"] == ["vk_ads1", None, None]
 
 
 async def test_new_user_gets_trial_offer_then_menu(h, db):

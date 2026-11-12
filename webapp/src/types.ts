@@ -120,6 +120,22 @@ export interface BroadcastStartResponse {
   audience_count: number;
 }
 
+export interface FunnelRow {
+  source: string | null; // null — пришли без метки
+  users: number;
+  trial: number;
+  profile: number;
+  paid: number;
+  payments: number;
+  revenue: number;
+}
+
+export interface FunnelResponse {
+  days: number; // 0 — за всё время
+  bot_username: string;
+  rows: FunnelRow[];
+}
+
 export interface GrantSubscriptionResponse {
   user_id: number;
   username: string | null;

@@ -6,7 +6,7 @@ import html
 from pathlib import Path
 
 from aiogram import Bot, Dispatcher, F
-from aiogram.filters import Command, CommandStart, StateFilter
+from aiogram.filters import Command, CommandObject, CommandStart, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import (
     CallbackQuery,
@@ -297,13 +297,19 @@ def build_dispatcher(
         await menu.send_main_menu(message, lang)
 
     @dp.message(CommandStart())
-    async def cmd_start(message: Message, state: FSMContext) -> None:
+    async def cmd_start(message: Message, state: FSMContext, command: CommandObject) -> None:
         await state.clear()
         lang = await i18n.get_lang(message.from_user.id, message.from_user.language_code)
-        await repository.upsert_user(
+        # Метка рекламы из t.me/<bot>?start=<метка>: пишется только для нового
+        # юзера (first touch), см. repository.upsert_user.
+        source = repository.normalize_source(command.args)
+        is_new = await repository.upsert_user(
             message.from_user.id,
             username=message.from_user.username,
+            source=source,
         )
+        if is_new:
+            logger.info("Новый пользователь {} источник={}", message.from_user.id, source or "-")
         # Сбрасываем флаг «мёртвый чат» — раз юзер прислал /start, диалог
         # точно живой. Это вернёт его в рассылки и нотификации.
         try:

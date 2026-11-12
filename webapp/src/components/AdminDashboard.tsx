@@ -16,6 +16,7 @@ import {
   LifeBuoy,
   Check,
   Gift,
+  TrendingUp,
 } from "lucide-react";
 import { api } from "../api";
 import { openTelegramLink, tg } from "../telegram";
@@ -25,6 +26,8 @@ import type {
   AdminStats,
   BroadcastFilter,
   BroadcastFilterBody,
+  FunnelResponse,
+  FunnelRow,
   ProblemItem,
 } from "../types";
 import { CATEGORY_LABELS } from "../types";
@@ -59,6 +62,7 @@ export function AdminDashboard({ onBack }: { onBack: () => void }) {
 
       <main className="flex-1 px-5 py-4 space-y-5">
         <StatsBlock />
+        <FunnelBlock />
         <ProblemsBlock />
         <GrantSubscriptionBlock />
         <BroadcastBlock />
@@ -168,6 +172,168 @@ function StatsBlock() {
         value={Object.values(subs).reduce((a, b) => a + b, 0)}
         hint={subsHint}
       />
+    </div>
+  );
+}
+
+// ===== Funnel by ad source =====
+
+const FUNNEL_PERIODS: { days: number; label: string }[] = [
+  { days: 7, label: "7 дней" },
+  { days: 30, label: "30 дней" },
+  { days: 90, label: "90 дней" },
+  { days: 0, label: "Всё время" },
+];
+
+const SOURCE_RE = /^[a-z0-9_-]{1,64}$/;
+
+function pct(part: number, total: number): string {
+  return total > 0 ? `${Math.round((part * 100) / total)}%` : "—";
+}
+
+function FunnelBlock() {
+  const [days, setDays] = useState(30);
+  const [data, setData] = useState<FunnelResponse | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [tag, setTag] = useState("");
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    setData(null);
+    setError(null);
+    api.adminFunnel(days).then(setData).catch((e) => setError(String(e)));
+  }, [days]);
+
+  const cleanTag = tag.trim().toLowerCase();
+  const tagOk = SOURCE_RE.test(cleanTag);
+  const link = data && tagOk ? `https://t.me/${data.bot_username}?start=${cleanTag}` : "";
+
+  const copy = async () => {
+    if (!link) return;
+    try {
+      await navigator.clipboard.writeText(link);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* в некоторых клиентах Telegram буфер недоступен — ссылку видно на экране */
+    }
+  };
+
+  const total = data?.rows.reduce(
+    (a, r) => ({
+      users: a.users + r.users, trial: a.trial + r.trial, profile: a.profile + r.profile,
+      paid: a.paid + r.paid, revenue: a.revenue + r.revenue,
+    }),
+    { users: 0, trial: 0, profile: 0, paid: 0, revenue: 0 },
+  );
+
+  return (
+    <section className="rounded-card bg-bg-surface p-4 space-y-3">
+      <div className="flex items-center gap-2">
+        <TrendingUp className="w-4 h-4 text-accent" />
+        <h2 className="font-semibold flex-1">Реклама: воронка по источникам</h2>
+      </div>
+
+      {/* Генератор ссылки */}
+      <div className="space-y-1.5">
+        <div className="text-xs text-slate-400">
+          Ссылка для рекламы — метка латиницей, например <code>vk_ads1</code>:
+        </div>
+        <div className="flex gap-2">
+          <input
+            value={tag}
+            onChange={(e) => setTag(e.target.value)}
+            placeholder="vk_ads1"
+            className="flex-1 min-w-0 bg-bg-card rounded-card px-3 py-2 text-sm outline-none focus:ring-1 ring-accent"
+          />
+          <button
+            onClick={copy}
+            disabled={!link}
+            className="shrink-0 px-3 py-2 rounded-card bg-accent text-bg text-sm font-medium disabled:opacity-40"
+          >
+            {copied ? "Скопировано" : "Копировать"}
+          </button>
+        </div>
+        {cleanTag && !tagOk && (
+          <div className="text-xs text-red-400">Только a–z, 0–9, «_» и «-», до 64 символов.</div>
+        )}
+        {link && <div className="text-xs text-slate-300 break-all">{link}</div>}
+      </div>
+
+      {/* Период */}
+      <div className="flex gap-1.5 flex-wrap">
+        {FUNNEL_PERIODS.map((p) => (
+          <button
+            key={p.days}
+            onClick={() => setDays(p.days)}
+            className={
+              "px-2.5 py-1 rounded-chip text-xs border transition " +
+              (days === p.days
+                ? "bg-bg-card border-accent text-accent"
+                : "bg-bg-card border-bg-card text-slate-400")
+            }
+          >
+            {p.label}
+          </button>
+        ))}
+      </div>
+
+      {error && <div className="text-red-400 text-sm">{error}</div>}
+      {!data && !error && <div className="text-slate-500 text-sm">Загрузка…</div>}
+      {data && data.rows.length === 0 && (
+        <div className="text-slate-500 text-sm">За этот период новых пользователей нет.</div>
+      )}
+
+      {data && total && data.rows.length > 0 && (
+        <div className="space-y-2">
+          {data.rows.map((r) => (
+            <FunnelCard key={r.source ?? "—"} row={r} />
+          ))}
+          {data.rows.length > 1 && (
+            <FunnelCard
+              row={{ source: "Итого", ...total, payments: 0 }}
+              isTotal
+            />
+          )}
+          <div className="text-[11px] text-slate-500">
+            Источник — первая метка, с которой человек пришёл в бота. «Анкета» — завершил хотя бы
+            одну анкету. Проценты — от пришедших. Метки сохраняются с 12.11.2026, все пришедшие
+            раньше — «без метки».
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function FunnelCard({ row, isTotal = false }: { row: FunnelRow; isTotal?: boolean }) {
+  const steps: [string, number][] = [
+    ["Пришли", row.users],
+    ["Пробный", row.trial],
+    ["Анкета", row.profile],
+    ["Оплатили", row.paid],
+  ];
+  return (
+    <div className={`rounded-card px-3 py-2.5 ${isTotal ? "border border-accent/40" : "bg-bg-card/60"}`}>
+      <div className="flex items-baseline gap-2">
+        <span className={`font-medium flex-1 min-w-0 truncate ${row.source ? "" : "text-slate-400"}`}>
+          {row.source ?? "без метки"}
+        </span>
+        <span className="text-sm tabular-nums text-accent">
+          {row.revenue.toLocaleString("ru-RU")} ₽
+        </span>
+      </div>
+      <div className="grid grid-cols-4 gap-1 mt-1.5">
+        {steps.map(([label, n], i) => (
+          <div key={label}>
+            <div className="text-[10px] text-slate-500">{label}</div>
+            <div className="text-sm tabular-nums font-semibold">{n}</div>
+            <div className="text-[10px] text-slate-500 tabular-nums">
+              {i === 0 ? " " : pct(n, row.users)}
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

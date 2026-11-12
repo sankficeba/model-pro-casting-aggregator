@@ -22,6 +22,8 @@ class Settings(BaseSettings):
 
     # Telegram Bot (aiogram)
     bot_token: str = Field(..., alias="BOT_TOKEN")
+    # Для рекламных ссылок t.me/<bot_username>?start=<метка> в админке.
+    bot_username: str = Field("ModelProAgency_bot", alias="BOT_USERNAME")
 
     # LLM
     llm_provider: str = Field("openai", alias="LLM_PROVIDER")

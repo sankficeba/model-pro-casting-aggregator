@@ -122,6 +122,10 @@ class User(Base):
     # from_user.language_code на каждом сообщении.
     language: Mapped[Optional[str]] = mapped_column(String(8), nullable=True)
 
+    # Метка рекламного источника из /start <payload> (first touch, миграция
+    # 0035). Пишется только при создании юзера. NULL = пришёл без метки.
+    source: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+
     filters: Mapped[list["Filter"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )

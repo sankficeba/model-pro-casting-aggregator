@@ -9,6 +9,7 @@ import type {
   CategoryCode,
   DeliverySettings,
   DigestStartResponse,
+  FunnelResponse,
   GrantSubscriptionResponse,
   ProblemActionResponse,
   ProblemsList,
@@ -248,6 +249,7 @@ export const api = {
 
   // Admin
   adminStats: () => request<AdminStats>("/admin/stats"),
+  adminFunnel: (days: number) => request<FunnelResponse>(`/admin/funnel?days=${days}`),
   adminProfiles: (limit = 50, offset = 0) =>
     request<AdminProfileRow[]>(`/admin/profiles?limit=${limit}&offset=${offset}`),
   adminMessages: (limit = 50, offset = 0, castingOnly = false) =>

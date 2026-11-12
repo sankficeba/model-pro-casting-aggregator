@@ -306,6 +306,40 @@ async def grant_subscription(
     )
 
 
+class FunnelRow(BaseModel):
+    source: Optional[str] = None  # None — пришли без метки
+    users: int
+    trial: int
+    profile: int
+    paid: int
+    payments: int
+    revenue: int
+
+
+class FunnelResponse(BaseModel):
+    days: int  # 0 — за всё время
+    bot_username: str
+    rows: list[FunnelRow]
+
+
+@router.get("/funnel", response_model=FunnelResponse)
+async def funnel(
+    days: int = Query(30, ge=0, le=3650),
+    _: TelegramUser = Depends(admin_user),
+) -> FunnelResponse:
+    """Воронка по источникам (метка из t.me/<bot>?start=<метка>) для юзеров,
+    пришедших за последние `days` дней: пришли → пробный → анкета → оплатили."""
+    from datetime import timedelta, timezone
+
+    since = datetime.now(timezone.utc) - timedelta(days=days) if days else None
+    rows = await repo.get_source_funnel(since)
+    return FunnelResponse(
+        days=days,
+        bot_username=settings.bot_username,
+        rows=[FunnelRow(**r) for r in rows],
+    )
+
+
 @router.get("/profiles", response_model=list[AdminProfile])
 async def list_profiles(
     limit: int = Query(50, ge=1, le=200),
