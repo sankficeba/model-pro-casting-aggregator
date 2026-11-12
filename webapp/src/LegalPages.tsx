@@ -12,7 +12,8 @@ const EMAIL     = "semen.ryab0v@yandex.ru";
 const INN       = "502018424008";
 const OGRNIP    = "325508100609056";
 const OWNER     = "Индивидуальный предприниматель Рябов Семён Кириллович";
-const DATE      = "17 июня 2026 года";
+const DATE      = "17 июня 2026 года";       // редакция Политики конфиденциальности
+const OFFER_DATE = "12 ноября 2026 года";    // редакция оферты: оплата и тарифы — в боте, пробный период
 
 /* ── Shared layout ─────────────────────────────────────────────────────── */
 
@@ -147,13 +148,17 @@ export function OfferPage() {
         <div className="meta">
           <strong>{t(OWNER, "Individual Entrepreneur Semyon Kirillovich Ryabov")}</strong><br />
           {t("ИНН", "Tax ID (INN)")}: {INN} · {t("ОГРНИП", "OGRNIP")}: {OGRNIP}<br />
-          {t("Сайт", "Website")}: <a href={SITE_URL}>{SITE_URL}</a> · {t("Редакция от", "Revision dated")} {t(DATE, "June 17, 2026")}
+          {t("Сайт", "Website")}: <a href={SITE_URL}>{SITE_URL}</a> · {t("Редакция от", "Revision dated")} {t(OFFER_DATE, "November 12, 2026")}
         </div>
 
         <div className="section-title"><span className="section-num">1</span><h2>{t("Термины и определения", "Definitions")}</h2></div>
         <p><strong>{t("Акцепт", "Acceptance")}</strong> — {t(
-          "полное безоговорочное принятие условий настоящей оферты путём оплаты подписки или начала использования платного функционала Сервиса.",
-          "the complete and unconditional acceptance of the terms of this offer by paying for a subscription or by beginning to use the Service's paid functionality.",
+          "полное безоговорочное принятие условий настоящей оферты путём оплаты подписки, активации Пробного периода или начала использования платного функционала Сервиса.",
+          "the complete and unconditional acceptance of the terms of this offer by paying for a subscription, activating the Trial Period, or beginning to use the Service's paid functionality.",
+        )}</p>
+        <p><strong>{t("Пробный период", "Trial Period")}</strong> — {t(
+          "бесплатный доступ к платному функционалу Сервиса сроком 7 (семь) календарных дней, предоставляемый Пользователю однократно и активируемый им самостоятельно кнопкой в Telegram-боте.",
+          "free access to the Service's paid functionality for 7 (seven) calendar days, granted to the User once and activated by the User via a button in the Telegram bot.",
         )}</p>
         <p><strong>{t("Договор", "Agreement")}</strong> — {t(
           "договор о предоставлении доступа к Сервису, заключённый между Администрацией и Пользователем на условиях настоящей оферты.",
@@ -168,15 +173,15 @@ export function OfferPage() {
 
         <div className="section-title"><span className="section-num">2</span><h2>{t("Предмет соглашения", "Subject of the Agreement")}</h2></div>
         <p>{t(
-          "Администрация предоставляет Пользователю доступ к платному функционалу Сервиса: просмотр актуальных кастингов и вакансий для актёров, моделей и event-персонала, агрегированных из 200+ Telegram-каналов; возможность откликаться на проекты; получение уведомлений о новых предложениях в режиме реального времени.",
-          "The Administration provides the User with access to the Service's paid functionality: viewing current castings and job openings for actors, models, and event staff, aggregated from 200+ Telegram channels; the ability to respond to projects; and receiving real-time notifications of new offers.",
+          "Администрация предоставляет Пользователю доступ к платному функционалу Сервиса: подбор актуальных кастингов и вакансий (для актёров и моделей, event-персонала, разнорабочих и административного персонала), агрегированных из 200+ Telegram-каналов, по анкете Пользователя; получение уведомлений о подходящих предложениях в режиме реального времени; переход к исходным объявлениям для связи с работодателем.",
+          "The Administration provides the User with access to the Service's paid functionality: matching of current castings and job openings (for actors and models, event staff, general laborers, and administrative staff), aggregated from 200+ Telegram channels, to the User's profile; real-time notifications of matching offers; and access to the original postings to contact the employer.",
         )}</p>
         <p>{t("Авторизация в Сервисе осуществляется исключительно через Telegram. Доступ к мини-приложению возможен только через официального Telegram-бота", "Authorization in the Service is carried out exclusively via Telegram. Access to the mini-app is only possible through the official Telegram bot")} <a href={BOT_URL}>@{BOT_USERNAME}</a>.</p>
 
         <div className="section-title"><span className="section-num">3</span><h2>{t("Порядок принятия оферты", "Procedure for Accepting the Offer")}</h2></div>
         <p>{t(
-          "Акцептом настоящей оферты является совершение оплаты подписки через платёжную форму внутри мини-приложения. Совершая Акцепт, Пользователь подтверждает:",
-          "Acceptance of this offer is constituted by paying for a subscription through the payment form inside the mini-app. By performing the Acceptance, the User confirms:",
+          "Акцептом настоящей оферты является оплата подписки на платёжной странице ЮKassa, ссылку на которую Пользователь получает в Telegram-боте, либо активация Пробного периода в Telegram-боте. Совершая Акцепт, Пользователь подтверждает:",
+          "Acceptance of this offer is constituted by paying for a subscription on the YooKassa payment page, the link to which the User receives in the Telegram bot, or by activating the Trial Period in the Telegram bot. By performing the Acceptance, the User confirms:",
         )}</p>
         <ul>
           <li>{t("полное и безоговорочное согласие с условиями настоящей оферты;", "full and unconditional agreement with the terms of this offer;")}</li>
@@ -186,13 +191,21 @@ export function OfferPage() {
 
         <div className="section-title"><span className="section-num">4</span><h2>{t("Стоимость и порядок оплаты", "Cost and Payment Procedure")}</h2></div>
         <p>{t(
-          "Стоимость подписки определяется выбранным тарифным планом, актуальный перечень которых отображается в мини-приложении в разделе «Подписка». Оплата производится единовременно за выбранный период.",
-          "The subscription cost is determined by the selected pricing plan; the current list of plans is displayed in the mini-app in the “Subscription” section. Payment is made as a one-time charge for the selected period.",
+          "Стоимость подписки определяется выбранным тарифным планом. Актуальный перечень тарифов и цен отображается в Telegram-боте: главное меню → «Оформить подписку» / «Продлить подписку». Оплата производится единовременно за выбранный период.",
+          "The subscription cost is determined by the selected pricing plan. The current list of plans and prices is displayed in the Telegram bot: main menu → “Subscribe” / “Renew subscription”. Payment is made as a one-time charge for the selected period.",
         )}</p>
-        <p>{t("Приём платежей осуществляется через платёжный сервис ЮKassa (", "Payments are processed through the YooKassa payment service (")}<a href="https://yookassa.ru" target="_blank" rel="noopener noreferrer">yookassa.ru</a>{t("). Оплата доступна только авторизованным Пользователям внутри мини-приложения.", "). Payment is available only to authorized Users inside the mini-app.")}</p>
+        <p>{t("Приём платежей (банковской картой или через СБП) осуществляется через платёжный сервис ЮKassa (", "Payments (by bank card or via SBP) are processed through the YooKassa payment service (")}<a href="https://yookassa.ru" target="_blank" rel="noopener noreferrer">yookassa.ru</a>{t("). Ссылку на оплату выбранного тарифа формирует Telegram-бот ", "). The payment link for the selected plan is generated by the Telegram bot ")}<a href={BOT_URL}>@{BOT_USERNAME}</a>{t(" только для авторизованного через Telegram Пользователя.", " only for a User authorized via Telegram.")}</p>
         <p>{t(
-          "Подписка активируется автоматически после подтверждения платежа. Возврат денежных средств за неиспользованный остаток периода подписки не производится, за исключением случаев, предусмотренных действующим законодательством РФ.",
-          "The subscription is activated automatically upon payment confirmation. No refund is issued for the unused portion of the subscription period, except in cases provided for by the applicable legislation of the Russian Federation.",
+          "Подписка активируется автоматически после подтверждения платежа. Оплаченный период прибавляется к текущему сроку действия подписки, если он ещё не истёк. Автоматические повторные списания (рекуррентные платежи) не производятся: каждое продление Пользователь оплачивает самостоятельно.",
+          "The subscription is activated automatically upon payment confirmation. The paid period is added to the current subscription term if it has not yet expired. No automatic repeat charges (recurring payments) are made: the User pays for each renewal themselves.",
+        )}</p>
+        <p>{t(
+          "Пробный период предоставляется бесплатно и не продлевается автоматически; по его окончании доступ к платному функционалу сохраняется только при оплате подписки.",
+          "The Trial Period is free of charge and does not renew automatically; after it ends, access to the paid functionality continues only upon payment of a subscription.",
+        )}</p>
+        <p>{t(
+          "Возврат денежных средств за неиспользованный остаток периода подписки не производится, за исключением случаев, предусмотренных действующим законодательством РФ.",
+          "No refund is issued for the unused portion of the subscription period, except in cases provided for by the applicable legislation of the Russian Federation.",
         )}</p>
 
         <div className="section-title"><span className="section-num">5</span><h2>{t("Срок действия договора", "Term of the Agreement")}</h2></div>

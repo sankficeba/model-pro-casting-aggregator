@@ -149,9 +149,8 @@ async def build_main_menu(user_id: int, lang: Lang) -> tuple[str, InlineKeyboard
     from bot.settings_menu import main_menu_rows  # циклический импорт
 
     rows += main_menu_rows(lang)
-    rows.append([_btn(
-        "English" if lang == "ru" else "Русский", E_GLOBE, callback_data=CB_LANG_TOGGLE,
-    )])
+    # Кнопки смены языка нет (язык — командой /language); обработчик
+    # CB_LANG_TOGGLE оставлен для кнопок в уже отправленных сообщениях.
     return text, InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -191,9 +190,6 @@ def _build_trial_offer(lang: Lang) -> tuple[str, InlineKeyboardMarkup]:
           f"Activate free trial — {days} days"),
         E_GIFT, callback_data=CB_TRIAL,
     )]]
-    rows.append([_btn(
-        "English" if lang == "ru" else "Русский", E_GLOBE, callback_data=CB_LANG_TOGGLE,
-    )])
     return text, InlineKeyboardMarkup(inline_keyboard=rows)
 
 

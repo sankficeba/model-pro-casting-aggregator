@@ -169,8 +169,10 @@ async def test_any_text_opens_main_menu(h):
     assert _is_main_menu(sent)
     buttons = sent[0][3]
     for b in ("Настроить анкету", "Продлить подписку", "Избранное", "Доставка",
-              "Чёрный список", "Предложить канал", "Сообщить о проблеме", "English"):
+              "Чёрный список", "Предложить канал", "Сообщить о проблеме"):
         assert b in buttons
+    # смена языка — только командой /language
+    assert "English" not in buttons and "Русский" not in buttons
 
 
 async def test_blacklist_add_and_remove(h, db):
@@ -241,7 +243,7 @@ async def test_new_user_gets_trial_offer_then_menu(h, db):
     db["trial_started_at"] = None
     db["active_until"] = None
     sent = await h.msg("/start")
-    assert sent[0][3] == ["Активировать пробный период — 7 дней", "English"]
+    assert sent[0][3] == ["Активировать пробный период — 7 дней"]
     sent = await h.cb(menu.CB_TRIAL)
     assert ("answer", None, "Пробный период активирован!", []) in sent
     assert _is_main_menu(sent)
