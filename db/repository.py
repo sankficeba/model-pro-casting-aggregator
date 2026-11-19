@@ -594,6 +594,28 @@ async def list_channels(active_only: bool = True) -> list[Channel]:
         return list(res.scalars().all())
 
 
+async def find_active_channel(ref: str) -> Optional[Channel]:
+    """Найти активный канал по ссылке/@username/t.me/c/<id>/invite —
+    той же логикой адресации, что и add_channel. None — канала в списке нет
+    (или он деактивирован, или ref не распознан)."""
+    invite_link = _parse_invite_ref(ref)
+    if invite_link is not None:
+        cond = Channel.invite_link == invite_link
+    else:
+        username, tg_chat_id = _parse_channel_ref(ref)
+        if username is not None:
+            cond = Channel.username == username
+        elif tg_chat_id is not None:
+            cond = Channel.tg_chat_id == tg_chat_id
+        else:
+            return None
+    async with AsyncSessionLocal() as session:
+        res = await session.execute(
+            select(Channel).where(cond, Channel.active.is_(True))
+        )
+        return res.scalar_one_or_none()
+
+
 async def add_channel(ref: str, added_by: int) -> Optional[Channel]:
     """Добавить канал. Поддерживает три формы:
     - `@username` / `t.me/username` → public.

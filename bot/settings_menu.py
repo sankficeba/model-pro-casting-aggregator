@@ -510,6 +510,18 @@ async def msg_suggest(message: Message, state: FSMContext) -> None:
         ), reply_markup=_cancel_kb(lang))
         return
     display_url, ref_short = _normalize_channel_ref(first)
+    # Дубликаты админу не шлём: если канал уже в активном списке — сразу
+    # отвечаем юзеру.
+    try:
+        existing = await repository.find_active_channel(display_url)
+    except Exception as e:  # noqa: BLE001
+        logger.warning("channel suggestion duplicate check failed for {}: {}", display_url, e)
+        existing = None
+    if existing is not None:
+        await state.clear()
+        await message.answer(t(lang, "Этот канал уже есть в базе.", "This channel is already in the database."),
+                             reply_markup=_done_kb(lang))
+        return
     u = message.from_user
     user_link = f"https://t.me/{u.username}" if u and u.username else f"tg://user?id={u.id if u else 0}"
     user_label = f"@{u.username}" if u and u.username else f"id {u.id if u else 0}"
@@ -520,10 +532,14 @@ async def msg_suggest(message: Message, state: FSMContext) -> None:
         f"<b>От:</b> <a href=\"{html.escape(user_link)}\">{html.escape(user_label)}</a>"
         + (f"\n<i>Комментарий:</i> {html.escape(comment)}" if comment else "")
     )
-    cb_safe = ref_short[:50]
+    # callback_data ≤ 64 байт: "csg:add:" + id предложившего + ":" + ref.
+    # id нужен, чтобы после «Добавить» уведомить юзера.
+    suggester_id = u.id if u else 0
+    cb_prefix_len = len(f"csg:skip:{suggester_id}:")
+    cb_safe = ref_short[:64 - cb_prefix_len]
     kb = _kb([[
-        InlineKeyboardButton(text="✅ Добавить", callback_data=f"csg:add:{cb_safe}"),
-        InlineKeyboardButton(text="❌ Не добавлять", callback_data=f"csg:skip:{cb_safe}"),
+        InlineKeyboardButton(text="✅ Добавить", callback_data=f"csg:add:{suggester_id}:{cb_safe}"),
+        InlineKeyboardButton(text="❌ Не добавлять", callback_data=f"csg:skip:{suggester_id}:{cb_safe}"),
     ]])
     for admin_id in settings.admin_ids:
         try:

@@ -277,6 +277,51 @@ async def _channels_changed(
         )
 
 
+def parse_suggestion_callback(data: str) -> tuple[str, int | None, str] | None:
+    """Разобрать callback_data кнопок под предложением канала.
+
+    Новый формат: 'csg:<action>:<suggester_id>:<ref>'.
+    Старый (кнопки, отправленные до обновления): 'csg:<action>:<ref>' —
+    suggester_id = None. ref никогда не состоит из одних цифр (username
+    начинается с буквы, приватные — 'c/…' или '+…'), так что форматы не путаются.
+    """
+    parts = data.split(":", 3)
+    if len(parts) < 3 or parts[0] != "csg" or not parts[2]:
+        return None
+    action = parts[1]
+    if len(parts) == 4 and parts[2].isdigit():
+        if not parts[3]:
+            return None
+        return action, int(parts[2]), parts[3]
+    return action, None, ":".join(parts[2:])
+
+
+async def _notify_suggester_added(bot: Bot, user_id: int, ch, ch_label: str) -> None:
+    """Сообщить юзеру, что предложенный им канал добавлен в агрегатор.
+    Название берём из Telegram (title), если бот может его получить."""
+    name = ch_label
+    if ch.username:
+        try:
+            chat = await bot.get_chat(f"@{ch.username}")
+            if chat.title:
+                name = chat.title
+        except Exception:  # noqa: BLE001
+            pass
+    try:
+        lang = await i18n.get_lang(user_id, None)
+        await bot.send_message(
+            user_id,
+            t(
+                lang,
+                f"Администратор добавил предложенный вами канал <b>{html.escape(name)}</b> в агрегатор.",
+                f"The administrator has added your suggested channel <b>{html.escape(name)}</b> to the aggregator.",
+            ),
+            parse_mode="HTML",
+        )
+    except Exception as e:  # noqa: BLE001
+        logger.warning("channel suggestion: notify suggester {} failed: {}", user_id, e)
+
+
 def build_dispatcher(
     bot: Bot,
     llm: LLMProvider | None = None,
@@ -552,11 +597,11 @@ def build_dispatcher(
         if not _is_admin(query.from_user.id if query.from_user else None):
             await query.answer("Только для админов.", show_alert=True)
             return
-        parts = (query.data or "").split(":", 2)
-        if len(parts) < 3:
+        parsed = parse_suggestion_callback(query.data or "")
+        if parsed is None:
             await query.answer("Битая кнопка.", show_alert=True)
             return
-        action, ref = parts[1], parts[2]
+        action, suggester_id, ref = parsed
         # Восстанавливаем полный ref для repository.add_channel
         full_ref = f"https://t.me/{ref}" if not ref.startswith("c/") else f"https://t.me/{ref}"
         message = query.message  # type: ignore[union-attr]
@@ -583,6 +628,8 @@ def build_dispatcher(
                 except Exception:  # noqa: BLE001
                     pass
             await query.answer(f"Добавлено: {ch_label}")
+            if suggester_id:
+                await _notify_suggester_added(bot, suggester_id, ch, ch_label)
             await _channels_changed(
                 bot=bot, message=message,  # type: ignore[arg-type]
                 userbot=userbot,
